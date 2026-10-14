@@ -22,7 +22,7 @@ import logging, logging.handlers, traceback
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from http.cookies import SimpleCookie, CookieError
 
-VERSION = "4.0"
+VERSION = "4.1"
 HIER = os.path.abspath(os.environ.get("SPARTENET_DATA_DIR") or os.path.dirname(os.path.abspath(sys.argv[0])))
 os.makedirs(HIER, exist_ok=True)
 DATEI = os.path.join(HIER, "SparteNet_Manager.json")
@@ -445,8 +445,8 @@ def excel_import(roh_bytes):
         v, t = c.find(M + "v"), c.get("t")
         if t == "inlineStr":
             wert = "".join(x.text or "" for x in c.iter(M + "t"))
-        elif v is None or c.find(M + "f") is not None:
-            continue
+        elif v is None or t == "e":
+            continue  # leer oder Formel ohne gespeichertes Ergebnis bzw. mit Fehler
         elif t == "s":
             wert = strings[int(v.text)]
         else:
@@ -459,6 +459,9 @@ def excel_import(roh_bytes):
             return 0
     sparten = [{"name": zellen[f"B{r}"], "kz": zellen.get(f"C{r}", ""), "sid": zahl(zellen.get(f"D{r}")), "n": zahl(zellen.get(f"E{r}"))}
                for r in range(9, 19) if zellen.get(f"B{r}") and zellen.get(f"E{r}")]
+    if not sparten and any(zellen.get(f"B{r}") is None for r in range(9, 19)) and "Sparten" in [s.get("name") for s in wb.iter(M + "sheet")]:
+        raise Fehler("Im VLAN-Planer sind für das gewählte Gateway keine Sparten eingetragen – oder die Datei wurde ohne berechnete Werte gespeichert. "
+                     "In Excel/LibreOffice öffnen, unter „Eingabe“ B4 das Gateway wählen, speichern und erneut übernehmen.")
     plan = {"gateway": zahl(zellen.get("B4")) or 1, "gatewayname": zellen.get("B5", ""), "praefix": zellen.get("B6", "SparteNet.de"), "sparten": sparten}
     plan_berechnen(plan)
     return plan
@@ -1770,9 +1773,9 @@ def akt_voucher(d, anzahl, minuten, name, ausfuehren):
 
 # =============================================================== Tarife (Bandbreite per QoS-Regel, Netzgröße per Subnetz/DHCP)
 TARIFE_STANDARD = [
-    {"name": "Basic", "down": 30, "up": 10, "praefix": 29, "geraete": 5},
-    {"name": "Plus", "down": 60, "up": 20, "praefix": 28, "geraete": 10},
-    {"name": "Max", "down": 100, "up": 40, "praefix": 24, "geraete": 0},
+    {"name": "Basic", "down": 30, "up": 10, "praefix": 29, "geraete": 5, "preis": 120},
+    {"name": "Plus", "down": 60, "up": 20, "praefix": 28, "geraete": 10, "preis": 180},
+    {"name": "Max", "down": 100, "up": 40, "praefix": 24, "geraete": 0, "preis": 240},
 ]
 QOS_TARIF, QOS_NETZ = "SparteNet-Tarif-", "SparteNet-Netz-"
 NETZ_ZWECK_AUS = {"wan", "remote-user-vpn", "site-vpn", "vpn-client", "vlan-only"}
@@ -1827,7 +1830,16 @@ def tarife_pruefen(roh):
         if geraete < 0:
             raise Fehler(f"Tarif „{name}“: Endgeräte nicht negativ.")
         dhcp_bereich("10.0.0.1", praefix, geraete)  # passt die Anzahl ins Netz?
-        aus.append({"name": name, "down": _zahl(down), "up": _zahl(up), "praefix": praefix, "geraete": geraete})
+        roh_preis = t.get("preis")
+        if roh_preis in (None, ""):
+            roh_preis = next((x["preis"] for x in TARIFE_STANDARD if x["name"].lower() == name.lower()), 0)
+        try:
+            preis = float(str(roh_preis).replace(",", "."))
+        except ValueError:
+            raise Fehler(f"Tarif „{name}“: Preis muss eine Zahl sein.")
+        if not 0 <= preis <= 100000:
+            raise Fehler(f"Tarif „{name}“: Preis 0 bis 100000 € pro Jahr.")
+        aus.append({"name": name, "down": _zahl(down), "up": _zahl(up), "praefix": praefix, "geraete": geraete, "preis": _zahl(preis)})
     return aus
 
 
@@ -1891,6 +1903,18 @@ def tarif_lage(d):
     modus = d.get("tarif_modus", "tarif")
     g = Gateway(d)
     netze = _tarif_netze(g)
+    # Netznamen merken; Parzellen-Zuordnungen in die Buchungen übernehmen (eine gemeinsame Quelle mit der Kalkulation)
+    netznamen = {n["_id"]: n.get("name") or "" for n in netze}
+    geaendert = netznamen != (d.get("tarif_netznamen") or {})
+    for nid, t in list(zuord.items()):
+        zp = netz_parzelle(netznamen.get(nid))
+        if zp:
+            b = d.setdefault("buchungen", {}).setdefault(zp[0], {})
+            b.setdefault(str(zp[1]), t)
+            zuord.pop(nid); geaendert = True
+    if geaendert:
+        d["tarif_netznamen"], d["tarif_zuordnung"] = netznamen, zuord
+        speichere(d)
     regeln = _qos_regeln(g)
     eigene = [r for r in regeln if _ist_eigene(r)]
     fremde = [r for r in regeln if not _ist_eigene(r)]
@@ -1912,7 +1936,7 @@ def tarif_lage(d):
 
     zeilen, ops = [], []
     for n in sorted(netze, key=lambda n: (n.get("name") or "").lower()):
-        tname = zuord.get(n["_id"], "")
+        tname = tarif_von_netz(d, n["_id"], n.get("name"))
         t = tarife.get(tname)
         z = {"id": n["_id"], "name": n.get("name") or "?", "vlan": n.get("vlan") or "", "subnetz": n["ip_subnet"],
              "dhcp": f"{n.get('dhcpd_start', '')} – {_kurz(n.get('dhcpd_stop'))}" if n.get("dhcpd_enabled") else "aus",
@@ -2117,6 +2141,7 @@ def akt_tarife_speichern(d, b):
             umben[alt] = t["name"]
     zuord = d.get("tarif_zuordnung") or {}
     d["tarif_zuordnung"] = {k: umben.get(v, v) for k, v in zuord.items()}
+    d["buchungen"] = {kz: {pz: umben.get(t, t) for pz, t in b.items()} for kz, b in (d.get("buchungen") or {}).items()}
     d["tarife"], d["tarif_modus"] = tarife, modus
     speichere(d)
     return {"tarife": tarife, "modus": modus, "log": [f"✔ {len(tarife)} Tarife gespeichert"
@@ -2129,18 +2154,30 @@ def akt_tarif_zuordnen(d, aenderungen):
         raise Fehler("Ungültige Zuordnung.")
     namen = {t["name"] for t in tarife_pruefen(d["tarife"])}
     zuord = dict(d.get("tarif_zuordnung") or {})
+    netznamen = d.get("tarif_netznamen") or {}
+    buch = d.setdefault("buchungen", {})
     for nid, t in aenderungen.items():
         if not re.fullmatch(r"[A-Za-z0-9\-]{1,64}", str(nid)):
             raise Fehler("Ungültige Netz-ID.")
-        if not t:
-            zuord.pop(nid, None)
-        elif t in namen:
-            zuord[nid] = t
-        else:
+        if t and t not in namen:
             raise Fehler(f"Tarif „{t}“ gibt es nicht.")
+        zp = netz_parzelle(netznamen.get(nid))
+        if zp:  # Parzelle → Buchung (gilt auch für die Kalkulation)
+            zuord.pop(nid, None)
+            b = buch.setdefault(zp[0], {})
+            if t:
+                b[str(zp[1])] = t
+            else:
+                b.pop(str(zp[1]), None)
+        elif not t:
+            zuord.pop(nid, None)
+        else:
+            zuord[nid] = t
+    d["buchungen"] = {kz: b for kz, b in buch.items() if b}
     d["tarif_zuordnung"] = zuord
     speichere(d)
-    return {"log": [f"✔ Zuordnung gespeichert ({len(aenderungen)} Änderung(en), {len(zuord)} Netze mit Tarif)."]}
+    n_buch = sum(len(b) for b in d["buchungen"].values())
+    return {"log": [f"✔ Zuordnung gespeichert ({len(aenderungen)} Änderung(en)) – {n_buch} Parzellen gebucht, {len(zuord)} weitere Netze mit Tarif. Die Parzellen-Tarife gelten auch in der Kalkulation."]}
 
 
 def akt_tarif_erkennen(d):
@@ -2166,7 +2203,7 @@ def akt_tarif_erkennen(d):
         passend = [t["name"] for t in tarife if t["praefix"] == p]
         if len(passend) == 1:
             vorschlag[n["_id"]] = passend[0]
-    neu = {k: v for k, v in vorschlag.items() if k not in zuord}
+    neu = {k: v for k, v in vorschlag.items() if not tarif_von_netz(d, k, next((n.get("name") for n in netze if n["_id"] == k), ""))}
     return {"vorschlag": neu, "log": [f"Vorschlag für {len(neu)} Netz(e) ohne Tarif (bestehende Zuordnungen bleiben). Übernehmen = in der Tabelle eingetragen, dann „Speichern“."]}
 
 
@@ -2432,6 +2469,12 @@ def akt_start(d):
         kacheln.append({"t": "Internet", "v": "online" if (wan.get("status") or www.get("status", "ok")) == "ok" else "gestört",
                         "a": "gut" if (wan.get("status") or "ok") == "ok" else "schlecht",
                         "k": " · ".join(x for x in (wan.get("isp_name") or "", f"{www.get('latency')} ms" if www.get("latency") is not None else "") if x)})
+    try:
+        kg = akt_kalkulation(d)["gesamt"]
+        if kg["parzellen_konf"]:
+            kacheln.append({"t": "Auslastung", "v": f"{kg['auslastung_konf']:.0%}", "a": "gut" if kg["auslastung_konf"] >= 0.6 else "", "k": f"{kg['gebucht']} von {kg['parzellen_konf']} Parzellen gebucht"})
+    except Fehler:
+        pass
     return {"kacheln": kacheln, "konsole": d.get("konsole_name", ""), "zeit": time.strftime("%H:%M"), "log": []}
 
 
@@ -2519,6 +2562,363 @@ async function an(e){e.preventDefault();const b=document.getElementById("b"),f=d
 LOGIN_FORM = """<p>Bitte das Manager-Passwort eingeben. Auf entfernten Handys funktioniert auch die eingerichtete Handy-PIN.</p>
 <form onsubmit="an(event)"><input id="passwort" type="password" autocomplete="current-password" placeholder="Passwort" autofocus required>
 <button id="b">Anmelden</button><div class="f" id="f"></div></form>"""
+
+
+# =============================================================== Kalkulation (Buchungen, Umsatz, Auslastung, Wirtschaftlichkeit)
+KALK_STANDARD = {
+    "kleinunternehmer": True, "ust": 19.0, "preise_inkl_ust": True,
+    "uplink_monat": 75.0, "strom_mast": 50.0, "strom_hv": 80.0, "zahlung_pct": 3.0, "wartung_pct": 3.0,
+    "zentral_start_technik": 1200.0, "zentral_start_personal": 0.0, "zentral_start_sonstiges": 1500.0,
+    "zentral_voll_technik": 36000.0, "zentral_voll_personal": 60000.0, "zentral_voll_sonstiges": 15000.0,
+    "phase": "auto", "abschreibung_jahre": 5.0, "ueberbuchung": 8.0,
+    "ku_grenze_vorjahr": 25000.0, "ku_grenze_lfd": 100000.0, "quote_prognose": 60.0,
+}
+KALK_TEXTE = {
+    "kleinunternehmer": "Kleinunternehmer (§ 19 UStG)", "ust": "Umsatzsteuersatz (%)", "preise_inkl_ust": "Regelbesteuerung: Tarifpreise enthalten MwSt.",
+    "uplink_monat": "Uplink je Sparte und Monat (€, netto)", "strom_mast": "Strom je Mast mit Technik und Jahr (€)", "strom_hv": "Strom Hauptverteiler je Sparte und Jahr (€)",
+    "zahlung_pct": "Zahlungsabwicklung (% vom Umsatz)", "wartung_pct": "Wartung/Ersatzteile (% der Investition je Jahr)",
+    "zentral_start_technik": "Startphase: zentrale Technik (€/Jahr)", "zentral_start_personal": "Startphase: Personal (€/Jahr)", "zentral_start_sonstiges": "Startphase: Versicherung, Steuerberatung (€/Jahr)",
+    "zentral_voll_technik": "Ausbau: zentrale Technik (€/Jahr)", "zentral_voll_personal": "Ausbau: Personal (€/Jahr)", "zentral_voll_sonstiges": "Ausbau: Versicherung, Steuerberatung, Recht (€/Jahr)",
+    "phase": "Zentrale Kosten", "abschreibung_jahre": "Abschreibungsdauer Hardware (Jahre)", "ueberbuchung": "Überbuchungsfaktor (1:x) für den Uplink",
+    "ku_grenze_vorjahr": "Umsatzgrenze Kleinunternehmer Vorjahr (€)", "ku_grenze_lfd": "Umsatzgrenze laufendes Jahr (€)", "quote_prognose": "Buchungsquote für Prognose (%)",
+}
+PAZ_RE = re.compile(r"^(.+)-Paz\.(\d{1,3})$")
+
+
+def netz_parzelle(name):
+    m = PAZ_RE.match(str(name or ""))
+    return (m.group(1), int(m.group(2))) if m else None
+
+
+def tarif_von_netz(d, nid, name):
+    """Tarif eines Netzes: bei Parzellen-Netzen aus den Buchungen, sonst aus der Netz-Zuordnung"""
+    zp = netz_parzelle(name)
+    if zp:
+        t = ((d.get("buchungen") or {}).get(zp[0]) or {}).get(str(zp[1]))
+        if t:
+            return t
+    return (d.get("tarif_zuordnung") or {}).get(nid, "")
+
+
+def kalk_annahmen(d):
+    roh = ((d.get("kalk") or {}).get("annahmen")) or {}
+    a = dict(KALK_STANDARD)
+    for k, std in KALK_STANDARD.items():
+        if k not in roh:
+            continue
+        v = roh[k]
+        if isinstance(std, bool):
+            a[k] = bool(v)
+        elif k == "phase":
+            a[k] = v if v in ("auto", "start", "voll") else "auto"
+        else:
+            try:
+                a[k] = max(0.0, float(v))
+            except (TypeError, ValueError):
+                raise Fehler(f"„{KALK_TEXTE.get(k, k)}“ muss eine Zahl sein.")
+    if a["abschreibung_jahre"] < 1 or a["ueberbuchung"] < 1:
+        raise Fehler("Abschreibungsdauer und Überbuchungsfaktor müssen mindestens 1 sein.")
+    if a["quote_prognose"] > 100:
+        raise Fehler("Buchungsquote höchstens 100 %.")
+    return a
+
+
+def kalk_sparten(d):
+    """Alle eingetragenen Sparten: aus der Planung (aktives Gateway) und aus dem VLAN-Planer übernommene"""
+    k = d.get("kalk") or {}
+    extra = k.get("sparten") or {}
+    aus = {}
+    try:
+        plan = plan_berechnen(d["plan"])
+        for s in plan["sparten"]:
+            aus[s["kz"]] = {"kz": s["kz"], "name": s["name"], "n": s["n"], "gateway": plan["gateway"], "quelle": "Planung"}
+    except Fehler:
+        pass
+    for kz, s in extra.items():
+        if kz in aus:
+            continue
+        try:
+            n = int(s.get("n") or 0)
+        except (TypeError, ValueError):
+            n = 0
+        if s.get("name") and n > 0:
+            aus[kz] = {"kz": kz, "name": s["name"], "n": n, "gateway": s.get("gateway") or "", "quelle": s.get("quelle", "VLAN-Planer")}
+    for kz, s in aus.items():
+        w = extra.get(kz) or {}
+        s["investition"] = w.get("investition")
+        s["masten"] = w.get("masten")
+        s["uplink"] = w.get("uplink")
+    return aus
+
+
+def _zahl_oder_none(v, text):
+    if v in (None, ""):
+        return None
+    try:
+        x = float(str(v).replace(",", "."))
+    except ValueError:
+        raise Fehler(f"{text}: bitte eine Zahl eintragen.")
+    if x < 0:
+        raise Fehler(f"{text}: nicht negativ.")
+    return x
+
+
+def akt_kalkulation(d, prognose=False):
+    a = kalk_annahmen(d)
+    tarife = tarife_pruefen(d["tarife"])
+    preis = {t["name"]: float(t.get("preis") or 0) for t in tarife}
+    down = {t["name"]: float(t.get("down") or 0) for t in tarife}
+    ku = a["kleinunternehmer"]
+    ek = 1 + a["ust"] / 100 if ku else 1.0  # Einkauf ohne Vorsteuerabzug = brutto
+    netto = (lambda p: p) if ku else ((lambda p: p / (1 + a["ust"] / 100)) if a["preise_inkl_ust"] else (lambda p: p))
+    oe = sum(preis.values()) / len(preis) if preis else 0
+    buch = d.get("buchungen") or {}
+    zeilen, unbekannt = [], 0
+    for kz, s in sorted(kalk_sparten(d).items(), key=lambda x: (str(x[1]["gateway"]), x[1]["name"].lower())):
+        b = buch.get(kz) or {}
+        je = {t["name"]: 0 for t in tarife}
+        for p, t in b.items():
+            if p.isdigit() and 1 <= int(p) <= s["n"]:
+                if t in je:
+                    je[t] += 1
+                else:
+                    unbekannt += 1
+        gebucht = sum(je.values())
+        umsatz_b = sum(je[t] * preis[t] for t in je)
+        umsatz = sum(je[t] * netto(preis[t]) for t in je)
+        uplink_bedarf = sum(je[t] * down[t] for t in je) / a["ueberbuchung"]
+        status = "konfiguriert" if gebucht else "eingetragen"
+        prog = False
+        if not gebucht and prognose and a["quote_prognose"] > 0:
+            # Prognose: Buchungsquote × Parzellen, Tarifmix wie im Durchschnitt der Tarifpreise
+            gebucht_p = round(s["n"] * a["quote_prognose"] / 100)
+            umsatz_b = gebucht_p * oe
+            umsatz = gebucht_p * netto(oe)
+            uplink_bedarf = gebucht_p * (sum(down.values()) / len(down) if down else 0) / a["ueberbuchung"]
+            prog, status = gebucht_p, "Prognose"
+        inv = float(s["investition"] or 0)
+        masten = float(s["masten"] or 0)
+        uplink = s["uplink"] if s["uplink"] is not None else a["uplink_monat"]
+        in_betrieb = bool(gebucht or prog or inv)
+        kosten = ((uplink * 12 + masten * a["strom_mast"] + a["strom_hv"]) * ek + umsatz * a["zahlung_pct"] / 100 + inv * a["wartung_pct"] / 100) if in_betrieb else 0.0
+        db = umsatz - kosten
+        zeilen.append({
+            "kz": kz, "name": s["name"], "gateway": s["gateway"], "quelle": s["quelle"], "n": s["n"], "gebucht": gebucht, "prognose": prog or 0,
+            "rate": gebucht / s["n"] if s["n"] else 0, "je": je, "umsatz_brutto": round(umsatz_b, 2), "umsatz": round(umsatz, 2),
+            "erloes_monat": round(umsatz_b / gebucht / 12, 2) if gebucht else (round(oe / 12, 2) if prog else 0),
+            "investition": s["investition"], "masten": s["masten"], "uplink": s["uplink"], "kosten": round(kosten, 2), "db": round(db, 2),
+            "amortisation": round(inv / db, 1) if inv and db > 0 else ("nie" if inv and db <= 0 else None),
+            "uplink_bedarf": round(uplink_bedarf), "uplink_warnung": uplink_bedarf > 900, "status": status})
+    konf = [z for z in zeilen if z["status"] == "konfiguriert"]
+    summe = lambda liste, k: round(sum(float(z[k] or 0) for z in liste), 2)
+    parz_konf, geb = sum(z["n"] for z in konf), sum(z["gebucht"] for z in konf)
+    parz_alle = sum(z["n"] for z in zeilen)
+    phase = a["phase"] if a["phase"] != "auto" else ("start" if ku else "voll")
+    zentral = sum(a[f"zentral_{phase}_{x}"] for x in ("technik", "personal", "sonstiges"))
+    zentral_ek = (a[f"zentral_{phase}_technik"] + a[f"zentral_{phase}_sonstiges"]) * ek + a[f"zentral_{phase}_personal"]
+    umsatz_ges, db_ges, inv_ges = summe(zeilen, "umsatz"), summe(zeilen, "db"), summe(zeilen, "investition")
+    afa = inv_ges / a["abschreibung_jahre"]
+    ergebnis_vor = db_ges - zentral_ek
+    umsatz_brutto_ges = summe(zeilen, "umsatz_brutto")
+    oe_buchung = umsatz_brutto_ges / max(1, geb + sum(z["prognose"] for z in zeilen)) if umsatz_brutto_ges else oe
+    gesamt = {
+        "sparten": len(zeilen), "sparten_konf": len(konf), "parzellen_alle": parz_alle, "parzellen_konf": parz_konf, "gebucht": geb,
+        "auslastung_konf": geb / parz_konf if parz_konf else 0, "auslastung_alle": geb / parz_alle if parz_alle else 0,
+        "je": {t["name"]: sum(z["je"][t["name"]] for z in zeilen) for t in tarife},
+        "umsatz_brutto": umsatz_brutto_ges, "umsatz": umsatz_ges, "kosten": summe(zeilen, "kosten"), "db": db_ges, "investition": inv_ges,
+        "zentral": round(zentral_ek, 2), "phase": phase, "ergebnis_vor_afa": round(ergebnis_vor, 2), "afa": round(afa, 2), "ergebnis": round(ergebnis_vor - afa, 2),
+        "amortisation": round(inv_ges / ergebnis_vor, 1) if inv_ges and ergebnis_vor > 0 else ("nicht erreicht" if inv_ges else None),
+        "ku": ku, "ku_grenze": a["ku_grenze_vorjahr"], "ku_status": ("unter der Grenze" if umsatz_brutto_ges <= a["ku_grenze_vorjahr"] else "Grenze überschritten → ab Folgejahr Regelbesteuerung") if ku else "Regelbesteuerung",
+        "ku_rest_parzellen": int(max(0, a["ku_grenze_vorjahr"] - umsatz_brutto_ges) // oe_buchung) if ku and oe_buchung else None,
+    }
+    log = [f"{len(zeilen)} Sparten eingetragen, davon {len(konf)} mit Buchungen · {geb} von {parz_konf} Parzellen gebucht ({gesamt['auslastung_konf']:.1%})"]
+    if unbekannt:
+        log.append(f"⚠ {unbekannt} Buchung(en) mit einem Tarif, den es nicht mehr gibt – im Bereich „Buchungen erfassen“ neu zuordnen.")
+    if any(z["uplink_warnung"] for z in zeilen):
+        log.append("⚠ Bei mindestens einer Sparte reicht 1 Gbit/s Uplink rechnerisch nicht (Spalte Uplink-Bedarf).")
+    return {"zeilen": zeilen, "gesamt": gesamt, "tarife": [{"name": t["name"], "preis": t.get("preis", 0), "down": t["down"]} for t in tarife],
+            "annahmen": a, "texte": KALK_TEXTE, "log": log}
+
+
+def akt_kalk_annahmen(d, b):
+    k = d.setdefault("kalk", {})
+    alt = k.get("annahmen") or {}
+    k["annahmen"] = {**alt, **{x: b[x] for x in KALK_STANDARD if x in b}}
+    try:
+        kalk_annahmen(d)
+    except Fehler:
+        k["annahmen"] = alt
+        raise
+    speichere(d)
+    return {"log": ["✔ Annahmen gespeichert."]}
+
+
+def akt_kalk_sparte(d, b):
+    """Investition, Masten mit Technik und Uplink je Sparte speichern"""
+    kz = str(b.get("sparte") or "")
+    if kz not in kalk_sparten(d):
+        raise Fehler("Sparte unbekannt.")
+    k = d.setdefault("kalk", {})
+    s = k.setdefault("sparten", {}).setdefault(kz, {})
+    for feld, text in (("investition", "Investition"), ("masten", "Masten mit Technik"), ("uplink", "Uplink €/Monat")):
+        if feld in b:
+            s[feld] = _zahl_oder_none(b[feld], text)
+    speichere(d)
+    return {"log": [f"✔ {kz} gespeichert."]}
+
+
+def akt_buchungen(d, kz):
+    sp = kalk_sparten(d).get(kz)
+    if not sp:
+        raise Fehler("Sparte unbekannt.")
+    b = (d.get("buchungen") or {}).get(kz) or {}
+    namen = {t["name"] for t in tarife_pruefen(d["tarife"])}
+    return {"sparte": sp["name"], "kz": kz, "n": sp["n"],
+            "zeilen": [{"p": p, "netz": NETZ_PARZELLE.format(kz=kz, p=p), "tarif": b.get(str(p), ""), "unbekannt": bool(b.get(str(p))) and b.get(str(p)) not in namen}
+                       for p in range(1, sp["n"] + 1)], "log": []}
+
+
+def akt_buchungen_speichern(d, kz, aenderungen):
+    sp = kalk_sparten(d).get(kz)
+    if not sp or not isinstance(aenderungen, dict):
+        raise Fehler("Sparte unbekannt oder ungültige Angaben.")
+    namen = {t["name"] for t in tarife_pruefen(d["tarife"])}
+    b = d.setdefault("buchungen", {}).setdefault(kz, {})
+    for p, t in aenderungen.items():
+        if not str(p).isdigit() or not 1 <= int(p) <= sp["n"]:
+            raise Fehler(f"Parzelle {p} gibt es in {kz} nicht (1–{sp['n']}).")
+        if not t:
+            b.pop(str(int(p)), None)
+        elif t in namen:
+            b[str(int(p))] = t
+        else:
+            raise Fehler(f"Tarif „{t}“ gibt es nicht.")
+    if not b:
+        d["buchungen"].pop(kz, None)
+    speichere(d)
+    journal(f"Buchungen {kz}: {len(aenderungen)} Änderung(en), jetzt {len(b)} gebucht")
+    return {"log": [f"✔ {len(aenderungen)} Änderung(en) gespeichert – {len(b)} von {sp['n']} Parzellen gebucht. "
+                    "Ans Gateway (Bandbreite/Netzgröße) geht das über den Reiter „Tarife“."]}
+
+
+def _xlsx_blaetter(roh_bytes):
+    """liest alle Blätter einer xlsx (gespeicherte Werte, auch Formelergebnisse) – ohne Zusatzpakete"""
+    M = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+    R = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
+    try:
+        z = zipfile.ZipFile(io.BytesIO(roh_bytes))
+    except zipfile.BadZipFile:
+        raise Fehler("Das ist keine Excel-Datei (.xlsx).")
+    wb = ET.fromstring(z.read("xl/workbook.xml"))
+    rels = {r.get("Id"): r.get("Target") for r in ET.fromstring(z.read("xl/_rels/workbook.xml.rels"))}
+    strings = []
+    if "xl/sharedStrings.xml" in z.namelist():
+        for si in ET.fromstring(z.read("xl/sharedStrings.xml")).iter(M + "si"):
+            strings.append("".join(t.text or "" for t in si.iter(M + "t")))
+    def lies(name):
+        rid = next((s.get(R + "id") for s in wb.iter(M + "sheet") if s.get("name") == name), None)
+        if not rid:
+            return None
+        ziel = rels[rid].lstrip("/")
+        ziel = ziel if ziel.startswith("xl/") else "xl/" + ziel
+        zellen = {}
+        for c in ET.fromstring(z.read(ziel)).iter(M + "c"):
+            v, t = c.find(M + "v"), c.get("t")
+            if t == "inlineStr":
+                zellen[c.get("r")] = "".join(x.text or "" for x in c.iter(M + "t"))
+            elif v is None or t == "e":
+                continue
+            elif t == "s":
+                zellen[c.get("r")] = strings[int(v.text)]
+            elif t in ("str", "b"):
+                zellen[c.get("r")] = v.text
+            else:
+                try:
+                    f = float(v.text)
+                    zellen[c.get("r")] = int(f) if f == int(f) else f
+                except ValueError:
+                    zellen[c.get("r")] = v.text
+        return zellen
+    return [s.get("name") for s in wb.iter(M + "sheet")], lies
+
+
+def _norm(s):
+    s = str(s or "").lower()
+    for a, b in (("ä", "ae"), ("ö", "oe"), ("ü", "ue"), ("ß", "ss")):
+        s = s.replace(a, b)
+    s = re.sub(r"\b(kgv|kga|kgs|kleingartenverein|kleingartenanlage|e\.?\s?v\.?|sparte)\b", " ", s)
+    return re.sub(r"[^a-z0-9]+", "", s)
+
+
+def akt_kalk_import(d, roh):
+    """Excel: entweder die Kalkulation (Annahmen, Sparten-Blätter) oder der VLAN-Planer (Blatt Sparten)"""
+    namen, lies = _xlsx_blaetter(roh)
+    log = []
+    k = d.setdefault("kalk", {})
+    if "Annahmen" in namen and "Zusammenfassung" in namen:
+        an = lies("Annahmen") or {}
+        def z(c, std=None):
+            v = an.get(c)
+            return v if isinstance(v, (int, float)) else std
+        neu = {"kleinunternehmer": z("B12", 1) == 1, "ust": (z("B20", 0.19) or 0) * 100, "preise_inkl_ust": z("B19", 1) == 1,
+               "uplink_monat": z("B24"), "strom_mast": z("B25"), "strom_hv": z("B26"),
+               "zahlung_pct": (z("B27", 0.03) or 0) * 100, "wartung_pct": (z("B28", 0.03) or 0) * 100,
+               "zentral_voll_technik": z("B31"), "zentral_voll_personal": z("B32"), "zentral_voll_sonstiges": z("B33"),
+               "zentral_start_technik": z("B36"), "zentral_start_personal": z("B37"), "zentral_start_sonstiges": z("B38"),
+               "abschreibung_jahre": z("B40"), "ueberbuchung": z("B41"), "ku_grenze_vorjahr": z("B14"), "ku_grenze_lfd": z("B15"),
+               "quote_prognose": (z("B18", 0.6) or 0) * 100}
+        k["annahmen"] = {**(k.get("annahmen") or {}), **{x: v for x, v in neu.items() if v is not None}}
+        log.append("✔ Annahmen übernommen (Steuer, Uplink, Strom, Zahlung, Wartung, zentrale Kosten, Abschreibung, Quote).")
+        # Tarifpreise der Reihe nach auf die Tarife des Managers
+        tarife = tarife_pruefen(d["tarife"])
+        preise = [(an.get(f"A{r}"), an.get(f"C{r}")) for r in range(4, 10) if isinstance(an.get(f"C{r}"), (int, float))]
+        for t, (n, p) in zip(tarife, preise):
+            t["preis"] = _zahl(p)
+            log.append(f"✔ Preis {t['name']}: {t['preis']} €/Jahr (aus „{n}“)")
+        d["tarife"] = tarife
+        # Sparten-Blätter aus der Zusammenfassung
+        zus = lies("Zusammenfassung") or {}
+        sparten = kalk_sparten(d)
+        for r in range(5, 155):
+            blatt = zus.get(f"A{r}")
+            if not blatt or blatt not in namen:
+                continue
+            w = lies(blatt) or {}
+            name, var = w.get("B3") or blatt, str(w.get("B7") or "A").upper()
+            inv = w.get("G49") if isinstance(w.get("G49"), (int, float)) else w.get("F49" if var == "B" else "D49")
+            masten = w.get("G52") if isinstance(w.get("G52"), (int, float)) else None
+            treffer = next((kz for kz, s in sparten.items() if _norm(s["name"]) and (_norm(s["name"]) in _norm(name) or _norm(name) in _norm(s["name"]))), None)
+            if not treffer:
+                log.append(f"ℹ Blatt „{blatt}“ ({name}): keine passende Sparte im Manager – erst Sparte eintragen bzw. VLAN-Planer übernehmen.")
+                continue
+            s = k.setdefault("sparten", {}).setdefault(treffer, {})
+            if isinstance(inv, (int, float)):
+                s["investition"] = round(float(inv), 2)
+            if isinstance(masten, (int, float)):
+                s["masten"] = float(masten)
+            up = w.get("B6")
+            if isinstance(up, (int, float)):
+                s["uplink"] = float(up)
+            log.append(f"✔ {treffer} ← Blatt „{blatt}“: Investition {s.get('investition', 0):,.2f} € (Variante {var}), {int(s.get('masten') or 0)} Masten mit Technik".replace(",", "X").replace(".", ",").replace("X", "."))
+    elif "Sparten" in namen and "Gateways" in namen:
+        sp = lies("Sparten") or {}
+        n_neu = 0
+        for r in range(5, 1000):
+            name = sp.get(f"B{r}")
+            if name is None and sp.get(f"A{r}") is None:
+                break
+            gw, kz, n = sp.get(f"F{r}"), sp.get(f"D{r}"), sp.get(f"C{r}")
+            if not name or not kz or not isinstance(n, (int, float)) or gw in (None, ""):
+                continue
+            s = k.setdefault("sparten", {}).setdefault(str(kz), {})
+            s.update({"name": str(name), "n": int(n), "gateway": gw, "quelle": "VLAN-Planer"})
+            n_neu += 1
+        # Sparten, die im VLAN-Planer kein Gateway mehr haben, verlieren den Planer-Eintrag (Werte bleiben)
+        log.append(f"✔ {n_neu} Sparten mit Gateway aus dem VLAN-Planer übernommen (Name, Kürzel, Parzellen, Gateway).")
+    else:
+        raise Fehler("Unbekannte Datei: erwartet wird die Kalkulation (Blätter „Annahmen“ und „Zusammenfassung“) oder der VLAN-Planer (Blätter „Sparten“ und „Gateways“).")
+    speichere(d)
+    return {"log": log}
 
 
 # =============================================================== Webserver
@@ -2641,7 +3041,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.headers.get("X-Token") != TOKEN:
             return self._send(403, {"fehler": "nicht erlaubt"})
         roh = self.rfile.read(int(self.headers.get("Content-Length") or 0))
-        body = None if u.path in ("/api/excel", "/api/logo") else json.loads(roh or b"{}")
+        body = None if u.path in ("/api/excel", "/api/logo", "/api/kalk-import") else json.loads(roh or b"{}")
         self._antwort(u.path, {}, body, roh)
 
     def _antwort(self, pfad, q, b, roh):
@@ -2732,6 +3132,11 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/tarif-erkennen": lambda: akt_tarif_erkennen(d),
                 "/api/tarif-uebertragen": lambda: akt_tarif_uebertragen(d, b.get("netze") or [], b.get("regeln") or [], bool(b.get("ausfuehren"))),
                 "/api/tarif-rueckgaengig": lambda: akt_tarif_rueckgaengig(d),
+                "/api/kalkulation": lambda: akt_kalkulation(d, q.get("prognose", ["0"])[0] == "1"),
+                "/api/kalk-annahmen": lambda: akt_kalk_annahmen(d, b),
+                "/api/kalk-sparte": lambda: akt_kalk_sparte(d, b),
+                "/api/kalk-import": lambda: akt_kalk_import(d, roh),
+                "/api/buchungen": lambda: akt_buchungen(d, q.get("sparte", [""])[0]) if b is None else akt_buchungen_speichern(d, b.get("sparte", ""), b.get("aenderungen")),
                 "/api/fern": lambda: akt_fern(d) if b is None else akt_fern_speichern(d, b),
                 "/api/tailscale": lambda: akt_tailscale(bool(b.get("an"))),
                 "/api/start": lambda: akt_start(d),
@@ -2840,7 +3245,7 @@ td input{padding:6px 8px;font-size:14px}.mono{font-family:Consolas,monospace}
 .pwleiste{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px}.pwleiste input{max-width:260px}
 #pw_st{font-size:13px;color:var(--muted);flex:1}#pw_st.dirty{color:var(--amber);font-weight:600}
 td input.pwfeld{font-family:Consolas,'DejaVu Sans Mono',monospace;min-width:190px;font-variant-ligatures:none}
-#tz_tab td:nth-child(2),#tz_tab td:nth-child(4),#tq_netz td:nth-child(2),#tq_qos td:nth-child(2){white-space:nowrap}tr.geaendert td{background:#fff6dd}tr.falsch td{background:#fde8e6}tr.gesperrt td{color:var(--muted)}
+#tz_tab td:nth-child(2),#tz_tab td:nth-child(4),#tq_netz td:nth-child(2),#tq_qos td:nth-child(2){white-space:nowrap}#kk_tab td,#kk_tab th{white-space:nowrap}#kk_tab td:first-child{white-space:normal;min-width:150px}tr.geaendert td{background:#fff6dd}tr.falsch td{background:#fde8e6}tr.gesperrt td{color:var(--muted)}
 .pwst{font-size:12px;white-space:nowrap}.pwst.f{color:var(--red)}.pwst.g{color:var(--amber)}
 button.mini{border:1px solid var(--line);background:#fff;border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer;color:var(--navy);margin-right:3px}button.mini:hover{background:#eef2f5}
 .balken{position:relative;height:16px;min-width:90px;background:#eef1ec;border-radius:8px;overflow:hidden}.balken i{position:absolute;inset:0 auto 0 0;background:var(--green)}
@@ -3034,6 +3439,27 @@ nav{position:sticky;top:0;z-index:20}
 <div class="knoepfe" style="margin-top:18px;border-top:1px solid var(--line);padding-top:14px"><button class="k" onclick="tqRueckgaengig()">Letzte Tarif-Übertragung rückgängig</button></div></div>
 </section>
 
+<section id="kalkulation"><div class="karte"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0;flex:1">Kalkulation &amp; Auslastung</h2>
+<label class="feld chk" style="margin:0;display:flex;gap:6px;align-items:center"><input type="checkbox" id="kk_prog" onchange="kkLaden()" style="width:auto"> Prognose für Sparten ohne Buchungen</label>
+<button class="k p" onclick="kkLaden()">Berechnen</button></div>
+<p class="hint">Gebuchte Parzellen × Tarifpreis je Sparte, Buchungsrate und Gesamtauslastung aller Sparten mit Buchungen. Kosten und Ergebnis nach den Annahmen der Kalkulation. Rechnet nur hier im Manager – am Gateway ändert sich nichts.</p>
+<div class="kacheln" id="kk_k"></div><div class="log" id="log_kk"></div></div>
+<div class="karte"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h3 style="margin:0;flex:1">Je Sparte</h3><button class="k" onclick="kkCsv()">Als CSV speichern</button></div>
+<p class="hint">Investition, Masten mit Technik und Uplink je Sparte direkt in der Tabelle ändern (wird sofort gespeichert) oder aus der Kalkulation (Excel) übernehmen. Uplink leer = Standard aus den Annahmen.</p>
+<div class="tab" id="kk_tab"></div></div>
+<div class="karte"><h3>Buchungen erfassen</h3>
+<p class="hint">Welche Parzelle welchen Tarif gebucht hat. Was im Reiter „Tarife“ einer Parzelle zugeordnet ist, steht automatisch hier – und umgekehrt. Ans Gateway (Bandbreite, Netzgröße) geht es über „Tarife“ → Übertragen.</p>
+<div class="reihe"><div><label for="kb_sp">Sparte</label><select id="kb_sp" onchange="kbLaden()"></select></div>
+<div><label for="kb_bereich">Parzellen (z. B. 1-20, 25, 31)</label><input id="kb_bereich" placeholder="1-20, 25"></div>
+<div><label for="kb_tarif">Tarif</label><div style="display:flex;gap:6px"><select id="kb_tarif"></select><button class="k" onclick="kbMassen()">setzen</button></div></div></div>
+<div class="kacheln" id="kb_k"></div><div class="tab" id="kb_tab"></div>
+<div class="knoepfe"><button class="k p" onclick="kbSpeichern()">Buchungen speichern</button><button class="k" onclick="kbLaden(true)">Verwerfen</button><span id="kb_offen" class="status"></span></div><div class="log" id="log_kb"></div></div>
+<div class="karte"><h3>Annahmen</h3><p class="hint">Aus der Kalkulation übernommen oder hier ändern. Tarifpreise (€ pro Jahr) stehen im Reiter „Tarife“.</p>
+<div class="reihe" id="ka_form"></div><div class="knoepfe"><button class="k p" onclick="kaSpeichern()">Annahmen speichern</button></div><div class="log" id="log_ka"></div></div>
+<div class="karte"><h3>Aus Excel übernehmen</h3><p class="hint"><b>Kalkulation</b> (Kalkulation_Sparten_WLAN.xlsx): Annahmen, Tarifpreise und je Sparten-Blatt Investition und Masten. <b>VLAN-Planer</b>: alle Sparten, die dort ein Gateway haben (Name, Kürzel, Parzellen, Gateway).</p>
+<div class="knoepfe"><label class="k">Kalkulation oder VLAN-Planer wählen …<input type="file" id="kk_datei" accept=".xlsx" onchange="kkImport()" style="display:none"></label></div><div class="log" id="log_ki"></div></div>
+</section>
+
 <section id="kartendesign"><div class="karte" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
 <h2 style="margin:0;flex:1;min-width:200px">Zugangskarten gestalten</h2><span id="kd_status"></span>
 <button class="k p" onclick="designSpeichern()">Speichern</button><button class="k" onclick="testdruck()">Testseite drucken</button><button class="k" onclick="designStandard()">Standard wiederherstellen</button></div>
@@ -3073,6 +3499,7 @@ nav{position:sticky;top:0;z-index:20}
 <b>Zugangskarten:</b> Aussehen im Reiter „Kartendesign“ einstellen und speichern – gedruckt wird unter „Einrichten“ Schritt 3. Logo-Datei und Design liegen im Programmordner.<br><br>
 <b>Passwörter ändern:</b> „Einrichten“ Schritt 3 → „Anzeigen“, Passwort in der Tabelle ändern, „Änderungen speichern“. Dann Reiter „Übertragen“ → „Unterschiede ermitteln“ → „Ausgewählte übertragen“ und die Karte neu drucken.<br><br>
 <b>Handy &amp; Tablet:</b> „Verbindung → Handy &amp; Tablet“: optional eine Handy-PIN festlegen, Tailscale-Freigabe (von überall, echte App) oder Heimnetz einschalten, QR-Code mit dem Handy scannen, Manager-Passwort oder PIN eingeben, „App installieren“. Der PC mit dem Manager muss dabei laufen.<br><br>
+<b>Kalkulation:</b> Reiter „Kalkulation“ → „Aus Excel übernehmen“ (Kalkulation und/oder VLAN-Planer) · Buchungen je Parzelle erfassen (oder über „Tarife“) · Tabelle „Je Sparte“ zeigt Umsatz, Buchungsrate, Kosten, Deckungsbeitrag; oben die Gesamtauslastung aller Sparten mit Buchungen.<br><br>
 <b>Tarife:</b> Reiter „Tarife“ → Tarife festlegen (Bandbreite Download/Upload, Netzmaske, Endgeräte) und speichern · „Netze laden“ · je Netz einen Tarif wählen (oder markieren und „für markierte setzen“) · „Zuordnung speichern“ · unten „Vorschau“, dann „Ausgewählte übertragen“. Bandbreite → QoS-Regel „SparteNet-Tarif-…“, Netzgröße → Subnetz und DHCP-Bereich des Netzes. Ein /29 mit DHCP .2–.6 lässt genau 5 Geräte zu, ein /28 mit .2–.11 genau 10.<br><br>
 <b>Übertragen:</b> Erst „Schreibzugriff prüfen“. Wird das abgelehnt (403), den API-Key auf unifi.ui.com als Besitzer bzw. Super-Admin neu erstellen.<br><br>
 <b>Systeminfo / Alle Daten:</b> nur lesend. Datenverkehr je Parzelle und einige Quellen der klassischen Schnittstelle gibt die Konsole über die Cloud nicht immer frei – „Alle Daten → Verfügbarkeit prüfen“ zeigt, was geht.<br><br>
@@ -3080,9 +3507,9 @@ nav{position:sticky;top:0;z-index:20}
 </main>
 <script>
 const T="__TOKEN__";let LETZT=null,PLAN=null,PLANZ=null,PPSK=null,PPSKSP=null,CODES=[],VMIN=0,EINST={};
-const TABS=[["start","Start"],["verbindung","Verbindung"],["lesen","Auslesen"],["planung","Planung"],["abgleich","Abgleich"],["einrichten","Einrichten"],["uebertragen","Übertragen"],["tarife","Tarife"],["kartendesign","Kartendesign"],["voucher","Gast-Voucher"],["system","Systeminfo"],["daten","Alle Daten"],["hilfe","Hilfe"]];
+const TABS=[["start","Start"],["verbindung","Verbindung"],["lesen","Auslesen"],["planung","Planung"],["abgleich","Abgleich"],["einrichten","Einrichten"],["uebertragen","Übertragen"],["tarife","Tarife"],["kalkulation","Kalkulation"],["kartendesign","Kartendesign"],["voucher","Gast-Voucher"],["system","Systeminfo"],["daten","Alle Daten"],["hilfe","Hilfe"]];
 const $=id=>document.getElementById(id);const nav=$("nav");TABS.forEach(([id,t])=>{const b=document.createElement("button");b.textContent=t;b.onclick=()=>zeige(id);b.id="n_"+id;nav.appendChild(b)});
-function zeige(id){if(id=="start"&&!$("st_k").innerHTML&&typeof EINST!="undefined"&&EINST.konsole_id)startLaden().catch(()=>{});if(id=="verbindung")fernLaden().catch(()=>{});if(location.hash!="#"+id)history.replaceState(null,"","#"+id);setTimeout(()=>{const b=document.querySelector("nav button.aktiv");if(b&&b.scrollIntoView)b.scrollIntoView({inline:"center",block:"nearest"})},0);if(id=="kartendesign"&&!DESIGN)designLaden();if(id=="tarife"&&!TF)tfLaden();if(id=="system"&&!SYS)sysLaden();if(id=="daten"&&!DLISTE)datenListe();document.querySelectorAll("section").forEach(s=>s.classList.toggle("aktiv",s.id==id));document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("aktiv",b.id=="n_"+id))}
+function zeige(id){if(id=="start"&&!$("st_k").innerHTML&&typeof EINST!="undefined"&&EINST.konsole_id)startLaden().catch(()=>{});if(id=="verbindung")fernLaden().catch(()=>{});if(location.hash!="#"+id)history.replaceState(null,"","#"+id);setTimeout(()=>{const b=document.querySelector("nav button.aktiv");if(b&&b.scrollIntoView)b.scrollIntoView({inline:"center",block:"nearest"})},0);if(id=="kalkulation"&&!KK)kkLaden().catch(()=>{});if(id=="kartendesign"&&!DESIGN)designLaden();if(id=="tarife"&&!TF)tfLaden();if(id=="system"&&!SYS)sysLaden();if(id=="daten"&&!DLISTE)datenListe();document.querySelectorAll("section").forEach(s=>s.classList.toggle("aktiv",s.id==id));document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("aktiv",b.id=="n_"+id))}
 async function api(pfad,body,logid){const el=logid&&$(logid);const kn=[...document.querySelectorAll("button")];kn.forEach(b=>b.disabled=true);if(el)el.textContent="… bitte warten (über die Cloud kann das einige Sekunden dauern)";
  try{const r=await fetch(pfad,{method:body===undefined?"GET":"POST",headers:{"X-Token":T,"Content-Type":"application/json"},body:body===undefined?undefined:(body instanceof Blob?body:JSON.stringify(body))});
  if(r.status==401||r.status==403){location.reload();return new Promise(()=>{})}const d=await r.json();if(!r.ok)throw new Error(d.fehler||r.status);if(el)el.textContent=d.log?d.log.join("\n"):"";return d}
@@ -3325,8 +3752,8 @@ async function journalZeigen(){await api("/api/journal",undefined,"log_jn")}
 let TF=null,TFL=[],TZ=null,TZAEND={};
 function tfBereich(p,n){p=+p;n=+n||0;const start=p<=24?6:2,letzte=Math.pow(2,32-p)-2,platz=letzte-start+1;if(n>platz)return{fehler:"passt nicht – max. "+platz};const stop=n?start+n-1:letzte;return{text:"DHCP ."+start+"–."+stop+" · "+(stop-start+1)+" Geräte"}}
 function tfMaske(p){const m=(0xffffffff<<(32-p))>>>0;return[m>>>24,(m>>16)&255,(m>>8)&255,m&255].join(".")}
-function tfZeigen(){$("tf_tab").innerHTML="<tr><th>Tarif</th><th>Download Mbit/s</th><th>Upload Mbit/s</th><th>Netzmaske</th><th>Endgeräte</th><th>ergibt</th><th></th></tr>"+TFL.map((t,i)=>{const b=tfBereich(t.praefix,t.geraete);
- return `<tr><td><input class="tf_in" data-i="${i}" data-k="name" value="${esc(t.name)}" style="min-width:90px"></td><td><input class="tf_in" type="number" min="0.1" step="any" data-i="${i}" data-k="down" value="${esc(t.down)}" style="width:90px"></td><td><input class="tf_in" type="number" min="0.1" step="any" data-i="${i}" data-k="up" value="${esc(t.up)}" style="width:90px"></td>
+function tfZeigen(){$("tf_tab").innerHTML="<tr><th>Tarif</th><th>Download Mbit/s</th><th>Upload Mbit/s</th><th>Preis €/Jahr</th><th>Netzmaske</th><th>Endgeräte</th><th>ergibt</th><th></th></tr>"+TFL.map((t,i)=>{const b=tfBereich(t.praefix,t.geraete);
+ return `<tr><td><input class="tf_in" data-i="${i}" data-k="name" value="${esc(t.name)}" style="min-width:90px"></td><td><input class="tf_in" type="number" min="0.1" step="any" data-i="${i}" data-k="down" value="${esc(t.down)}" style="width:90px"></td><td><input class="tf_in" type="number" min="0.1" step="any" data-i="${i}" data-k="up" value="${esc(t.up)}" style="width:90px"></td><td><input class="tf_in" type="number" min="0" step="any" data-i="${i}" data-k="preis" value="${esc(t.preis??0)}" style="width:90px" title="${t.preis?(t.preis/12).toLocaleString("de-DE",{maximumFractionDigits:2})+" € im Monat":""}"></td>
  <td><select class="tf_in" data-i="${i}" data-k="praefix">${[24,25,26,27,28,29,30].map(p=>`<option value="${p}"${p==t.praefix?" selected":""}>/${p} · ${tfMaske(p)}</option>`).join("")}</select></td>
  <td><input class="tf_in" type="number" min="0" data-i="${i}" data-k="geraete" value="${esc(t.geraete)}" style="width:80px"></td><td class="tf_erg" data-i="${i}">${b.fehler?'<span class="fehler">'+esc(b.fehler)+"</span>":esc(b.text)}</td>
  <td><button class="k" onclick="tfWeg(${i})" title="Tarif entfernen">✕</button></td></tr>`}).join("");
@@ -3334,7 +3761,7 @@ function tfZeigen(){$("tf_tab").innerHTML="<tr><th>Tarif</th><th>Download Mbit/s
   document.querySelector(`.tf_erg[data-i="${e.dataset.i}"]`).innerHTML=b.fehler?'<span class="fehler">'+esc(b.fehler)+"</span>":esc(b.text)})}
 function tfModusHint(){$("tf_modus_hint").textContent=$("tf_modus").value=="tarif"?"Wie in UniFi unter Einstellungen → QoS: eine Regel „SparteNet-Tarif-Basic“ mit allen Basic-Netzen. Bitte einmal prüfen, ob das Limit dann für jedes Netz einzeln oder für alle zusammen gilt (Geschwindigkeitstest in zwei Basic-Parzellen gleichzeitig). Teilen sich alle die Bandbreite, „eine Regel je Netz“ wählen.":"Jede Parzelle bekommt eine eigene Regel „SparteNet-Netz-BW-Paz.067“ – die Bandbreite ist sicher je Parzelle getrennt, dafür gibt es viele Regeln."}
 async function tfLaden(){const d=await api("/api/tarife");TF=d;TFL=d.tarife.map(t=>({...t,alt:t.name}));tfZeigen();$("tf_modus").value=d.modus;tfModusHint();tzMassenFuellen()}
-function tfNeu(){TFL.push({name:"Tarif "+(TFL.length+1),down:50,up:10,praefix:29,geraete:5});tfZeigen()}
+function tfNeu(){TFL.push({name:"Tarif "+(TFL.length+1),down:50,up:10,praefix:29,geraete:5,preis:0});tfZeigen()}
 function tfWeg(i){if(!confirm("Tarif „"+TFL[i].name+"“ entfernen? Netze mit diesem Tarif sind danach ohne Tarif (erst nach „Speichern“)."))return;TFL.splice(i,1);tfZeigen()}
 function tfStandard(){if(!confirm("Beispiel-Tarife Basic, Plus und Max einsetzen? Gespeichert wird erst mit „Tarife speichern“."))return;TFL=TF.standard.map(t=>({...t,alt:(TFL.find(x=>x.name==t.name)||{}).alt}));tfZeigen()}
 async function tfSpeichern(){const d=await api("/api/tarife",{tarife:TFL,modus:$("tf_modus").value},"log_tf");TF.tarife=d.tarife;TF.modus=d.modus;TFL=d.tarife.map(t=>({...t,alt:t.name}));tfZeigen();tzMassenFuellen();if(TZ)tzZeigen()}
@@ -3405,6 +3832,58 @@ async function fernAbmelden(){if(!confirm("Alle Handy-, Tablet- und Browser-Sitz
 async function fernLan(){const an=$("fern_lan").checked;if(an&&!confirm("Den Manager im Heimnetz erreichbar machen?\nJedes Gerät im selben Netz sieht dann die Anmeldeseite – Zugriff nur mit Manager-Passwort oder optionaler Handy-PIN. Wirkt nach Neustart des Managers."))return $("fern_lan").checked=false;
  try{await api("/api/fern",{lan:an},"log_fern")}catch(e){$("fern_lan").checked=!an}fernLaden()}
 async function tailscale(an){if(!confirm(an?"Tailscale-Freigabe einschalten?\nDer Manager ist dann für deine Geräte im Tailscale-Konto per HTTPS erreichbar (mit Manager-Passwort oder optionaler Handy-PIN).":"Tailscale-Freigabe ausschalten?"))return;await api("/api/tailscale",{an:an},"log_fern");fernLaden()}
+
+let KK=null,KB=null,KBAEND={};
+const eur=(v,n=0)=>v==null||v===""?"–":Number(v).toLocaleString("de-DE",{minimumFractionDigits:n,maximumFractionDigits:n})+" €";
+const pct=v=>(v*100).toLocaleString("de-DE",{minimumFractionDigits:1,maximumFractionDigits:1})+" %";
+function balken(v){const w=Math.round(Math.min(1,v)*100);return `<div class="balken" style="min-width:110px"><i class="${v<.3?"s":v<.6?"w":""}" style="width:${w}%"></i><span>${pct(v)}</span></div>`}
+async function kkLaden(){const d=await api("/api/kalkulation?prognose="+($("kk_prog").checked?1:0),undefined,"log_kk");KK=d;const g=d.gesamt;
+ $("kk_k").innerHTML=kachel("Auslastung (Sparten mit Buchungen)",pct(g.auslastung_konf),g.auslastung_konf>=.6?"gut":g.auslastung_konf>=.3?"warn":"schlecht")+
+  kachel("gebuchte Parzellen",g.gebucht+" / "+g.parzellen_konf,"gut")+kachel("Sparten mit Buchungen",g.sparten_konf+" / "+g.sparten,"gut")+
+  kachel("Auslastung aller eingetragenen",pct(g.auslastung_alle)+"<small>"+g.parzellen_alle+" Parzellen</small>","")+
+  kachel("Umsatz / Jahr",eur(g.umsatz_brutto)+(g.ku?"":"<small>netto "+eur(g.umsatz)+"</small>"),"gut")+
+  kachel("Deckungsbeitrag / Jahr",eur(g.db),g.db>=0?"gut":"schlecht")+
+  kachel("Ergebnis nach zentralen Kosten",eur(g.ergebnis_vor_afa)+"<small>zentral "+eur(g.zentral)+" ("+(g.phase=="start"?"Startphase":"Ausbau")+")</small>",g.ergebnis_vor_afa>=0?"gut":"schlecht")+
+  kachel("Ergebnis nach Abschreibung",eur(g.ergebnis)+"<small>AfA "+eur(g.afa)+"</small>",g.ergebnis>=0?"gut":"schlecht")+
+  kachel("Kleinunternehmer-Grenze",g.ku?(g.ku_status.startsWith("unter")?"OK":"über"):"–",g.ku?(g.ku_status.startsWith("unter")?"gut":"schlecht"):"")+
+  (g.ku?`<div class="kachel"><b style="font-size:16px">${esc(g.ku_status)}</b>Umsatz ${eur(g.umsatz_brutto)} von ${eur(g.ku_grenze)}<small>${g.ku_rest_parzellen!=null?"noch ca. "+g.ku_rest_parzellen+" Buchungen bis zur Grenze":""}</small></div>`:"");
+ const T=d.tarife;let h="<table><tr><th>Sparte</th><th>Gateway</th><th>Parzellen</th><th>gebucht</th><th>Buchungsrate</th>"+T.map(t=>"<th>"+esc(t.name)+"<br><small>"+eur(t.preis)+"/J.</small></th>").join("")+
+  "<th>Umsatz / Jahr</th><th>Ø € / Monat</th><th>Investition</th><th>Masten mit Technik</th><th>Uplink €/Monat</th><th>lfd. Kosten / Jahr</th><th>Deckungsbeitrag</th><th>Amortisation</th><th>Uplink-Bedarf</th><th>Status</th></tr>";
+ for(const z of d.zeilen){h+=`<tr class="${z.status=="Prognose"?"gesperrt":""}"><td><b>${esc(z.name)}</b> <span class="mono" style="color:var(--muted)">${esc(z.kz)}</span></td><td>${esc(z.gateway)}</td><td>${z.n}</td><td>${z.status=="Prognose"?"≈ "+z.prognose:z.gebucht}</td><td>${balken(z.status=="Prognose"?z.prognose/z.n:z.rate)}</td>`+
+  T.map(t=>"<td>"+(z.je[t.name]||"")+"</td>").join("")+`<td>${eur(z.umsatz_brutto)}</td><td>${z.erloes_monat?eur(z.erloes_monat,2):"–"}</td>
+  <td><input class="kk_in" data-kz="${esc(z.kz)}" data-f="investition" value="${z.investition??""}" inputmode="decimal" style="width:110px"></td>
+  <td><input class="kk_in" data-kz="${esc(z.kz)}" data-f="masten" value="${z.masten??""}" inputmode="numeric" style="width:70px"></td>
+  <td><input class="kk_in" data-kz="${esc(z.kz)}" data-f="uplink" value="${z.uplink??""}" placeholder="${d.annahmen.uplink_monat}" inputmode="decimal" style="width:80px"></td>
+  <td>${eur(z.kosten)}</td><td style="color:${z.db<0?"var(--red)":"inherit"}">${eur(z.db)}</td><td>${z.amortisation==null?"–":typeof z.amortisation=="number"?z.amortisation.toLocaleString("de-DE")+" J.":esc(z.amortisation)}</td>
+  <td style="color:${z.uplink_warnung?"var(--red)":"inherit"}">${z.uplink_bedarf} Mbit/s</td><td>${esc(z.status)}</td></tr>`}
+ h+=`<tr class="kopf"><td>Summe</td><td></td><td>${g.parzellen_alle}</td><td>${g.gebucht}</td><td>${balken(g.auslastung_alle)}</td>`+T.map(t=>"<td>"+(g.je[t.name]||"")+"</td>").join("")+
+  `<td>${eur(g.umsatz_brutto)}</td><td></td><td>${eur(g.investition)}</td><td></td><td></td><td>${eur(g.kosten)}</td><td>${eur(g.db)}</td><td>${g.amortisation==null?"–":typeof g.amortisation=="number"?g.amortisation.toLocaleString("de-DE")+" J.":esc(g.amortisation)}</td><td></td><td></td></tr></table>`;
+ $("kk_tab").innerHTML=d.zeilen.length?h:'<p class="hint" style="padding:12px">Noch keine Sparten – unter „Planung“ eintragen oder unten den VLAN-Planer übernehmen.</p>';
+ document.querySelectorAll(".kk_in").forEach(e=>e.onchange=async()=>{await api("/api/kalk-sparte",{sparte:e.dataset.kz,[e.dataset.f]:e.value},"log_kk");kkLaden()});
+ const alt=$("kb_sp").value;$("kb_sp").innerHTML=d.zeilen.map(z=>`<option value="${esc(z.kz)}">${esc(z.name)} (${esc(z.kz)})</option>`).join("");if(alt&&d.zeilen.some(z=>z.kz==alt))$("kb_sp").value=alt;
+ $("kb_tarif").innerHTML='<option value="">– kein Tarif (nicht gebucht) –</option>'+T.map(t=>`<option value="${esc(t.name)}">${esc(t.name)} · ${eur(t.preis)}/Jahr</option>`).join("");
+ kaZeigen(d.annahmen,d.texte);if(!KB&&d.zeilen.length)kbLaden(true)}
+function kkCsv(){if(!KK)return;const T=KK.tarife;csvSpeichern({spalten:[["name","Sparte"],["kz","Kürzel"],["gateway","Gateway"],["n","Parzellen"],["gebucht","gebucht"],["rate_t","Buchungsrate"]].concat(T.map(t=>["t_"+t.name,t.name])).concat([["umsatz_brutto","Umsatz/Jahr"],["investition","Investition"],["kosten","lfd. Kosten/Jahr"],["db","Deckungsbeitrag"],["amortisation","Amortisation (J.)"],["status","Status"]]),
+ zeilen:KK.zeilen.map(z=>Object.assign({},z,{rate_t:(z.rate*100).toFixed(1).replace(".",",")+" %"},Object.fromEntries(T.map(t=>["t_"+t.name,z.je[t.name]||0]))))},"SparteNet_Kalkulation")}
+function kaZeigen(a,t){$("ka_form").innerHTML=Object.keys(t).map(k=>{const v=a[k];
+ if(typeof v=="boolean")return `<div><label><input type="checkbox" class="ka_in" data-k="${k}" ${v?"checked":""} style="width:auto"> ${esc(t[k])}</label></div>`;
+ if(k=="phase")return `<div><label>${esc(t[k])}</label><select class="ka_in" data-k="phase"><option value="auto"${v=="auto"?" selected":""}>automatisch (Kleinunternehmer → Startphase)</option><option value="start"${v=="start"?" selected":""}>Startphase</option><option value="voll"${v=="voll"?" selected":""}>Ausbau</option></select></div>`;
+ return `<div><label>${esc(t[k])}</label><input class="ka_in" data-k="${k}" value="${String(v).replace(".",",")}" inputmode="decimal"></div>`}).join("")}
+async function kaSpeichern(){const b={};document.querySelectorAll(".ka_in").forEach(e=>{b[e.dataset.k]=e.type=="checkbox"?e.checked:e.tagName=="SELECT"?e.value:e.value.replace(",",".")});await api("/api/kalk-annahmen",b,"log_ka");kkLaden()}
+async function kkImport(){const f=$("kk_datei").files[0];if(!f)return;await api("/api/kalk-import",f,"log_ki");$("kk_datei").value="";KB=null;kkLaden()}
+async function kbLaden(still){const kz=$("kb_sp").value;if(!kz)return;if(!still&&Object.keys(KBAEND).length&&!confirm("Ungespeicherte Buchungen verwerfen?"))return;KBAEND={};
+ const d=await api("/api/buchungen?sparte="+encodeURIComponent(kz),undefined,"log_kb");KB=d;kbZeigen()}
+function kbTarif(p){return p in KBAEND?KBAEND[p]:KB.zeilen[p-1].tarif}
+function kbZeigen(){const T=KK?KK.tarife:[];const opt=w=>'<option value="">–</option>'+T.map(t=>`<option value="${esc(t.name)}"${t.name==w?" selected":""}>${esc(t.name)}</option>`).join("");
+ $("kb_tab").innerHTML="<table><tr><th>Parzelle</th><th>Netz</th><th>Tarif</th></tr>"+KB.zeilen.map(z=>{const w=kbTarif(z.p);return `<tr class="${z.p in KBAEND?"geaendert":z.unbekannt?"falsch":""}"><td>${z.p}</td><td class="mono">${esc(z.netz)}</td><td><select class="kb_sel" data-p="${z.p}" style="min-width:140px">${opt(w)}</select>${z.unbekannt&&!(z.p in KBAEND)?" <small>Tarif „"+esc(z.tarif)+"“ fehlt</small>":""}</td></tr>`}).join("")+"</table>";
+ document.querySelectorAll(".kb_sel").forEach(s=>s.onchange=()=>kbSetzen(+s.dataset.p,s.value));kbStand()}
+function kbSetzen(p,w){if(w===KB.zeilen[p-1].tarif)delete KBAEND[p];else KBAEND[p]=w;const tr=document.querySelector(`.kb_sel[data-p="${p}"]`);if(tr){tr.value=w;tr.closest("tr").classList.toggle("geaendert",p in KBAEND)}kbStand()}
+function kbStand(){const n=Object.keys(KBAEND).length,T=KK?KK.tarife:[],z={};let g=0;KB.zeilen.forEach(r=>{const w=kbTarif(r.p);if(w&&T.some(t=>t.name==w)){g++;z[w]=(z[w]||0)+1}});
+ $("kb_k").innerHTML=kachel("gebucht",g+" / "+KB.n,"gut")+kachel("Buchungsrate",pct(g/KB.n),g/KB.n>=.6?"gut":"warn")+T.map(t=>kachel(esc(t.name),z[t.name]||0,"")).join("")+kachel("Umsatz / Jahr",eur(T.reduce((s,t)=>s+(z[t.name]||0)*t.preis,0)),"gut");
+ $("kb_offen").textContent=n?n+" ungespeichert":"alles gespeichert";$("kb_offen").classList.toggle("ok",!n)}
+function kbBereich(txt,max){const s=new Set();for(const teil of txt.split(/[,; ]+/).filter(Boolean)){const m=teil.match(/^(\d+)(?:-(\d+))?$/);if(!m)throw new Error("„"+teil+"“ verstehe ich nicht – Beispiel: 1-20, 25");let a=+m[1],b=+(m[2]||m[1]);if(a>b)[a,b]=[b,a];for(let p=a;p<=b;p++){if(p<1||p>max)throw new Error("Parzelle "+p+" gibt es nicht (1–"+max+")");s.add(p)}}return [...s]}
+function kbMassen(){if(!KB)return;try{const ps=kbBereich($("kb_bereich").value,KB.n);if(!ps.length)return $("kb_bereich").focus();ps.forEach(p=>kbSetzen(p,$("kb_tarif").value));$("log_kb").textContent=ps.length+" Parzelle(n) auf „"+($("kb_tarif").value||"nicht gebucht")+"“ gesetzt – noch speichern."}catch(e){$("log_kb").innerHTML='<span class="fehler">✖ '+esc(e.message)+"</span>"}}
+async function kbSpeichern(){if(!Object.keys(KBAEND).length)return $("log_kb").textContent="Nichts geändert.";await api("/api/buchungen",{sparte:KB.kz,aenderungen:KBAEND},"log_kb");const l=$("log_kb").textContent;KBAEND={};await kkLaden();await kbLaden(true);$("log_kb").textContent=l}
 async function beenden(){if(confirm("SparteNet Manager beenden?")){await api("/api/beenden",{});document.body.innerHTML="<p style='padding:40px;font-family:Arial'>Beendet. Fenster kann geschlossen werden.</p>"}}
 ansAnwenden();zeige(TABS.some(t=>t[0]==location.hash.slice(1))?location.hash.slice(1):"start");einst();planLaden(true);regelLaden();["pr_pre","pr_z"].forEach(i=>$(i).addEventListener("input",regelBeispiel));
 </script></body></html>"""
