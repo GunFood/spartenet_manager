@@ -76,14 +76,10 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   Am PC: Verbindung > "Handy & Tablet":
 1. Optional eine separate Handy-PIN festlegen (6–32 Zeichen). Ohne PIN ist der Zugriff vom Handy
        weiterhin mit dem Manager-Passwort möglich.
-2a. Von überall (empfohlen): Tailscale kostenlos auf PC und Handy installieren (tailscale.com/download),
-        mit demselben Konto anmelden, im Tailscale-Konto unter DNS "HTTPS Certificates" erlauben,
-        dann "Tailscale-Freigabe einschalten". Verschlüsselt, auch über Mobilfunk – echte App.
-        Linux: falls verweigert, einmal "sudo tailscale set --operator=$USER".
-2b. Nur im Heimnetz: "Im Heimnetz erreichbar machen", Manager neu starten (Windows-Firewall:
-        "Private Netzwerke" erlauben). Unverschlüsselt, am Handy als Verknüpfung statt echter App.
-3. QR-Code mit dem Handy scannen, Manager-Passwort oder eingerichtete Handy-PIN eingeben, dann
+   
+2. QR-Code mit dem Handy scannen, Manager-Passwort oder eingerichtete Handy-PIN eingeben, dann
        Android/Chrome: Menü ⋮ > "App installieren"   ·   iPhone/iPad/Safari: Teilen > "Zum Home-Bildschirm".
+   
   Anmeldungen gelten 30 Tage. Nach 5 falschen PIN- bzw. Passwortversuchen je Client-Adresse folgt
   eine 5-minütige Sperre. "Alle Geräte abmelden" am PC widerruft auch Manager-Passwort-Sitzungen.
   Am Handy nicht änderbar: API-Key, Konsole, PIN, Heimnetz-Zugriff, Beenden.
