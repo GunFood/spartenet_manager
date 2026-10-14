@@ -4,38 +4,43 @@ SparteNet Manager 4.0 (Cloud)
 Funktioniert komplett über die UniFi-Cloud (api.ui.com). Kein lokaler Zugriff, kein VPN.
 Benötigt nur Python 3 – keine Zusatzpakete.
 
-STARTEN
-  Linux (Nobara):  einmal ./installieren.sh (Menüeintrag), danach aus dem Anwendungsmenü
+### STARTEN
+  - Linux (Nobara):  einmal ./installieren.sh (Menüeintrag), danach aus dem Anwendungsmenü  
                    oder direkt ./SparteNet_starten.sh
-  Windows:         Doppelklick auf SparteNet_starten.bat
+                   
+  - Windows:         Doppelklick auf SparteNet_starten.bat
 
-ZUGRIFFSSCHUTZ
+### ZUGRIFFSSCHUTZ
   Vor dem Start muss ein Manager-Passwort mit mindestens 12 Zeichen konfiguriert sein.
   Direktstart: SPARTENET_PASSWORD als Umgebungsvariable setzen.
+  
   Docker Compose: SPARTENET_PASSWORD_FILE auf ein Docker Secret zeigen lassen (empfohlen):
-    services:
-      spartenet-manager:
-        environment:
-          SPARTENET_HOST: "0.0.0.0"
-          SPARTENET_DATA_DIR: /data
-          SPARTENET_PASSWORD_FILE: /run/secrets/spartenet_password
-        volumes:
-          - spartenet-daten:/data
-        secrets:
-          - spartenet_password
-    volumes:
-      spartenet-daten:
-    secrets:
-      spartenet_password:
-        file: ./secrets/spartenet_password.txt
-  Persistente Daten (Konfiguration, WLAN-Passwörter, Sicherungen, Protokolle) gehören in ein beschreibbares Volume nach /data.
-  Dafür SPARTENET_DATA_DIR: /data setzen und das Volume nach /data mounten.
-  Das Passwort gilt für lokale und entfernte Zugriffe. Auf entfernten Handys kann zusätzlich die
-  bestehende Handy-PIN verwendet werden. Die Anmeldung bleibt bis zu 30 Tage gültig; „Abmelden“
-  beendet die Sitzung auf dem Gerät. Passwortänderungen erfordern einen Neustart des Managers.
-  Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugriff HTTPS/Tailscale nutzen.
+````
+  services:
+    spartenet-manager:
+      environment:
+        SPARTENET_HOST: "0.0.0.0"
+        SPARTENET_DATA_DIR: /data
+        SPARTENET_PASSWORD_FILE: /run/secrets/spartenet_password
+      volumes:
+        - spartenet-daten:/data
+      secrets:
+        - spartenet_password
+  volumes:
+    spartenet-daten:
+  secrets:
+    spartenet_password:
+      file: ./secrets/spartenet_password.txt
+````
+  
+Persistente Daten (Konfiguration, WLAN-Passwörter, Sicherungen, Protokolle) gehören in ein beschreibbares Volume nach /data.
+Dafür SPARTENET_DATA_DIR: /data setzen und das Volume nach /data mounten.
+Das Passwort gilt für lokale und entfernte Zugriffe. Auf entfernten Handys kann zusätzlich die
+bestehende Handy-PIN verwendet werden. Die Anmeldung bleibt bis zu 30 Tage gültig; „Abmelden“
+beendet die Sitzung auf dem Gerät. Passwortänderungen erfordern einen Neustart des Managers.
+Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugriff HTTPS/Tailscale nutzen.
 
-ERSTE SCHRITTE
+### ERSTE SCHRITTE
   1. Verbindung: Site-Manager-API-Key (unifi.ui.com > Einstellungen > API Keys, als Besitzer erstellt)
      eintragen > "Konsolen laden" > Konsole wählen > Speichern > Verbindung testen.
   2. Planung: Sparten eintragen (Name, Kürzel, Sparten-ID, Parzellen) oder aus dem VLAN-Planer übernehmen.
@@ -53,12 +58,12 @@ ERSTE SCHRITTE
   8. Alle Daten: jede lesbare Quelle (Network-API, UniFi-Cloud, klassische Schnittstelle) als Tabelle
      oder JSON, mit Export. "Verfügbarkeit prüfen" zeigt, was über die Cloud geht. Nur lesend.
 
-PASSWORT-REGEL
+### PASSWORT-REGEL
   Neu erzeugte WLAN-Passwörter: SN + 10 Ziffern (z. B. SN4827130596), einstellbar unter Einrichten > Schritt 3.
   Jedes Passwort ist einmalig – über alle Sparten und gegenüber allen früher vergebenen.
   Das Register SparteNet_Passwort_Register.txt enthält nur Prüfsummen, keine Passwörter. Nicht löschen.
 
-ÄNDERUNGEN ÜBERTRAGEN (Reiter "Übertragen")
+### ÄNDERUNGEN ÜBERTRAGEN (Reiter "Übertragen")
   1. "Schreibzugriff prüfen" (legt einen Test-Voucher an und löscht ihn sofort wieder).
   2. Sparte wählen > "Unterschiede ermitteln": fehlende Netze und Passwörter (neu/geändert/zu entfernen).
   3. Auswählen > "Vorschau" > "Ausgewählte übertragen". Danach liest der Manager zur Kontrolle nach.
@@ -66,18 +71,18 @@ PASSWORT-REGEL
   enthält Passwörter – vertraulich). "Letzte Passwort-Übertragung rückgängig" spielt ihn zurück.
   Jede Übertragung steht ohne Passwörter in SparteNet_Aenderungen.log.
 
-HANDY, TABLET, FOLD – ALS APP
+### HANDY, TABLET, FOLD – ALS APP
   Der Manager läuft auf dem PC, Handy/Tablet sind die Bedienung (PC muss an sein, Manager offen).
   Am PC: Verbindung > "Handy & Tablet":
-    1. Optional eine separate Handy-PIN festlegen (6–32 Zeichen). Ohne PIN ist der Zugriff vom Handy
+1. Optional eine separate Handy-PIN festlegen (6–32 Zeichen). Ohne PIN ist der Zugriff vom Handy
        weiterhin mit dem Manager-Passwort möglich.
-    2a. Von überall (empfohlen): Tailscale kostenlos auf PC und Handy installieren (tailscale.com/download),
+2a. Von überall (empfohlen): Tailscale kostenlos auf PC und Handy installieren (tailscale.com/download),
         mit demselben Konto anmelden, im Tailscale-Konto unter DNS "HTTPS Certificates" erlauben,
         dann "Tailscale-Freigabe einschalten". Verschlüsselt, auch über Mobilfunk – echte App.
         Linux: falls verweigert, einmal "sudo tailscale set --operator=$USER".
-    2b. Nur im Heimnetz: "Im Heimnetz erreichbar machen", Manager neu starten (Windows-Firewall:
+2b. Nur im Heimnetz: "Im Heimnetz erreichbar machen", Manager neu starten (Windows-Firewall:
         "Private Netzwerke" erlauben). Unverschlüsselt, am Handy als Verknüpfung statt echter App.
-    3. QR-Code mit dem Handy scannen, Manager-Passwort oder eingerichtete Handy-PIN eingeben, dann
+3. QR-Code mit dem Handy scannen, Manager-Passwort oder eingerichtete Handy-PIN eingeben, dann
        Android/Chrome: Menü ⋮ > "App installieren"   ·   iPhone/iPad/Safari: Teilen > "Zum Home-Bildschirm".
   Anmeldungen gelten 30 Tage. Nach 5 falschen PIN- bzw. Passwortversuchen je Client-Adresse folgt
   eine 5-minütige Sperre. "Alle Geräte abmelden" am PC widerruft auch Manager-Passwort-Sitzungen.
@@ -85,7 +90,7 @@ HANDY, TABLET, FOLD – ALS APP
   Neuer Reiter "Start": Überblick, Parzelle nachschlagen (Passwort + QR-Code zum Scannen/Teilen),
   Gast-Voucher mit einem Tipp.
 
-TARIFE (Reiter "Tarife")
+### TARIFE (Reiter "Tarife")
   Ein Tarif = Bandbreite (Download/Upload) + Netzgröße (Netzmaske + Zahl der Endgeräte).
   Voreingestellt: Basic 30/10 Mbit/s, /29, 5 Geräte · Plus 60/20, /28, 10 Geräte · Max 100/40, /24, ganzer Bereich.
   Alle Werte änderbar, weitere Tarife möglich. "Tarife speichern".
@@ -103,14 +108,14 @@ TARIFE (Reiter "Tarife")
     Geräte mit IP außerhalb eines verkleinerten Netzes werden vorher angezeigt; sie brauchen eine neue IP (WLAN aus/an).
   Vorher wird gesichert (SparteNet_Sicherung_Tarife_*.json). "Letzte Tarif-Übertragung rückgängig" spielt zurück.
 
-ANSICHT (FHD bis 8K, normal und curved)
+### ANSICHT (FHD bis 8K, normal und curved)
   Oben rechts "Ansicht": Breite des Inhalts (Standard, Breit, 4K, Ultra/Curved, volle Breite oder eigene),
   Größe/Skalierung (automatisch nach Bildschirm oder 80–300 %), Höhe der Tabellen (auch an Fensterhöhe),
   "Karten nebeneinander" für breite Monitore. Breite auch direkt am rechten Rand des Inhalts ziehen
   (Doppelklick = volle Breite). In Kartendesign und Alle Daten lässt sich der Trenner zwischen linker
   und rechter Spalte ziehen. Alles wird gespeichert.
 
-SICHERHEIT
+### SICHERHEIT
   Zugangsdaten stehen in SparteNet_Manager.json, Passwörter in PPSK_<Kürzel>.csv – nicht weitergeben.
   Das Kartendesign steht ebenfalls in SparteNet_Manager.json, das Logo in SparteNet_Kartenlogo.<png/jpg/svg>.
   Jeder Zugriff auf die Oberfläche und API erfordert eine Anmeldung mit dem Manager-Passwort; auf
@@ -118,10 +123,10 @@ SICHERHEIT
   standardmäßig nur auf 127.0.0.1. Angemeldete Handy-Geräte stehen (nur als Prüfsumme) in
   SparteNet_Manager.json. Manager-Passwort-Sitzungen werden bis zum Neustart im Speicher gehalten.
 
-DIAGNOSE-DATEI (Fehlersuche)
+### DIAGNOSE-DATEI (Fehlersuche)
   Verbindung > "Diagnose-Datei erstellen": liest alles einmal aus (nur lesend) und speichert
   SparteNet_Diagnose_<Datum>.json – ohne API-Key, Passwörter, Schlüssel und E-Mail-Adressen,
   Clientnamen/MACs wahlweise anonymisiert. Diese Datei zur Fehlersuche weitergeben, nie den API-Key.
 
-VERBINDUNGSTEST OHNE OBERFLÄCHE
+### VERBINDUNGSTEST OHNE OBERFLÄCHE
   ./sparteNet_verbindungstest.py
