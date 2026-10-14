@@ -1,4 +1,4 @@
-SparteNet Manager 4.0 (Cloud)
+SparteNet Manager 4.1 (Cloud)
 ===============================
 
 Funktioniert komplett über die UniFi-Cloud (api.ui.com). Kein lokaler Zugriff, kein VPN.
@@ -52,6 +52,25 @@ ERSTE SCHRITTE
      (CPU, RAM, Uplink, Ports, Funk), Clients und – falls freigegeben – Datenverkehr je Parzelle.
   8. Alle Daten: jede lesbare Quelle (Network-API, UniFi-Cloud, klassische Schnittstelle) als Tabelle
      oder JSON, mit Export. "Verfügbarkeit prüfen" zeigt, was über die Cloud geht. Nur lesend.
+
+KALKULATION & AUSLASTUNG (Reiter "Kalkulation")
+  1. "Aus Excel übernehmen": Kalkulation_Sparten_WLAN.xlsx (Annahmen, Tarifpreise, Investition und
+     Masten je Sparten-Blatt) und/oder den VLAN-Planer (alle Sparten mit Gateway).
+  2. Buchungen erfassen: Sparte wählen, Parzellen (z. B. "1-20, 25") und Tarif, "setzen", speichern.
+     Tarife, die im Reiter "Tarife" einer Parzelle zugeordnet sind, zählen automatisch als Buchung – und umgekehrt.
+  3. Tabelle "Je Sparte": gebuchte Parzellen je Tarif, Buchungsrate, Umsatz, laufende Kosten,
+     Deckungsbeitrag, Amortisation, Uplink-Bedarf. Investition/Masten/Uplink direkt in der Tabelle änderbar.
+  Oben: Gesamtauslastung aller Sparten mit Buchungen, Umsatz, Ergebnis, Kleinunternehmer-Grenze.
+  "Prognose": Sparten ohne Buchungen mit der Buchungsquote aus den Annahmen hochrechnen.
+  Tarifpreise (€ pro Jahr) stehen im Reiter "Tarife".
+
+VLAN-PLANER (VLAN_Planer_SparteNet.xlsx) – MEHRERE GATEWAYS
+  Blatt "Sparten": alle 88 Kleingartenanlagen (Kleingartenentwicklungskonzept 2040) mit Parzellen.
+    Je Sparte die Gateway-Nr. wählen, optional die Reihenfolge am Gateway (1 = erster Steckplatz).
+    Kürzel und Sparten-ID sind Vorschläge und änderbar (müssen einmalig sein).
+  Blatt "Gateways": Bezeichnung je Gateway, Belegung der 10 Steckplätze, Status/Fehler.
+  Blatt "Eingabe": in B4 das Gateway wählen – Übersicht, VLAN-Plan, Beispiele zeigen dieses Gateway.
+  In den Manager übernehmen: B4 wählen, Datei speichern, im Manager Planung > "Aus Excel übernehmen".
 
 PASSWORT-REGEL
   Neu erzeugte WLAN-Passwörter: SN + 10 Ziffern (z. B. SN4827130596), einstellbar unter Einrichten > Schritt 3.
