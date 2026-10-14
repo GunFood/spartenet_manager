@@ -1,0 +1,31 @@
+services:
+  spartenet-manager:
+    build:
+      context: ./SparteNet_Manager
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8765:8765"
+    environment:
+      SPARTENET_HOST: "0.0.0.0"
+      SPARTENET_PORT: "8765"
+      SPARTENET_DATA_DIR: "/data"
+      SPARTENET_KEIN_BROWSER: "1"
+      SPARTENET_PASSWORD_FILE: /run/secrets/spartenet_password
+    volumes:
+      - spartenet-daten:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    secrets:
+      - spartenet_password
+
+secrets:
+  spartenet_password:
+    file: ./secrets/spartenet_password.txt
+
+volumes:
+  spartenet-daten:

@@ -1,0 +1,19 @@
+# Local credentials and Docker secrets
+/secrets/
+/.env
+/.env.*
+!/.env.example
+
+# Runtime data and generated exports
+/SparteNet_Manager/SparteNet_Manager.json
+/SparteNet_Manager/SparteNet_Manager.log*
+/SparteNet_Manager/SparteNet_Aenderungen.log
+/SparteNet_Manager/SparteNet_Passwort_Register.txt
+/SparteNet_Manager/PPSK_*.csv
+/SparteNet_Manager/SparteNet_Sicherung_*.json
+/SparteNet_Manager/SparteNet_Diagnose_*.json
+/SparteNet_Manager/SparteNet_Kartenlogo.*
+
+# Python artifacts
+__pycache__/
+*.py[cod]

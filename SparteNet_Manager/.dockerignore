@@ -1,0 +1,16 @@
+.git
+.gitignore
+.dockerignore
+Dockerfile
+__pycache__/
+*.py[cod]
+
+# Never include credentials, runtime data, or user-generated files in the image
+SparteNet_Manager.json
+SparteNet_Manager.log*
+SparteNet_Aenderungen.log
+SparteNet_Passwort_Register.txt
+PPSK_*.csv
+SparteNet_Sicherung_*.json
+SparteNet_Diagnose_*.json
+SparteNet_Kartenlogo.*
