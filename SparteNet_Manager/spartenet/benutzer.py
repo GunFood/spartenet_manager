@@ -120,7 +120,7 @@ def konto_rechte(d, name):
     if not isinstance(u, dict):
         return None
     r = u.get("recht")
-    if r in VORLAGEN:  # ältere Konten (4.4): „lesen“ / „schreiben“
+    if r in VORLAGEN:  # Konten aus 4.4: „lesen“ / „schreiben“
         return {"art": "bereiche", "bereiche": dict(VORLAGEN[r][1])}
     if r in ("admin", "gesperrt"):
         return {"art": r, "bereiche": _alle("schreiben" if r == "admin" else "kein")}
