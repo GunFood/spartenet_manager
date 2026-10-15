@@ -1,5 +1,5 @@
 """SparteNet Manager – Oberfläche (HTML, CSS, JavaScript der Web-App)"""
-from .benutzer import *  # noqa: F401,F403 – alle Namen der vorherigen Module
+from .update import *  # noqa: F401,F403 – alle Namen der vorherigen Module
 
 
 # =============================================================== Oberfläche
@@ -116,7 +116,7 @@ nav{position:sticky;top:0;z-index:20}
 #bn_ich .kachel b{font-size:19px;overflow-wrap:anywhere}#bn_tab td,#bn_tab th{white-space:nowrap}#bn_tab select{min-width:150px}#bn_tab tr.bn_detail td{background:#f7f9f5;white-space:normal}.bn_matrix{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:8px 18px;padding:6px 2px}.bn_matrix label{display:flex;justify-content:space-between;gap:10px;align-items:center;margin:0;font-size:13px;color:var(--text)}.bn_matrix select{min-width:175px!important;max-width:190px}.bn_matrix select.kein{color:var(--muted)}.bn_matrix select.schreiben{border-color:#3a9a1f;font-weight:600}[data-bereich].nurlesen-karte{position:relative}[data-bereich].nurlesen-karte::after{content:"nur lesen";position:absolute;top:-9px;right:18px;font-size:11px;background:#fff6dd;color:#7a5a00;border:1px solid #ecd9a0;border-radius:10px;padding:1px 8px}.recht-gesperrt td{color:var(--muted)}.recht-gesperrt td:first-child{text-decoration:line-through}
 @media print{header,nav,.nurlesen,.karte:not(.druck),.log{display:none!important}main{padding:0}}
 </style></head><body>
-<header><b>Sparte<span>Net</span></b><small>Manager __VERSION__ · Cloud</small><span id="verb"></span><div style="flex:1"></div><button class="k ich" id="ich_k" onclick="zeige('benutzer')" title="Mein Konto und Benutzerkonten"></button><button class="k" style="background:none;color:#fff;border-color:#fff" onclick="ansichtPanel()" title="Breite, Größe und Tabellenhöhe an den Bildschirm anpassen">Ansicht</button><button class="k pc-nur" id="beenden_k" style="background:none;color:#fff;border-color:#fff" onclick="beenden()">Beenden</button></header>
+<header><b>Sparte<span>Net</span></b><small>Manager __VERSION__ · Cloud</small><span id="verb"></span><div style="flex:1"></div><button class="k ich" id="up_chip" onclick="zeige('system')" hidden title="Neue Version verfügbar"></button><button class="k ich" id="ich_k" onclick="zeige('benutzer')" title="Mein Konto und Benutzerkonten"></button><button class="k" style="background:none;color:#fff;border-color:#fff" onclick="ansichtPanel()" title="Breite, Größe und Tabellenhöhe an den Bildschirm anpassen">Ansicht</button><button class="k pc-nur" id="beenden_k" style="background:none;color:#fff;border-color:#fff" onclick="beenden()">Beenden</button></header>
 <div id="ansicht"><h3>Ansicht anpassen</h3><p class="hint" style="margin:2px 0 6px">Für FHD bis 8K, normal oder curved. Wird gespeichert. Breite auch direkt am rechten Rand ziehen (Doppelklick = volle Breite).</p>
 <div class="feld"><label for="an_breite_sel">Breite des Inhalts</label><output id="an_breite_o"></output><select id="an_breite_sel" onchange="ansSet('breite',+this.value)"><option value="1200">Standard (FHD)</option><option value="1600">Breit (WQHD)</option><option value="2200">Sehr breit (4K)</option><option value="3200">Ultra (5K / Curved)</option><option value="0">Volle Fensterbreite</option><option value="-1">Eigene …</option></select>
 <input type="range" id="an_breite" min="800" max="6000" step="50" oninput="ansSet('breite',+this.value)"></div>
@@ -313,7 +313,18 @@ nav{position:sticky;top:0;z-index:20}
 <div class="kd" id="kd_box"><div id="kd_form"></div><div class="teiler" data-k="kd" data-box="kd_box" title="Ziehen: Breite der Einstellungen ändern"></div>
 <div class="vorschau"><iframe id="kd_vor" title="Vorschau Zugangskarte"></iframe><div class="log" id="log_kd"></div></div></div></section>
 
-<section id="system"><div class="karte"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0;flex:1">Systeminfo</h2>
+<section id="system"><div class="karte bn-admin" id="up_karte"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0;flex:1">Aktualisierung</h2><span id="up_st" class="status"></span>
+<button class="k" onclick="upPruefen()">Nach Updates suchen</button><button class="k p" id="up_los" onclick="upInstallieren()" hidden>Jetzt aktualisieren</button></div>
+<p class="hint">Wie bei Nextcloud: Der Manager fragt GitHub nach einer neueren Version, sichert die Daten, lädt die neue Version, prüft sie, testet sie und startet dann neu – ohne Docker-Neubau. Die neue Version liegt im Datenordner unter <span class="mono">updates/</span>; „Vorherige Version“ schaltet jederzeit zurück (startet eine neue Version nicht, geschieht das automatisch).</p>
+<div class="kacheln" id="up_k"></div><div id="up_notiz"></div><div id="up_schritte"></div>
+<details style="margin-top:10px"><summary style="cursor:pointer;font-weight:600">Einstellungen und installierte Versionen</summary>
+<div class="reihe" style="margin-top:10px"><div><label for="up_kanal">Quelle (Kanal)</label><select id="up_kanal"><option value="main">main – jeder Stand auf GitHub main</option><option value="release">release – nur veröffentlichte GitHub-Releases</option><option value="branch">anderer Zweig …</option></select></div>
+<div><label for="up_zweig">Zweig (nur bei „anderer Zweig“)</label><input id="up_zweig" placeholder="z. B. manager-4.6"></div>
+<div><label for="up_std">Automatisch prüfen alle … Stunden (0 = aus)</label><input id="up_std" inputmode="numeric"></div>
+<div><label style="display:flex;gap:8px;align-items:center;margin-top:26px"><input type="checkbox" id="up_auto" style="width:auto"> automatisch installieren (nachts 2–5 Uhr)</label></div></div>
+<div class="knoepfe"><button class="k p" onclick="upEinstellungen()">Speichern</button><button class="k" id="up_zurueck" onclick="upZurueck()">Vorherige Version</button></div>
+<div class="tab" id="up_versionen"></div></details><div class="log" id="log_up"></div></div>
+<div class="karte"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0;flex:1">Systeminfo</h2>
 <label style="display:flex;align-items:center;gap:8px;margin:0;font-size:14px;color:var(--text)"><input type="checkbox" id="sys_auto" style="width:auto" onchange="sysAuto()"> alle 60 s aktualisieren</label>
 <button class="k p" onclick="sysLaden()">Aktualisieren</button></div>
 <div class="log" id="log_sys"></div><div class="kacheln" id="sys_k"></div></div>
@@ -375,7 +386,7 @@ nav{position:sticky;top:0;z-index:20}
 const T="__TOKEN__";let LETZT=null,PLAN=null,PLANZ=null,PPSK=null,PPSKSP=null,CODES=[],VMIN=0,EINST={};
 const TABS=[["start","Start"],["verbindung","Verbindung"],["lesen","Auslesen"],["planung","Planung"],["abgleich","Abgleich"],["einrichten","Einrichten"],["uebertragen","Übertragen"],["tarife","Tarife"],["kalkulation","Kalkulation"],["netzplanung","Netzplanung"],["kartendesign","Kartendesign"],["voucher","Gast-Voucher"],["system","Systeminfo"],["daten","Alle Daten"],["benutzer","Benutzer"],["hilfe","Hilfe"]];
 const $=id=>document.getElementById(id);const nav=$("nav");TABS.forEach(([id,t])=>{const b=document.createElement("button");b.textContent=t;b.onclick=()=>zeige(id);b.id="n_"+id;nav.appendChild(b)});
-function zeige(id){if(!reiterErlaubt(id))id=startReiter();rechteHinweis(id);if(id=="start"&&!$("st_k").innerHTML&&typeof EINST!="undefined"&&EINST.konsole_id)startLaden().catch(()=>{});if(id=="verbindung")fernLaden().catch(()=>{});if(location.hash!="#"+id)history.replaceState(null,"","#"+id);setTimeout(()=>{const b=document.querySelector("nav button.aktiv");if(b&&b.scrollIntoView)b.scrollIntoView({inline:"center",block:"nearest"})},0);if(id=="kalkulation"&&!KK)kkLaden().catch(()=>{});if(id=="netzplanung"&&!GP)gpLaden().catch(()=>{});if(id=="benutzer")bnStart();if(id=="kartendesign"&&!DESIGN)designLaden();if(id=="tarife"&&!TF)tfLaden();if(id=="system"&&!SYS)sysLaden();if(id=="daten"&&!DLISTE)datenListe();document.querySelectorAll("section").forEach(s=>s.classList.toggle("aktiv",s.id==id));document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("aktiv",b.id=="n_"+id))}
+function zeige(id){if(!reiterErlaubt(id))id=startReiter();rechteHinweis(id);if(id=="start"&&!$("st_k").innerHTML&&typeof EINST!="undefined"&&EINST.konsole_id)startLaden().catch(()=>{});if(id=="verbindung")fernLaden().catch(()=>{});if(location.hash!="#"+id)history.replaceState(null,"","#"+id);setTimeout(()=>{const b=document.querySelector("nav button.aktiv");if(b&&b.scrollIntoView)b.scrollIntoView({inline:"center",block:"nearest"})},0);if(id=="kalkulation"&&!KK)kkLaden().catch(()=>{});if(id=="netzplanung"&&!GP)gpLaden().catch(()=>{});if(id=="benutzer")bnStart();if(id=="system"&&ICH.admin)upLaden(true).catch(()=>{});if(id=="kartendesign"&&!DESIGN)designLaden();if(id=="tarife"&&!TF)tfLaden();if(id=="system"&&!SYS)sysLaden();if(id=="daten"&&!DLISTE)datenListe();document.querySelectorAll("section").forEach(s=>s.classList.toggle("aktiv",s.id==id));document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("aktiv",b.id=="n_"+id))}
 async function api(pfad,body,logid){const el=logid&&$(logid);const kn=[...document.querySelectorAll("button")];kn.forEach(b=>b.disabled=true);if(el)el.textContent="… bitte warten (über die Cloud kann das einige Sekunden dauern)";
  try{const r=await fetch(pfad,{method:body===undefined?"GET":"POST",headers:{"X-Token":T,"Content-Type":"application/json"},body:body===undefined?undefined:(body instanceof Blob?body:JSON.stringify(body))});
  if(r.status==401){location.reload();return new Promise(()=>{})}const d=await r.json().catch(()=>({}));if(r.status==403&&!d.recht){location.reload();return new Promise(()=>{})}if(!r.ok)throw new Error(d.fehler||r.status);if(el)el.textContent=d.log?d.log.join("\n"):"";return d}
@@ -774,6 +785,31 @@ async function bnPw(n){const p=prompt("Neues Passwort für „"+n+"“ (mind. 12
  await bnSpeichern({name:n,passwort:pw,passwort2:pw});if(!p)$("log_bn").textContent+="\nNeues Passwort: "+pw+"  (bitte notieren – wird nicht noch einmal angezeigt)"}
 async function bnLoeschen(n){if(!confirm("Konto „"+n+"“ löschen? Offene Sitzungen werden beendet."))return;BNOFFEN.delete(n);bnZeigen(await api("/api/benutzer-loeschen",{name:n},"log_bn"))}
 
+let UP=null,UPT=null;
+const UPICON={"offen":"○","läuft":"⏳","fertig":"✔","fehler":"✖"};
+async function upLaden(still){const d=await api("/api/update",undefined,still?undefined:"log_up");upZeigen(d);return d}
+function upZeigen(d){UP=d;const l=d.lage,a=d.aktiv||{};
+ $("up_st").textContent=d.laeuft?"Update läuft":l?(l.verfuegbar?"Update verfügbar":"aktuell"):"";$("up_st").hidden=!$("up_st").textContent;$("up_st").className="status"+(l&&!l.verfuegbar&&!d.laeuft?" ok":"");
+ $("up_k").innerHTML=kachel("installiert",esc(d.version)+"<small>"+(a.ordner&&d.code.endsWith(a.ordner)?"aus updates/"+esc(a.ordner):"mitgeliefert")+"</small>","")+
+  (l?kachel("auf GitHub ("+esc(l.kanal)+")",esc(l.neu)+"<small>"+esc(l.kurz)+" · "+esc(l.datum)+"</small>",l.verfuegbar?"warn":"gut"):"")+
+  kachel("zuletzt geprüft",l?esc(l.zeit):"–","")+(a.fehler?kachel("letztes Update",'<span style="font-size:15px">startete nicht</span><small>'+esc(a.fehler)+"</small>","schlecht"):"");
+ $("up_notiz").innerHTML=l&&l.verfuegbar&&l.notiz?'<h3>Was ist neu in '+esc(l.neu)+'</h3><pre class="json" style="white-space:pre-wrap;max-height:260px">'+esc(l.notiz)+"</pre>":"";
+ $("up_los").hidden=!(l&&l.verfuegbar)||d.laeuft;if(l)$("up_los").textContent="Jetzt aktualisieren auf "+l.neu;
+ $("up_schritte").innerHTML=d.schritte&&d.schritte.length?"<table><tr><th></th><th>Schritt</th><th>Ergebnis</th></tr>"+d.schritte.map(s=>`<tr class="${s.status=="fehler"?"falsch":s.status=="läuft"?"geaendert":""}"><td>${UPICON[s.status]||""}</td><td>${esc(s.name)}</td><td>${esc(s.text)}</td></tr>`).join("")+"</table>":"";
+ const e=d.einstellungen;if(document.activeElement==null||!document.activeElement.closest||!document.activeElement.closest("#up_karte details")){
+  $("up_kanal").value=e.kanal.startsWith("branch:")?"branch":e.kanal;$("up_zweig").value=e.kanal.startsWith("branch:")?e.kanal.slice(7):"";$("up_std").value=e.stunden;$("up_auto").checked=e.automatisch}
+ $("up_zurueck").disabled=!a.ordner;if(d.abgeschlossen&&!$("log_up").textContent)$("log_up").textContent=d.abgeschlossen;
+ $("up_versionen").innerHTML=d.versionen.length?"<table><tr><th>Ordner in updates/</th><th>Version</th><th></th></tr>"+d.versionen.map(v=>`<tr><td class="mono">${esc(v.ordner)}</td><td>${esc(v.version)}</td><td>${v.ordner==a.ordner?"aktiv":""}</td></tr>`).join("")+"</table>":"";
+ const c=$("up_chip");if(c){c.hidden=!(l&&l.verfuegbar);if(l)c.textContent="⬆ Update "+l.neu}
+ clearTimeout(UPT);if(d.laeuft)UPT=setTimeout(()=>upLaden(true).catch(()=>upWarten(l?l.neu:"")),1000);else if(d.fertig)upWarten(l?l.neu:"")}
+async function upPruefen(){upZeigen(await api("/api/update-pruefen",{},"log_up"))}
+async function upInstallieren(){const l=UP&&UP.lage;if(!l)return;if(!confirm("Auf Version "+l.neu+" aktualisieren? Der Manager sichert die Daten, lädt die neue Version und startet neu (ca. 10–30 Sekunden)."))return;
+ upZeigen(await api("/api/update-installieren",{sha:l.sha},"log_up"))}
+async function upEinstellungen(){const k=$("up_kanal").value=="branch"?"branch:"+$("up_zweig").value.trim():$("up_kanal").value;upZeigen(await api("/api/update-einstellungen",{kanal:k,stunden:$("up_std").value.trim()||"0",automatisch:$("up_auto").checked},"log_up"))}
+async function upZurueck(){if(!confirm("Zur vorherigen Version zurück? Der Manager startet neu."))return;const d=await api("/api/update-zurueck",{},"log_up");if(d.neustart)upWarten("")}
+let UPW=false;function upWarten(ziel){if(UPW)return;UPW=true;$("log_up").textContent="Neustart … die Seite lädt automatisch neu, sobald der Manager wieder läuft.";let n=0;
+ const t=setInterval(async()=>{n++;try{const r=await fetch("/status",{cache:"no-store"});const s=await r.json();if(!s.wartung&&(s.version!=UP.version||n>20)){clearInterval(t);location.reload()}}catch(e){}if(n>90){clearInterval(t);$("log_up").textContent="Der Manager antwortet nicht – bitte Container-Log prüfen und die Seite neu laden."}},2000)}
+
 let GP=null;
 const gz=(v,n=0)=>v==null||v===""?"–":Number(v).toLocaleString("de-DE",{minimumFractionDigits:n,maximumFractionDigits:n});
 async function gpLaden(){gpZeigen(await api("/api/gwplan",undefined,"log_gp"))}
@@ -853,7 +889,7 @@ function kbBereich(txt,max){const s=new Set();for(const teil of txt.split(/[,; ]
 function kbMassen(){if(!KB)return;try{const ps=kbBereich($("kb_bereich").value,KB.n);if(!ps.length)return $("kb_bereich").focus();ps.forEach(p=>kbSetzen(p,$("kb_tarif").value));$("log_kb").textContent=ps.length+" Parzelle(n) auf „"+($("kb_tarif").value||"nicht gebucht")+"“ gesetzt – noch speichern."}catch(e){$("log_kb").innerHTML='<span class="fehler">✖ '+esc(e.message)+"</span>"}}
 async function kbSpeichern(){if(!Object.keys(KBAEND).length)return $("log_kb").textContent="Nichts geändert.";await api("/api/buchungen",{sparte:KB.kz,aenderungen:KBAEND},"log_kb");const l=$("log_kb").textContent;KBAEND={};await kkLaden();await kbLaden(true);$("log_kb").textContent=l}
 async function beenden(){if(confirm("SparteNet Manager beenden?")){await api("/api/beenden",{});document.body.innerHTML="<p style='padding:40px;font-family:Arial'>Beendet. Fenster kann geschlossen werden.</p>"}}
-ansAnwenden();zeige(startReiter());einst();planLaden(true);regelLaden();["pr_pre","pr_z"].forEach(i=>$(i).addEventListener("input",regelBeispiel));
+ansAnwenden();zeige(startReiter());if(ICH.admin)setTimeout(()=>upLaden(true).catch(()=>{}),1500);einst();planLaden(true);regelLaden();["pr_pre","pr_z"].forEach(i=>$(i).addEventListener("input",regelBeispiel));
 </script></body></html>"""
 
 __all__ = [_n for _n in dict(globals()) if not _n.startswith("__")]  # alle Namen an die folgenden Module weitergeben

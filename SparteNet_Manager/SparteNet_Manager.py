@@ -26,7 +26,8 @@ Der Programmcode liegt im Ordner spartenet/ – je Aufgabe eine Datei, in dieser
   pwa              Web-App: Icons, Manifest, Anmeldeseite
   kalkulation      Buchungen, Umsatz, Auslastung
   netzplanung_daten, netzplanung   Gateway-Standorte, Glasfaser, Buchungsquote, Einnahmen
-  benutzer         Benutzerkonten und Zugriffsrechte
+  benutzer         Benutzerkonten und Zugriffsrechte je Bereich
+  update           Aktualisierung von GitHub (wie bei Nextcloud)
   oberflaeche      HTML, CSS und JavaScript der Web-App
   webserver        Anfragen, Rechteprüfung, Start
 
@@ -35,12 +36,68 @@ Schema:
   Vorstand 2000 + n·10 + 1 (10.S.200.0/24) · Gäste +2 (10.S.201.0/24) · Technik +9 (10.S.250.0/24)
   Namen: BW-Paz.001, BW-Vorstand, BW-Gäste, BW-Technik · WLANs: <Präfix>-BW-Pächter, -Gäste, -Vorstand
 """
+import json
 import os
+import re
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+MITGELIEFERT = os.path.dirname(os.path.abspath(__file__))
 
-from spartenet.webserver import main  # noqa: E402
+
+def _version(ordner):
+    try:
+        with open(os.path.join(ordner, "spartenet", "basis.py"), encoding="utf-8") as f:
+            m = re.search(r'^VERSION\s*=\s*"([^"]+)"', f.read(), re.M)
+        return tuple(int(x) for x in re.findall(r"\d+", m.group(1))[:4]) if m else (0,)
+    except OSError:
+        return (0,)
+
+
+def _aktiv_datei():
+    daten = os.path.abspath(os.environ.get("SPARTENET_DATA_DIR") or os.path.dirname(os.path.abspath(sys.argv[0])))
+    return os.path.join(daten, "updates", "aktiv.json")
+
+
+def _code_ordner():
+    """aktualisierte Version aus dem Datenordner (updates/), wenn sie neuer ist als die mitgelieferte"""
+    if os.environ.get("SPARTENET_UPDATE_AUS") == "1":
+        return MITGELIEFERT, None
+    try:
+        with open(_aktiv_datei(), encoding="utf-8") as f:
+            a = json.load(f)
+    except (OSError, ValueError):
+        return MITGELIEFERT, None
+    if not isinstance(a, dict) or not a.get("ordner") or a.get("fehler"):
+        return MITGELIEFERT, None
+    p = os.path.join(os.path.dirname(_aktiv_datei()), os.path.basename(a["ordner"]))
+    if os.path.isfile(os.path.join(p, "spartenet", "webserver.py")) and _version(p) > _version(MITGELIEFERT):
+        return p, a
+    return MITGELIEFERT, None
+
+
+def _laden():
+    ordner, aktiv = _code_ordner()
+    sys.path.insert(0, ordner)
+    try:
+        from spartenet.webserver import main
+        return main
+    except Exception as e:  # neue Version startet nicht → automatisch zurück zur mitgelieferten
+        if ordner == MITGELIEFERT:
+            raise
+        print(f"Die aktualisierte Version startet nicht ({type(e).__name__}: {e}) – zurück zur mitgelieferten Version.")
+        try:
+            aktiv["fehler"] = f"{type(e).__name__}: {e}"[:300]
+            with open(_aktiv_datei(), "w", encoding="utf-8") as f:
+                json.dump(aktiv, f, ensure_ascii=False, indent=1)
+        except OSError:
+            pass
+        sys.path.remove(ordner)
+        for name in [n for n in sys.modules if n == "spartenet" or n.startswith("spartenet.")]:
+            del sys.modules[name]
+        sys.path.insert(0, MITGELIEFERT)
+        from spartenet.webserver import main
+        return main
+
 
 if __name__ == "__main__":
-    main()
+    _laden()()
