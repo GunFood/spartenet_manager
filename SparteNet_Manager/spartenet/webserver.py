@@ -58,13 +58,13 @@ class Handler(BaseHTTPRequestHandler):
         """(Kontoname, Recht) der Anfrage oder None, wenn nicht angemeldet; gesperrte oder gelöschte Konten fliegen sofort raus"""
         info = auth_sitzung_info(self._auth_sitzung())
         if info:
-            recht = recht_von(d, info.get("benutzer", ADMIN_NAME))
-            if recht and recht != "gesperrt":
-                return info.get("benutzer", ADMIN_NAME), recht
+            rechte = konto_rechte(d, info.get("benutzer", ADMIN_NAME))
+            if rechte and rechte["art"] != "gesperrt":
+                return info.get("benutzer", ADMIN_NAME), rechte
             auth_sitzung_entfernen(self._auth_sitzung())
             return None
         if self._fern() and sitzung_ok(d, self._sitzung()):
-            return HANDY_NAME, recht_von(d, HANDY_NAME)
+            return HANDY_NAME, konto_rechte(d, HANDY_NAME)
         return None
 
     def _erlaubt(self, d):
@@ -93,7 +93,7 @@ class Handler(BaseHTTPRequestHandler):
             if not wer:
                 return self._send(200, LOGIN_HTML.replace("__INHALT__", LOGIN_FORM).encode("utf-8"), "text/html")
             fern_nur = self._fern() and not auth_sitzung_ok(self._auth_sitzung())
-            ich = json.dumps({"name": wer[0], "recht": wer[1], "recht_text": RECHTE.get(wer[1], "")}).replace("<", "\\u003c")
+            ich = json.dumps(ich_daten(*wer)).replace("<", "\\u003c")
             return self._send(200, HTML.replace("__TOKEN__", TOKEN).replace("__VERSION__", VERSION).replace("__FERN__", "1" if fern_nur else "0")
                               .replace("__SITZUNG_TAGE__", str(SITZUNG_TAGE)).replace("__ICH__", ich).encode("utf-8"), "text/html")
         if not wer:
@@ -126,7 +126,7 @@ class Handler(BaseHTTPRequestHandler):
             cookie = f"sn_auth={t}"
             LOG.info("Anmeldung erfolgreich: %s", konto)
             if konto != ADMIN_NAME:
-                journal(f"Angemeldet: {konto} ({RECHTE.get(recht_von(d, konto), '')})")
+                journal(f"Angemeldet: {konto} ({rechte_text(konto_rechte(d, konto))})")
         except Fehler as passwort_fehler:
             if name or not self._fern() or not fern_daten(d)["pin"].get("hash"):
                 return self._send(400, {"fehler": str(passwort_fehler)})
@@ -164,16 +164,15 @@ class Handler(BaseHTTPRequestHandler):
         self._antwort(u.path, {}, body, roh, wer)
 
     def _antwort(self, pfad, q, b, roh, wer):
-        ich, recht = wer
+        ich, rechte = wer
         if pfad in ("/api/ppsk-speichern", "/api/fern", "/api/benutzer-speichern", "/api/benutzer-ich"):
             LOG.info("Aktion %s von %s (Inhalt nicht protokolliert)", pfad, ich)
         elif pfad not in ("/api/log", "/api/karten-vorschau"):
             LOG.info("Aktion %s von %s %s", pfad, ich, json.dumps(_maskiere(b), ensure_ascii=False)[:500] if isinstance(b, (dict, list)) else (urllib.parse.urlencode(q, doseq=True) if q else ""))
         noetig = recht_fuer(pfad, q, b)
-        if RANG.get(recht, 0) < RANG[noetig]:
-            LOG.warning("Keine Berechtigung: %s (%s) für %s", ich, recht, pfad)
-            return self._send(403, {"fehler": f"Keine Berechtigung – Ihr Konto „{ich}“ hat das Recht „{RECHTE.get(recht, recht)}“, "
-                                              f"dafür ist „{RECHTE[noetig]}“ nötig.", "recht": "fehlt"})
+        if not erlaubt(rechte, noetig):
+            LOG.warning("Keine Berechtigung: %s für %s (%s)", ich, pfad, "/".join(noetig))
+            return self._send(403, {"fehler": fehlt_text(ich, rechte, noetig), "recht": "fehlt"})
         ANFRAGE.benutzer = None if ich == ADMIN_NAME else ich
         try:
             d = lade()

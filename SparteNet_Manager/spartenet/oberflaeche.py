@@ -113,7 +113,7 @@ nav{position:sticky;top:0;z-index:20}
 .qrs figcaption{font-size:13px;overflow-wrap:anywhere;margin-top:6px}.fern-nur{display:none}body.fern .fern-nur{display:block}body.fern .pc-nur{display:none!important}
 .hinweis{background:#fff6dd;border:1px solid #f0d58a;border-radius:8px;padding:10px 12px;font-size:14px;margin-top:10px}
 .k.ich{background:none;color:#fff;border-color:rgba(255,255,255,.55);font-size:13px;padding:6px 12px}.nurlesen{background:#fff6dd;color:#7a5a00;border-bottom:1px solid #ecd9a0;padding:8px 22px;font-size:14px}
-#bn_ich .kachel b{font-size:19px;overflow-wrap:anywhere}#bn_tab td,#bn_tab th{white-space:nowrap}#bn_tab select{min-width:170px}.recht-gesperrt td{color:var(--muted)}.recht-gesperrt td:first-child{text-decoration:line-through}
+#bn_ich .kachel b{font-size:19px;overflow-wrap:anywhere}#bn_tab td,#bn_tab th{white-space:nowrap}#bn_tab select{min-width:150px}#bn_tab tr.bn_detail td{background:#f7f9f5;white-space:normal}.bn_matrix{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:8px 18px;padding:6px 2px}.bn_matrix label{display:flex;justify-content:space-between;gap:10px;align-items:center;margin:0;font-size:13px;color:var(--text)}.bn_matrix select{min-width:175px!important;max-width:190px}.bn_matrix select.kein{color:var(--muted)}.bn_matrix select.schreiben{border-color:#3a9a1f;font-weight:600}[data-bereich].nurlesen-karte{position:relative}[data-bereich].nurlesen-karte::after{content:"nur lesen";position:absolute;top:-9px;right:18px;font-size:11px;background:#fff6dd;color:#7a5a00;border:1px solid #ecd9a0;border-radius:10px;padding:1px 8px}.recht-gesperrt td{color:var(--muted)}.recht-gesperrt td:first-child{text-decoration:line-through}
 @media print{header,nav,.nurlesen,.karte:not(.druck),.log{display:none!important}main{padding:0}}
 </style></head><body>
 <header><b>Sparte<span>Net</span></b><small>Manager __VERSION__ · Cloud</small><span id="verb"></span><div style="flex:1"></div><button class="k ich" id="ich_k" onclick="zeige('benutzer')" title="Mein Konto und Benutzerkonten"></button><button class="k" style="background:none;color:#fff;border-color:#fff" onclick="ansichtPanel()" title="Breite, Größe und Tabellenhöhe an den Bildschirm anpassen">Ansicht</button><button class="k pc-nur" id="beenden_k" style="background:none;color:#fff;border-color:#fff" onclick="beenden()">Beenden</button></header>
@@ -125,7 +125,7 @@ nav{position:sticky;top:0;z-index:20}
 <input type="range" id="an_tabh" min="200" max="3000" step="20" oninput="ansSet('tabh',+this.value)"></div>
 <div class="feld chk"><input type="checkbox" id="an_spalten" onchange="ansSet('spalten',this.checked)"><label for="an_spalten">Karten nebeneinander, wenn Platz ist (breite Monitore)</label></div>
 <div class="knoepfe"><button class="k" onclick="ansZurueck()">Zurücksetzen</button><button class="k p" onclick="ansichtPanel(false)">Fertig</button></div></div>
-<div id="nurlesen" class="nurlesen" hidden>Nur lesen – mit diesem Konto lassen sich Daten ansehen, aber nichts ändern oder ans Gateway übertragen.</div>
+<div id="nurlesen" class="nurlesen" hidden></div>
 <nav id="nav"></nav>
 <main id="main"><div id="griff" title="Ziehen: Breite ändern · Doppelklick: volle Breite / Standard"></div>
 <section id="start"><div class="karte"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><h2 style="flex:1;margin:0">Überblick <span id="st_zeit" class="status"></span></h2><button class="k" onclick="startLaden()">Aktualisieren</button></div>
@@ -133,7 +133,7 @@ nav{position:sticky;top:0;z-index:20}
 <div class="karte"><h3>Parzelle nachschlagen</h3><p class="hint">WLAN-Name, Passwort und QR-Code einer Parzelle – zum Zeigen, Scannen lassen oder Teilen.</p>
 <div class="reihe"><div><label for="st_sp">Sparte</label><select id="st_sp"></select></div><div><label for="st_p">Parzelle</label><input id="st_p" type="number" inputmode="numeric" min="1" max="199" placeholder="z. B. 47" onkeydown="if(event.key=='Enter')parzelleZeigen()"></div></div>
 <div class="knoepfe"><button class="k p" onclick="parzelleZeigen()">Anzeigen</button></div><div class="log" id="log_pz"></div><div id="pz_karte"></div></div>
-<div class="karte"><h3>Gast-Voucher schnell</h3><p class="hint">Erstellt einen Code für das Gäste-WLAN.</p>
+<div data-bereich="voucher" class="karte"><h3>Gast-Voucher schnell</h3><p class="hint">Erstellt einen Code für das Gäste-WLAN.</p>
 <div class="knoepfe"><button class="k" onclick="schnellVoucher(120)">2 Stunden</button><button class="k" onclick="schnellVoucher(1440)">1 Tag</button><button class="k" onclick="schnellVoucher(10080)">1 Woche</button></div>
 <div class="log" id="log_sv"></div><div id="sv_code"></div></div>
 <div class="karte"><h3>Schnellzugriff</h3><div class="schnell">
@@ -197,10 +197,10 @@ nav{position:sticky;top:0;z-index:20}
 
 <section id="einrichten"><div class="karte"><h2>Sparte einrichten</h2><p class="hint">Immer zuerst „Vorschau“. Vor Änderungen eine Sicherung der Konsole machen.</p>
 <label>Sparte</label><select id="ein_sp" onchange="ssid()"></select></div>
-<div class="karte schritt"><div class="nr">1</div><div><h3>Fehlende Netze anlegen</h3><p class="hint">Vorlage ist ein vorhandenes Parzellennetz (z. B. BW-Paz.004): DHCP, Isolation, Firewall-Zone werden übernommen, nur Name, VLAN und Adressen geändert.</p>
+<div data-bereich="netze" class="karte schritt"><div class="nr">1</div><div><h3>Fehlende Netze anlegen</h3><p class="hint">Vorlage ist ein vorhandenes Parzellennetz (z. B. BW-Paz.004): DHCP, Isolation, Firewall-Zone werden übernommen, nur Name, VLAN und Adressen geändert.</p>
 <div class="knoepfe"><button class="k" onclick="netze(false,false)">Vorschau</button><button class="k p" onclick="netze(true,true)">Erstes Netz anlegen (Test)</button><button class="k r" onclick="netze(true,false)">Alle fehlenden anlegen</button></div></div></div>
-<div class="karte schritt"><div class="nr">2</div><div><h3>WLANs prüfen</h3><p class="hint">Pächter <b id="ssid1"></b> (WPA2, PPSK) · Gäste <b id="ssid2"></b> (Hotspot/Voucher) · Vorstand <b id="ssid3"></b>.</p></div></div>
-<div class="karte schritt"><div class="nr">3</div><div><h3>Passwörter je Parzelle</h3><p class="hint">Bereits verteilte Passwörter erst übernehmen, dann nur fehlende ergänzen. Gespeichert in PPSK_&lt;Kürzel&gt;.csv.</p>
+<div data-bereich="netze" class="karte schritt"><div class="nr">2</div><div><h3>WLANs prüfen</h3><p class="hint">Pächter <b id="ssid1"></b> (WPA2, PPSK) · Gäste <b id="ssid2"></b> (Hotspot/Voucher) · Vorstand <b id="ssid3"></b>.</p></div></div>
+<div data-bereich="wlan_pw" class="karte schritt"><div class="nr">3</div><div><h3>Passwörter je Parzelle</h3><p class="hint">Bereits verteilte Passwörter erst übernehmen, dann nur fehlende ergänzen. Gespeichert in PPSK_&lt;Kürzel&gt;.csv.</p>
 <div class="knoepfe"><button class="k" onclick="ppsk('anzeigen')">Anzeigen</button><button class="k" onclick="ppsk('gateway')">Vom Gateway übernehmen</button><button class="k p" onclick="ppsk('fehlende')">Fehlende erzeugen</button>
 <button class="k" onclick="ppsk('neu')">Alle neu erzeugen</button><button class="k" onclick="csvSpeichern(PPSK,'ppsk')">Als CSV</button></div>
 <div class="pwleiste"><span style="font-size:14px">Regel für neue Passwörter:</span><input id="pr_pre" style="max-width:90px" maxlength="10"><span>+</span><input id="pr_z" type="number" min="6" max="30" style="max-width:80px"><span style="font-size:14px">Ziffern</span>
@@ -210,11 +210,11 @@ nav{position:sticky;top:0;z-index:20}
 <div class="pwleiste"><input id="pw_suche" placeholder="Suchen (Parzelle, Netz, Passwort)" oninput="pwFilter()"><span id="pw_st"></span>
 <button class="k p" onclick="pwSpeichern()">Änderungen speichern</button><button class="k" onclick="pwVerwerfen()">Verwerfen</button></div>
 <div class="tab" id="tab_pw"></div></div>
-<h3 style="margin-top:16px">Zugangskarten mit WLAN-QR-Code</h3><p class="hint">Je Parzelle eine Seite, im gespeicherten Kartendesign. Erst „Anzeigen“ oder „Fehlende erzeugen“, dann in der Tabelle oben (Spalte „Drucken“) auswählen.</p>
+<div data-bereich="karten"><h3 style="margin-top:16px">Zugangskarten mit WLAN-QR-Code</h3><p class="hint">Je Parzelle eine Seite, im gespeicherten Kartendesign. Erst „Anzeigen“ oder „Fehlende erzeugen“, dann in der Tabelle oben (Spalte „Drucken“) auswählen.</p>
 <p class="hint">Format, Farben, Texte, QR-Größe und Logo: Reiter <a href="#" onclick="zeige('kartendesign');return false">Kartendesign</a>.</p>
 <div class="knoepfe"><button class="k p" onclick="karten('alle')">Alle drucken</button><button class="k" onclick="karten('auswahl')">Ausgewählte drucken</button>
-<button class="k" onclick="markiere(true)">Alle markieren</button><button class="k" onclick="markiere(false)">Keine markieren</button><button class="k" onclick="markiereGeaendert()">Zuletzt geänderte markieren</button></div></div></div>
-<div class="karte schritt"><div class="nr">4</div><div><h3>Passwörter ins Pächter-WLAN laden</h3><p class="hint">Überträgt alle Unterschiede dieser Sparte (neu, geändert, gesperrt), mit Sicherung und Kontrolle. Einzelne Parzellen auswählen: Reiter <a href="#" onclick="zeige('uebertragen');return false">Übertragen</a>.</p>
+<button class="k" onclick="markiere(true)">Alle markieren</button><button class="k" onclick="markiere(false)">Keine markieren</button><button class="k" onclick="markiereGeaendert()">Zuletzt geänderte markieren</button></div></div></div></div>
+<div data-bereich="wlan_pw" class="karte schritt"><div class="nr">4</div><div><h3>Passwörter ins Pächter-WLAN laden</h3><p class="hint">Überträgt alle Unterschiede dieser Sparte (neu, geändert, gesperrt), mit Sicherung und Kontrolle. Einzelne Parzellen auswählen: Reiter <a href="#" onclick="zeige('uebertragen');return false">Übertragen</a>.</p>
 <div class="knoepfe"><button class="k" onclick="schritt('ppsk-hochladen',false)">Vorschau</button><button class="k r" onclick="schritt('ppsk-hochladen',true)">Ausführen</button></div></div></div>
 <div class="karte"><h3>Protokoll</h3><div class="log" id="log_e"></div><div class="tab" id="tab_e"></div></div></section>
 
@@ -232,7 +232,7 @@ nav{position:sticky;top:0;z-index:20}
 <div class="karte"><h3>Änderungsprotokoll</h3><p class="hint">Jede Übertragung mit Zeit und Ergebnis (ohne Passwörter) – Datei SparteNet_Aenderungen.log.</p>
 <div class="knoepfe"><button class="k" onclick="journalZeigen()">Anzeigen</button></div><div class="log" id="log_jn"></div></div></section>
 
-<section id="tarife"><div class="karte"><h2>Tarife</h2>
+<section id="tarife"><div data-bereich="tarife" class="karte"><h2>Tarife</h2>
 <p class="hint">Ein Tarif legt zwei Dinge fest: die <b>Bandbreite</b> (wird am Gateway als QoS-Regel „Geschwindigkeit begrenzen“ angelegt, die Netze des Tarifs werden darin eingetragen) und die <b>Netzgröße</b> (Subnetzmaske unter Netzwerke → Gateway-IP/Subnetz, dazu der passende DHCP-Bereich). „Endgeräte“ = Größe des DHCP-Bereichs, 0 = ganzer Bereich. Die Router-IP (z. B. 10.1.67.1) bleibt immer gleich.</p>
 <div class="tab"><table id="tf_tab"></table></div>
 <div class="knoepfe"><button class="k" onclick="tfNeu()">+ Tarif</button><button class="k" onclick="tfStandard()">Beispiel-Tarife einsetzen</button></div>
@@ -240,7 +240,7 @@ nav{position:sticky;top:0;z-index:20}
 <p class="hint" id="tf_modus_hint"></p>
 <div class="knoepfe"><button class="k p" onclick="tfSpeichern()">Tarife speichern</button></div><div class="log" id="log_tf"></div></div>
 
-<div class="karte"><h3>Netze einem Tarif zuordnen</h3>
+<div data-bereich="buchungen" class="karte"><h3>Netze einem Tarif zuordnen</h3>
 <p class="hint">Alle Netze vom Gateway (auch Vorstand, Gäste, Technik oder eigene) – jedes kann einen Tarif bekommen. Tarif wählen, „Zuordnung speichern“, dann unten übertragen. „Ist-Zustand erkennen“ schlägt für Parzellen ohne Tarif den passenden Tarif nach der heutigen Netzmaske vor.</p>
 <div class="knoepfe"><button class="k p" onclick="tzLaden()">Netze laden &amp; Unterschiede ermitteln</button><button class="k" onclick="tzErkennen()">Ist-Zustand erkennen</button></div>
 <div class="log" id="log_tz"></div><div class="kacheln" id="tz_k"></div>
@@ -251,7 +251,7 @@ nav{position:sticky;top:0;z-index:20}
 <div class="knoepfe"><button class="k" onclick="tzMarkAlle(true)">Sichtbare markieren</button><button class="k" onclick="tzMarkAlle(false)">Keine markieren</button><button class="k p" onclick="tzSpeichern()">Zuordnung speichern &amp; neu vergleichen</button><span id="tz_offen" class="status"></span></div>
 </div></div>
 
-<div class="karte"><h3>An das Gateway übertragen</h3>
+<div data-bereich="tarife" class="karte"><h3>An das Gateway übertragen</h3>
 <p class="hint">Zuerst oben „Unterschiede ermitteln“. QoS-Regeln, die der Manager anlegt, heißen „SparteNet-Tarif-…“ bzw. „SparteNet-Netz-…“ – andere QoS-Regeln am Gateway werden nie verändert. Vor jeder Übertragung wird der alte Stand gesichert.</p>
 <h3 id="tq_h_qos" style="margin-top:12px"></h3><div class="tab" id="tq_qos"></div>
 <h3 id="tq_h_netz" style="margin-top:12px"></h3><div class="tab" id="tq_netz"></div>
@@ -260,24 +260,24 @@ nav{position:sticky;top:0;z-index:20}
 <div class="knoepfe" style="margin-top:18px;border-top:1px solid var(--line);padding-top:14px"><button class="k" onclick="tqRueckgaengig()">Letzte Tarif-Übertragung rückgängig</button></div></div>
 </section>
 
-<section id="kalkulation"><div class="karte"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0;flex:1">Kalkulation &amp; Auslastung</h2>
+<section id="kalkulation"><div data-bereich="kalkulation" class="karte"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0;flex:1">Kalkulation &amp; Auslastung</h2>
 <label class="feld chk" style="margin:0;display:flex;gap:6px;align-items:center"><input type="checkbox" id="kk_prog" onchange="kkLaden()" style="width:auto"> Prognose für Sparten ohne Buchungen</label>
 <button class="k p" onclick="kkLaden()">Berechnen</button></div>
 <p class="hint">Gebuchte Parzellen × Tarifpreis je Sparte, Buchungsrate und Gesamtauslastung aller Sparten mit Buchungen. Kosten und Ergebnis nach den Annahmen der Kalkulation. Rechnet nur hier im Manager – am Gateway ändert sich nichts.</p>
 <div class="kacheln" id="kk_k"></div><div class="log" id="log_kk"></div></div>
-<div class="karte"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h3 style="margin:0;flex:1">Je Sparte</h3><button class="k" onclick="kkCsv()">Als CSV speichern</button></div>
+<div data-bereich="kalkulation" class="karte"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h3 style="margin:0;flex:1">Je Sparte</h3><button class="k" onclick="kkCsv()">Als CSV speichern</button></div>
 <p class="hint">Investition, Masten mit Technik und Uplink je Sparte direkt in der Tabelle ändern (wird sofort gespeichert) oder aus der Kalkulation (Excel) übernehmen. Uplink leer = Standard aus den Annahmen.</p>
 <div class="tab" id="kk_tab"></div></div>
-<div class="karte"><h3>Buchungen erfassen</h3>
+<div data-bereich="buchungen" class="karte"><h3>Buchungen erfassen</h3>
 <p class="hint">Welche Parzelle welchen Tarif gebucht hat. Was im Reiter „Tarife“ einer Parzelle zugeordnet ist, steht automatisch hier – und umgekehrt. Ans Gateway (Bandbreite, Netzgröße) geht es über „Tarife“ → Übertragen.</p>
 <div class="reihe"><div><label for="kb_sp">Sparte</label><select id="kb_sp" onchange="kbLaden()"></select></div>
 <div><label for="kb_bereich">Parzellen (z. B. 1-20, 25, 31)</label><input id="kb_bereich" placeholder="1-20, 25"></div>
 <div><label for="kb_tarif">Tarif</label><div style="display:flex;gap:6px"><select id="kb_tarif"></select><button class="k" onclick="kbMassen()">setzen</button></div></div></div>
 <div class="kacheln" id="kb_k"></div><div class="tab" id="kb_tab"></div>
 <div class="knoepfe"><button class="k p" onclick="kbSpeichern()">Buchungen speichern</button><button class="k" onclick="kbLaden(true)">Verwerfen</button><span id="kb_offen" class="status"></span></div><div class="log" id="log_kb"></div></div>
-<div class="karte"><h3>Annahmen</h3><p class="hint">Aus der Kalkulation übernommen oder hier ändern. Tarifpreise (€ pro Jahr) stehen im Reiter „Tarife“.</p>
+<div data-bereich="kalkulation" class="karte"><h3>Annahmen</h3><p class="hint">Aus der Kalkulation übernommen oder hier ändern. Tarifpreise (€ pro Jahr) stehen im Reiter „Tarife“.</p>
 <div class="reihe" id="ka_form"></div><div class="knoepfe"><button class="k p" onclick="kaSpeichern()">Annahmen speichern</button></div><div class="log" id="log_ka"></div></div>
-<div class="karte"><h3>Aus Excel übernehmen</h3><p class="hint"><b>Kalkulation</b> (Kalkulation_Sparten_WLAN.xlsx): Annahmen, Tarifpreise und je Sparten-Blatt Investition und Masten. <b>VLAN-Planer</b>: alle Sparten, die dort ein Gateway haben (Name, Kürzel, Parzellen, Gateway).</p>
+<div data-bereich="kalkulation" class="karte"><h3>Aus Excel übernehmen</h3><p class="hint"><b>Kalkulation</b> (Kalkulation_Sparten_WLAN.xlsx): Annahmen, Tarifpreise und je Sparten-Blatt Investition und Masten. <b>VLAN-Planer</b>: alle Sparten, die dort ein Gateway haben (Name, Kürzel, Parzellen, Gateway).</p>
 <div class="knoepfe"><label class="k">Kalkulation oder VLAN-Planer wählen …<input type="file" id="kk_datei" accept=".xlsx" onchange="kkImport()" style="display:none"></label></div><div class="log" id="log_ki"></div></div>
 </section>
 
@@ -341,18 +341,19 @@ nav{position:sticky;top:0;z-index:20}
 <div class="log" id="log_vo"></div><div class="tab" id="tab_vo"></div></div></section>
 
 <section id="benutzer"><div class="karte"><h2>Mein Konto</h2><div class="kacheln" id="bn_ich"></div>
+<div class="tab" id="bn_ich_liste" style="--tab-h:420px"></div>
 <div id="bn_ich_pw"><h3>Eigenes Passwort ändern</h3><div class="reihe" style="max-width:820px"><div><label for="bn_alt">Bisheriges Passwort</label><input id="bn_alt" type="password" autocomplete="current-password"></div>
 <div><label for="bn_neu1">Neues Passwort (mind. 12 Zeichen)</label><input id="bn_neu1" type="password" autocomplete="new-password"></div><div><label for="bn_neu2">Neues Passwort wiederholen</label><input id="bn_neu2" type="password" autocomplete="new-password"></div></div>
 <div class="knoepfe"><button class="k p" onclick="bnEigenesPw()">Passwort ändern</button></div></div>
 <p class="hint" id="bn_admin_hint" hidden>Das Konto „admin“ meldet sich mit dem Manager-Passwort an. Geändert wird es in der Docker-Konfiguration (Secret spartenet_password) – danach den Manager neu starten.</p>
 <div class="knoepfe"><button class="k" onclick="abmelden()">Abmelden</button></div><div class="log" id="log_bni"></div></div>
 <div class="karte bn-admin"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h3 style="margin:0;flex:1">Benutzerkonten</h3><button class="k" onclick="bnLaden()">Aktualisieren</button></div>
-<p class="hint"><b>Administrator</b>: alles, auch Benutzerkonten und Verbindungs-Einstellungen. <b>Lesen und schreiben</b>: alles ansehen, planen, ändern und ans Gateway übertragen. <b>Nur lesen</b>: alles ansehen, Vorschauen und Zugangskarten, aber nichts ändern. <b>Gesperrt</b>: keine Anmeldung, offene Sitzungen werden sofort beendet. Recht ändern = sofort gespeichert.</p>
-<div class="tab" id="bn_tab"></div><div class="log" id="log_bn"></div></div>
+<p class="hint"><b>Administrator</b>: alles, auch Benutzerkonten. <b>Gesperrt</b>: keine Anmeldung, offene Sitzungen enden sofort. <b>Rechte je Bereich</b>: für jedes Arbeitsblatt bzw. jede Funktion einzeln <i>kein Zugriff</i> (ausgeblendet), <i>lesen</i> (ansehen, Vorschau) oder <i>lesen und schreiben</i> (ändern, ans Gateway übertragen) – z. B. alles nur lesen, aber WLAN-Passwörter schreiben und Tarife buchen. „Rechte“ öffnet die Liste; jede Änderung wird sofort gespeichert.</p>
+<div class="tab" id="bn_tab" style="--tab-h:900px"></div><div class="log" id="log_bn"></div></div>
 <div class="karte bn-admin"><h3>Neues Benutzerkonto</h3>
 <div class="reihe"><div><label for="bn_name">Benutzername</label><input id="bn_name" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="z. B. vorstand.buchenweg"></div>
 <div><label for="bn_anz">Name (Anzeige, optional)</label><input id="bn_anz" placeholder="z. B. Maria Muster, Vorstand Buchenweg"></div>
-<div><label for="bn_recht">Zugriffsrecht</label><select id="bn_recht"><option value="lesen">Nur lesen</option><option value="schreiben">Lesen und schreiben</option><option value="gesperrt">Gesperrt</option><option value="admin">Administrator</option></select></div>
+<div><label for="bn_vorlage">Rechte (Vorlage – danach je Bereich anpassbar)</label><select id="bn_vorlage"></select></div>
 <div><label for="bn_pw1">Passwort (mind. 12 Zeichen)</label><input id="bn_pw1" type="password" autocomplete="new-password"></div>
 <div><label for="bn_pw2">Passwort wiederholen</label><input id="bn_pw2" type="password" autocomplete="new-password"></div></div>
 <div class="knoepfe"><button class="k p" onclick="bnAnlegen()">Konto anlegen</button><button class="k" onclick="bnVorschlag()">Passwort vorschlagen</button><span id="bn_vorschlag" class="mono"></span></div><div class="log" id="log_bnn"></div></div>
@@ -374,7 +375,7 @@ nav{position:sticky;top:0;z-index:20}
 const T="__TOKEN__";let LETZT=null,PLAN=null,PLANZ=null,PPSK=null,PPSKSP=null,CODES=[],VMIN=0,EINST={};
 const TABS=[["start","Start"],["verbindung","Verbindung"],["lesen","Auslesen"],["planung","Planung"],["abgleich","Abgleich"],["einrichten","Einrichten"],["uebertragen","Übertragen"],["tarife","Tarife"],["kalkulation","Kalkulation"],["netzplanung","Netzplanung"],["kartendesign","Kartendesign"],["voucher","Gast-Voucher"],["system","Systeminfo"],["daten","Alle Daten"],["benutzer","Benutzer"],["hilfe","Hilfe"]];
 const $=id=>document.getElementById(id);const nav=$("nav");TABS.forEach(([id,t])=>{const b=document.createElement("button");b.textContent=t;b.onclick=()=>zeige(id);b.id="n_"+id;nav.appendChild(b)});
-function zeige(id){if(id=="start"&&!$("st_k").innerHTML&&typeof EINST!="undefined"&&EINST.konsole_id)startLaden().catch(()=>{});if(id=="verbindung")fernLaden().catch(()=>{});if(location.hash!="#"+id)history.replaceState(null,"","#"+id);setTimeout(()=>{const b=document.querySelector("nav button.aktiv");if(b&&b.scrollIntoView)b.scrollIntoView({inline:"center",block:"nearest"})},0);if(id=="kalkulation"&&!KK)kkLaden().catch(()=>{});if(id=="netzplanung"&&!GP)gpLaden().catch(()=>{});if(id=="benutzer")bnStart();if(id=="kartendesign"&&!DESIGN)designLaden();if(id=="tarife"&&!TF)tfLaden();if(id=="system"&&!SYS)sysLaden();if(id=="daten"&&!DLISTE)datenListe();document.querySelectorAll("section").forEach(s=>s.classList.toggle("aktiv",s.id==id));document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("aktiv",b.id=="n_"+id))}
+function zeige(id){if(!reiterErlaubt(id))id=startReiter();rechteHinweis(id);if(id=="start"&&!$("st_k").innerHTML&&typeof EINST!="undefined"&&EINST.konsole_id)startLaden().catch(()=>{});if(id=="verbindung")fernLaden().catch(()=>{});if(location.hash!="#"+id)history.replaceState(null,"","#"+id);setTimeout(()=>{const b=document.querySelector("nav button.aktiv");if(b&&b.scrollIntoView)b.scrollIntoView({inline:"center",block:"nearest"})},0);if(id=="kalkulation"&&!KK)kkLaden().catch(()=>{});if(id=="netzplanung"&&!GP)gpLaden().catch(()=>{});if(id=="benutzer")bnStart();if(id=="kartendesign"&&!DESIGN)designLaden();if(id=="tarife"&&!TF)tfLaden();if(id=="system"&&!SYS)sysLaden();if(id=="daten"&&!DLISTE)datenListe();document.querySelectorAll("section").forEach(s=>s.classList.toggle("aktiv",s.id==id));document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("aktiv",b.id=="n_"+id))}
 async function api(pfad,body,logid){const el=logid&&$(logid);const kn=[...document.querySelectorAll("button")];kn.forEach(b=>b.disabled=true);if(el)el.textContent="… bitte warten (über die Cloud kann das einige Sekunden dauern)";
  try{const r=await fetch(pfad,{method:body===undefined?"GET":"POST",headers:{"X-Token":T,"Content-Type":"application/json"},body:body===undefined?undefined:(body instanceof Blob?body:JSON.stringify(body))});
  if(r.status==401){location.reload();return new Promise(()=>{})}const d=await r.json().catch(()=>({}));if(r.status==403&&!d.recht){location.reload();return new Promise(()=>{})}if(!r.ok)throw new Error(d.fehler||r.status);if(el)el.textContent=d.log?d.log.join("\n"):"";return d}
@@ -730,28 +731,48 @@ async function kkLaden(){const d=await api("/api/kalkulation?prognose="+($("kk_p
  kaZeigen(d.annahmen,d.texte);if(!KB&&d.zeilen.length)kbLaden(true)}
 window.addEventListener("unhandledrejection",e=>e.preventDefault());  // Fehler zeigt api() bereits im jeweiligen Protokollfeld
 const ICH=__ICH__;
-(function(){const k=$("ich_k");if(k)k.textContent="👤 "+ICH.name+" · "+ICH.recht_text;if(ICH.recht=="lesen")$("nurlesen").hidden=false;
- document.querySelectorAll(".bn-admin").forEach(e=>e.hidden=ICH.recht!="admin");if(ICH.recht!="admin"){const b=$("n_benutzer");if(b)b.textContent="Mein Konto"}})();
+function reiterErlaubt(id){return ICH.admin||!(id in ICH.reiter)||ICH.reiter[id]!="kein"}
+function startReiter(){const h=location.hash.slice(1);if(TABS.some(t=>t[0]==h)&&reiterErlaubt(h))return h;const t=TABS.find(t=>reiterErlaubt(t[0]));return t?t[0]:"benutzer"}
+function rechteHinweis(id){const e=$("nurlesen");if(!e)return;const st=ICH.admin?"schreiben":ICH.reiter[id];
+ if(st=="lesen"){e.textContent="Nur lesen – in diesem Bereich lassen sich mit Ihrem Konto Daten ansehen, aber nichts ändern oder ans Gateway übertragen.";e.hidden=false}else e.hidden=true}
+(function(){const k=$("ich_k");if(k)k.textContent="👤 "+ICH.name+" · "+ICH.recht_text;
+ TABS.forEach(([id])=>{const b=$("n_"+id);if(b&&!reiterErlaubt(id))b.style.display="none"});
+ document.querySelectorAll("[data-bereich]").forEach(e=>{const st=ICH.admin?"schreiben":(ICH.bereiche[e.dataset.bereich]||"kein");if(st=="kein")e.style.display="none";else if(st=="lesen")e.classList.add("nurlesen-karte")});
+ document.querySelectorAll(".bn-admin").forEach(e=>e.hidden=!ICH.admin);if(!ICH.admin){const b=$("n_benutzer");if(b)b.textContent="Mein Konto"}})();
+let BN=null;const BNOFFEN=new Set();
 async function bnStart(){const d=await api("/api/benutzer-ich",undefined,"log_bni");$("log_bni").textContent="";
- $("bn_ich").innerHTML=kachel("Benutzername",esc(d.name),"")+kachel("Zugriffsrecht",esc(d.recht_text),d.recht=="lesen"?"warn":"gut")+(d.anzeige?kachel("Name",esc(d.anzeige),""):"");
- $("bn_ich_pw").hidden=!d.eigenes_passwort;$("bn_admin_hint").hidden=d.name!="admin";if(ICH.recht=="admin")bnLaden()}
+ $("bn_ich").innerHTML=kachel("Benutzername",esc(d.name),"")+kachel("Rechte",esc(d.recht_text),d.admin?"gut":"")+(d.anzeige?kachel("Name",esc(d.anzeige),""):"");
+ $("bn_ich_liste").innerHTML=d.admin?"":"<table><tr><th>Bereich</th><th>Ihr Recht</th></tr>"+d.liste.map(x=>`<tr class="${x.stufe=="kein Zugriff"?"gesperrt":""}"><td>${esc(x.text)}</td><td>${esc(x.stufe)}</td></tr>`).join("")+"</table>";
+ $("bn_ich_pw").hidden=!d.eigenes_passwort;$("bn_admin_hint").hidden=d.name!="admin";if(ICH.admin)bnLaden()}
 async function bnEigenesPw(){await api("/api/benutzer-ich",{alt:$("bn_alt").value,passwort:$("bn_neu1").value,passwort2:$("bn_neu2").value},"log_bni");["bn_alt","bn_neu1","bn_neu2"].forEach(i=>$(i).value="")}
 async function bnLaden(){bnZeigen(await api("/api/benutzer",undefined,"log_bn"))}
-function bnZeigen(d){const R=d.rechte;
- $("bn_tab").innerHTML="<table><tr><th>Benutzername</th><th>Name</th><th>Zugriffsrecht</th><th>angelegt</th><th>zuletzt angemeldet</th><th>offene Sitzungen</th><th></th></tr>"+d.zeilen.map(z=>`<tr class="${z.recht=="gesperrt"?"recht-gesperrt":""}"><td><b>${esc(z.name)}</b>${z.name==d.ich?" <small>(Sie)</small>":""}</td>
- <td>${z.fest?esc(z.anzeige):`<input class="bn_anz" data-n="${esc(z.name)}" value="${esc(z.anzeige)}" style="min-width:180px">`}</td>
- <td>${z.fest?esc(R[z.recht]):`<select class="bn_recht" data-n="${esc(z.name)}">${Object.entries(R).map(([k,t])=>`<option value="${k}"${k==z.recht?" selected":""}>${esc(t)}</option>`).join("")}</select>`}</td>
- <td>${esc(z.angelegt)}${z.von?" <small>von "+esc(z.von)+"</small>":""}</td><td>${esc(z.zuletzt)||"–"}</td><td>${z.sitzungen||"–"}</td>
- <td>${z.fest?"":`<button class="k" onclick="bnPw('${esc(z.name)}')">Passwort setzen</button> <button class="k" onclick="bnLoeschen('${esc(z.name)}')">Löschen</button>`}</td></tr>`).join("")+"</table>";
- document.querySelectorAll(".bn_recht").forEach(e=>e.onchange=async()=>{if(e.dataset.n==d.ich&&e.value!="admin"&&!confirm("Ihr eigenes Konto verliert damit die Administrator-Rechte. Fortfahren?")){e.value="admin";return}bnZeigen(await api("/api/benutzer-speichern",{name:e.dataset.n,recht:e.value},"log_bn"))});
- document.querySelectorAll(".bn_anz").forEach(e=>e.onchange=async()=>bnZeigen(await api("/api/benutzer-speichern",{name:e.dataset.n,anzeige:e.value},"log_bn")))}
-async function bnAnlegen(){const r=await api("/api/benutzer-speichern",{neu:true,name:$("bn_name").value.trim(),anzeige:$("bn_anz").value.trim(),recht:$("bn_recht").value,passwort:$("bn_pw1").value,passwort2:$("bn_pw2").value},"log_bnn");
- ["bn_name","bn_anz","bn_pw1","bn_pw2"].forEach(i=>$(i).value="");$("bn_vorschlag").textContent="";bnZeigen(r)}
+async function bnSpeichern(b,logid){bnZeigen(await api("/api/benutzer-speichern",b,logid||"log_bn"))}
+function bnZeigen(d){BN=d;const box=$("bn_tab"),y=box.scrollTop;
+ if(!$("bn_vorlage").options.length)$("bn_vorlage").innerHTML=Object.entries(d.vorlagen).map(([k,v])=>`<option value="${k}">${esc(v.text)}</option>`).join("")+'<option value="#admin">Administrator</option><option value="#gesperrt">Gesperrt (noch nicht freigeschaltet)</option>';
+ let h="<table><tr><th>Benutzername</th><th>Name</th><th>Kontoart</th><th>Rechte</th><th>angelegt</th><th>zuletzt angemeldet</th><th>Sitzungen</th><th></th></tr>";
+ for(const z of d.zeilen){const n=esc(z.name),offen=BNOFFEN.has(z.name);
+  h+=`<tr class="${z.art=="gesperrt"?"recht-gesperrt":""}"><td><b>${n}</b>${z.name==d.ich?" <small>(Sie)</small>":""}</td>
+  <td>${z.fest?esc(z.anzeige):`<input class="bn_anz" data-n="${n}" value="${esc(z.anzeige)}" style="min-width:170px">`}</td>
+  <td>${z.fest?"Administrator":`<select class="bn_art" data-n="${n}">${Object.entries(d.arten).map(([k,t])=>`<option value="${k}"${k==z.art?" selected":""}>${esc(t)}</option>`).join("")}</select>`}</td>
+  <td>${esc(z.recht_text)}${z.art=="bereiche"?` <button class="k" onclick="bnAuf('${n}')">${offen?"Rechte schließen":"Rechte …"}</button>`:""}</td>
+  <td>${esc(z.angelegt)}${z.von?" <small>von "+esc(z.von)+"</small>":""}</td><td>${esc(z.zuletzt)||"–"}</td><td>${z.sitzungen||"–"}</td>
+  <td>${z.fest?"":`<button class="k" onclick="bnPw('${n}')">Passwort setzen</button> <button class="k" onclick="bnLoeschen('${n}')">Löschen</button>`}</td></tr>`;
+  if(offen&&z.art=="bereiche")h+=`<tr class="bn_detail"><td colspan="8"><div class="knoepfe" style="margin:4px 0 6px">Vorlage übernehmen: ${Object.entries(d.vorlagen).map(([k,v])=>`<button class="k" onclick="bnVorlage('${n}','${k}')">${esc(v.text.split(":")[0])}</button>`).join(" ")}</div>
+   <div class="bn_matrix">${d.bereiche.map(b=>{const st=z.bereiche[b.k]||"kein";return `<label>${esc(b.text)}<select class="bn_ber ${st}" data-n="${n}" data-k="${b.k}">${b.stufen.map(x=>`<option value="${x}"${x==st?" selected":""}>${esc(d.stufen[x])}</option>`).join("")}</select></label>`}).join("")}</div></td></tr>`}
+ box.innerHTML=h+"</table>";box.scrollTop=y;
+ box.querySelectorAll(".bn_art").forEach(e=>e.onchange=()=>{if(e.value=="bereiche")BNOFFEN.add(e.dataset.n);bnSpeichern({name:e.dataset.n,art:e.value})});
+ box.querySelectorAll(".bn_anz").forEach(e=>e.onchange=()=>bnSpeichern({name:e.dataset.n,anzeige:e.value}));
+ box.querySelectorAll(".bn_ber").forEach(e=>e.onchange=()=>bnSpeichern({name:e.dataset.n,bereiche:{[e.dataset.k]:e.value}}))}
+function bnAuf(n){BNOFFEN.has(n)?BNOFFEN.delete(n):BNOFFEN.add(n);bnZeigen(BN)}
+function bnVorlage(n,k){bnSpeichern({name:n,art:"bereiche",vorlage:k})}
+async function bnAnlegen(){const v=$("bn_vorlage").value,n=$("bn_name").value.trim();const b={neu:true,name:n,anzeige:$("bn_anz").value.trim(),passwort:$("bn_pw1").value,passwort2:$("bn_pw2").value};
+ if(v.startsWith("#"))b.art=v.slice(1);else{b.art="bereiche";b.vorlage=v}
+ const r=await api("/api/benutzer-speichern",b,"log_bnn");["bn_name","bn_anz","bn_pw1","bn_pw2"].forEach(i=>$(i).value="");$("bn_vorschlag").textContent="";if(b.art=="bereiche")BNOFFEN.add(n.toLowerCase());bnZeigen(r)}
 function bnZufall(){const z="ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";const a=new Uint32Array(16);crypto.getRandomValues(a);return [...a].map(x=>z[x%z.length]).join("").replace(/(.{4})(?!$)/g,"$1-")}
 function bnVorschlag(){const p=bnZufall();$("bn_pw1").value=p;$("bn_pw2").value=p;$("bn_vorschlag").textContent=p+"  ← bitte notieren und dem Benutzer sicher mitteilen"}
 async function bnPw(n){const p=prompt("Neues Passwort für „"+n+"“ (mind. 12 Zeichen). Leer lassen = Vorschlag erzeugen:");if(p===null)return;const pw=p||bnZufall();
- const r=await api("/api/benutzer-speichern",{name:n,passwort:pw,passwort2:pw},"log_bn");bnZeigen(r);if(!p)$("log_bn").textContent+="\nNeues Passwort: "+pw+"  (bitte notieren – wird nicht noch einmal angezeigt)"}
-async function bnLoeschen(n){if(!confirm("Konto „"+n+"“ löschen? Offene Sitzungen werden beendet."))return;bnZeigen(await api("/api/benutzer-loeschen",{name:n},"log_bn"))}
+ await bnSpeichern({name:n,passwort:pw,passwort2:pw});if(!p)$("log_bn").textContent+="\nNeues Passwort: "+pw+"  (bitte notieren – wird nicht noch einmal angezeigt)"}
+async function bnLoeschen(n){if(!confirm("Konto „"+n+"“ löschen? Offene Sitzungen werden beendet."))return;BNOFFEN.delete(n);bnZeigen(await api("/api/benutzer-loeschen",{name:n},"log_bn"))}
 
 let GP=null;
 const gz=(v,n=0)=>v==null||v===""?"–":Number(v).toLocaleString("de-DE",{minimumFractionDigits:n,maximumFractionDigits:n});
@@ -832,7 +853,7 @@ function kbBereich(txt,max){const s=new Set();for(const teil of txt.split(/[,; ]
 function kbMassen(){if(!KB)return;try{const ps=kbBereich($("kb_bereich").value,KB.n);if(!ps.length)return $("kb_bereich").focus();ps.forEach(p=>kbSetzen(p,$("kb_tarif").value));$("log_kb").textContent=ps.length+" Parzelle(n) auf „"+($("kb_tarif").value||"nicht gebucht")+"“ gesetzt – noch speichern."}catch(e){$("log_kb").innerHTML='<span class="fehler">✖ '+esc(e.message)+"</span>"}}
 async function kbSpeichern(){if(!Object.keys(KBAEND).length)return $("log_kb").textContent="Nichts geändert.";await api("/api/buchungen",{sparte:KB.kz,aenderungen:KBAEND},"log_kb");const l=$("log_kb").textContent;KBAEND={};await kkLaden();await kbLaden(true);$("log_kb").textContent=l}
 async function beenden(){if(confirm("SparteNet Manager beenden?")){await api("/api/beenden",{});document.body.innerHTML="<p style='padding:40px;font-family:Arial'>Beendet. Fenster kann geschlossen werden.</p>"}}
-ansAnwenden();zeige(TABS.some(t=>t[0]==location.hash.slice(1))?location.hash.slice(1):"start");einst();planLaden(true);regelLaden();["pr_pre","pr_z"].forEach(i=>$(i).addEventListener("input",regelBeispiel));
+ansAnwenden();zeige(startReiter());einst();planLaden(true);regelLaden();["pr_pre","pr_z"].forEach(i=>$(i).addEventListener("input",regelBeispiel));
 </script></body></html>"""
 
 __all__ = [_n for _n in dict(globals()) if not _n.startswith("__")]  # alle Namen an die folgenden Module weitergeben
