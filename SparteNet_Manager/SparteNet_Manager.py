@@ -22,7 +22,7 @@ import logging, logging.handlers, traceback
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from http.cookies import SimpleCookie, CookieError
 
-VERSION = "4.2"
+VERSION = "4.3"
 HIER = os.path.abspath(os.environ.get("SPARTENET_DATA_DIR") or os.path.dirname(os.path.abspath(sys.argv[0])))
 os.makedirs(HIER, exist_ok=True)
 DATEI = os.path.join(HIER, "SparteNet_Manager.json")
@@ -139,14 +139,10 @@ def design_pruefen(roh):
 def logo_daten_uri(design):
     if not design.get("logo"):
         return ""
-    pfad = os.path.join(HIER, design["logo"])
-    try:
-        with open(pfad, "rb") as f:
-            roh = f.read()
-    except OSError:
+    roh = ablage_lesen(design["logo"])
+    if not roh:
         return ""
-    import base64
-    return f"data:{LOGO_TYPEN[pfad.rsplit('.', 1)[1]]};base64," + base64.b64encode(roh).decode()
+    return f"data:{LOGO_TYPEN[design['logo'].rsplit('.', 1)[1]]};base64," + base64.b64encode(roh).decode()
 
 
 def logo_speichern(roh):
@@ -168,18 +164,14 @@ def logo_speichern(roh):
     else:
         raise Fehler("Unbekanntes Bildformat – bitte PNG, JPG, GIF, WEBP oder SVG verwenden.")
     logo_entfernen()
-    pfad = LOGO_BASIS + "." + ext
-    with open(pfad, "wb") as f:
-        f.write(roh)
-    return os.path.basename(pfad)
+    name = os.path.basename(LOGO_BASIS) + "." + ext
+    ablage_schreiben(name, roh)
+    return name
 
 
 def logo_entfernen():
     for e in LOGO_TYPEN:
-        try:
-            os.remove(LOGO_BASIS + "." + e)
-        except OSError:
-            pass
+        ablage_loeschen(os.path.basename(LOGO_BASIS) + "." + e)
 
 
 def vlan_parzelle(slot, p):
@@ -191,13 +183,248 @@ class Fehler(Exception):
     pass
 
 
+# =============================================================== Datenspeicher: Dateien im Datenordner oder MariaDB/MySQL
+# Mit SPARTENET_DB_HOST speichert der Manager alles in der Datenbank (Einstellungen, Planung, Buchungen, Passwörter je Parzelle,
+# Sicherungen, Änderungsprotokoll, Passwort-Register, Kartenlogo). Ohne: wie bisher Dateien im Datenordner.
+DB_HOST = os.environ.get("SPARTENET_DB_HOST", "").strip()
+DB_PORT = int(os.environ.get("SPARTENET_DB_PORT", "3306") or 3306)
+DB_NAME = os.environ.get("SPARTENET_DB_NAME", "spartenet").strip() or "spartenet"
+DB_USER = os.environ.get("SPARTENET_DB_USER", "spartenet").strip() or "spartenet"
+DB_SSL = os.environ.get("SPARTENET_DB_SSL", "0").strip().lower() in ("1", "ja", "true", "yes")
+DB_SSL_CA = os.environ.get("SPARTENET_DB_SSL_CA", "").strip()
+DB_PASSWORD_FILE = os.environ.get("SPARTENET_DB_PASSWORD_FILE", "").strip()
+if DB_PASSWORD_FILE:
+    try:
+        with open(DB_PASSWORD_FILE, encoding="utf-8") as f:
+            DB_PASSWORD = f.read().rstrip("\r\n")
+    except OSError as e:
+        raise SystemExit(f"SPARTENET_DB_PASSWORD_FILE kann nicht gelesen werden: {e}")
+else:
+    DB_PASSWORD = os.environ.get("SPARTENET_DB_PASSWORD", "")
+DB_TABELLEN = [
+    """CREATE TABLE IF NOT EXISTS sn_daten (
+        schluessel VARCHAR(100) NOT NULL PRIMARY KEY,
+        wert LONGTEXT NOT NULL,
+        geaendert TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci""",
+    """CREATE TABLE IF NOT EXISTS sn_dateien (
+        name VARCHAR(190) NOT NULL PRIMARY KEY,
+        inhalt LONGBLOB NOT NULL,
+        geaendert TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci""",
+    """CREATE TABLE IF NOT EXISTS sn_journal (
+        id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        zeit DATETIME NOT NULL,
+        text TEXT NOT NULL,
+        KEY zeit (zeit)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci""",
+    """CREATE TABLE IF NOT EXISTS sn_passwort_register (
+        pruefsumme CHAR(64) NOT NULL PRIMARY KEY,
+        angelegt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=ascii""",
+    """CREATE TABLE IF NOT EXISTS sn_meta (
+        schluessel VARCHAR(100) NOT NULL PRIMARY KEY,
+        wert TEXT NOT NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci""",
+]
+DB_SCHEMA = "1"
+
+
+class Datenbank:
+    """eine Verbindung je Thread, bei Abbruch einmal neu verbinden"""
+
+    def __init__(self):
+        self._lokal = threading.local()
+        try:
+            import pymysql
+        except ImportError:
+            raise SystemExit("SPARTENET_DB_HOST ist gesetzt, aber das Paket PyMySQL fehlt: pip install PyMySQL (im Docker-Image enthalten).")
+        self.pymysql = pymysql
+
+    def _verbinden(self):
+        ssl_opt = None
+        if DB_SSL:
+            ctx = ssl.create_default_context(cafile=DB_SSL_CA or None)
+            ssl_opt = ctx
+        return self.pymysql.connect(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME, charset="utf8mb4",
+                                    autocommit=True, connect_timeout=10, read_timeout=60, write_timeout=60, ssl=ssl_opt)
+
+    def _verbindung(self):
+        c = getattr(self._lokal, "c", None)
+        if c is None:
+            c = self._lokal.c = self._verbinden()
+        return c
+
+    def sql(self, befehl, werte=None, viele=False, alle=False):
+        for versuch in (1, 2):
+            try:
+                with self._verbindung().cursor() as k:
+                    if viele:
+                        k.executemany(befehl, werte)
+                    else:
+                        k.execute(befehl, werte)
+                    return k.fetchall() if alle else k.rowcount
+            except (self.pymysql.err.OperationalError, self.pymysql.err.InterfaceError) as e:
+                try:
+                    self._lokal.c.close()
+                except Exception:
+                    pass
+                self._lokal.c = None
+                if versuch == 2:
+                    LOG.error("Datenbank nicht erreichbar: %s", e)
+                    raise Fehler(f"Datenbank {DB_HOST}:{DB_PORT}/{DB_NAME} nicht erreichbar ({e.args[0] if e.args else e}).")
+
+    def einrichten(self):
+        for t in DB_TABELLEN:
+            self.sql(t)
+        self.sql("INSERT INTO sn_meta (schluessel, wert) VALUES ('schema', %s) ON DUPLICATE KEY UPDATE wert = VALUES(wert)", (DB_SCHEMA,))
+
+
+DB = Datenbank() if DB_HOST else None
+
+
+class Daten(dict):
+    """Einstellungen; merkt sich den geladenen Stand je Schlüssel, damit nur Geändertes in die Datenbank geht"""
+    _stand = None
+
+
+def speicher_text():
+    return f"MariaDB/MySQL {DB_USER}@{DB_HOST}:{DB_PORT}/{DB_NAME}" if DB else f"Dateien im Ordner {HIER}"
+
+
+def ablage_lesen(name):
+    """Datei aus dem Datenspeicher (bytes) oder None"""
+    if DB:
+        r = DB.sql("SELECT inhalt FROM sn_dateien WHERE name = %s", (name,), alle=True)
+        return bytes(r[0][0]) if r else None
+    try:
+        with open(os.path.join(HIER, name), "rb") as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+def ablage_schreiben(name, roh):
+    if isinstance(roh, str):
+        roh = roh.encode("utf-8")
+    if DB:
+        DB.sql("INSERT INTO sn_dateien (name, inhalt) VALUES (%s, %s) ON DUPLICATE KEY UPDATE inhalt = VALUES(inhalt)", (name, roh))
+        return
+    pfad = os.path.join(HIER, name)
+    with open(pfad, "wb") as f:
+        f.write(roh)
+    try:
+        os.chmod(pfad, 0o600)
+    except OSError:
+        pass
+
+
+def ablage_liste(praefix, endung=""):
+    if DB:
+        namen = [r[0] for r in DB.sql("SELECT name FROM sn_dateien WHERE LEFT(name, %s) = %s", (len(praefix), praefix), alle=True)]
+    else:
+        namen = [x for x in os.listdir(HIER) if x.startswith(praefix) and os.path.isfile(os.path.join(HIER, x))]
+    return sorted(x for x in namen if x.startswith(praefix) and x.endswith(endung))
+
+
+def ablage_loeschen(name):
+    if DB:
+        DB.sql("DELETE FROM sn_dateien WHERE name = %s", (name,))
+        return
+    try:
+        os.remove(os.path.join(HIER, name))
+    except OSError:
+        pass
+
+
+def ablage_umbenennen(alt, neu):
+    if DB:
+        DB.sql("DELETE FROM sn_dateien WHERE name = %s", (neu,))
+        DB.sql("UPDATE sn_dateien SET name = %s WHERE name = %s", (neu, alt))
+        return
+    os.replace(os.path.join(HIER, alt), os.path.join(HIER, neu))
+
+
+def datenbank_starten():
+    """Tabellen anlegen; beim ersten Start vorhandene Dateien aus dem Datenordner übernehmen"""
+    if not DB:
+        return
+    try:
+        DB.einrichten()
+    except Fehler as e:
+        raise SystemExit(str(e))
+    except Exception as e:
+        raise SystemExit(f"Datenbank {DB_HOST}:{DB_PORT}/{DB_NAME}: {e}")
+    leer = not DB.sql("SELECT COUNT(*) FROM sn_daten", alle=True)[0][0]
+    dateien = sorted(x for x in os.listdir(HIER) if os.path.isfile(os.path.join(HIER, x)) and (
+        x == os.path.basename(DATEI) or x in (os.path.basename(JOURNAL), os.path.basename(REGISTER))
+        or x.startswith(("PPSK_", "SparteNet_Sicherung_", os.path.basename(LOGO_BASIS) + "."))))
+    if not dateien:
+        return
+    if not leer:
+        LOG.warning("Datenbank enthält schon Daten – Dateien im Datenordner werden nicht übernommen: %s", ", ".join(dateien))
+        print("Hinweis: Datenbank enthält schon Daten – alte Dateien im Datenordner werden ignoriert.")
+        return
+    n = {"daten": 0, "journal": 0, "register": 0, "dateien": 0}
+    for x in dateien:
+        pfad = os.path.join(HIER, x)
+        if x == os.path.basename(DATEI):
+            with open(pfad, encoding="utf-8") as f:
+                alt = json.load(f)
+            DB.sql("INSERT INTO sn_daten (schluessel, wert) VALUES (%s, %s) ON DUPLICATE KEY UPDATE wert = VALUES(wert)",
+                   [(k, json.dumps(v, ensure_ascii=False)) for k, v in alt.items()], viele=True)
+            n["daten"] = len(alt)
+        elif x == os.path.basename(JOURNAL):
+            zeilen = []
+            with open(pfad, encoding="utf-8", errors="replace") as f:
+                for z in f:
+                    m = re.match(r"^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) \| (.*)$", z.rstrip("\n"))
+                    if m:
+                        zeilen.append((m.group(1), m.group(2)))
+            if zeilen:
+                DB.sql("INSERT INTO sn_journal (zeit, text) VALUES (%s, %s)", zeilen, viele=True)
+            n["journal"] = len(zeilen)
+        elif x == os.path.basename(REGISTER):
+            with open(pfad, encoding="utf-8") as f:
+                h = sorted({z.strip() for z in f if re.fullmatch(r"[0-9a-f]{64}", z.strip())})
+            if h:
+                DB.sql("INSERT IGNORE INTO sn_passwort_register (pruefsumme) VALUES (%s)", [(x,) for x in h], viele=True)
+            n["register"] = len(h)
+        else:
+            with open(pfad, "rb") as f:
+                ablage_schreiben(x, f.read())
+            n["dateien"] += 1
+    ziel = os.path.join(HIER, "in_Datenbank_uebernommen_" + time.strftime("%Y%m%d_%H%M%S"))
+    os.makedirs(ziel, exist_ok=True)
+    for x in dateien:
+        try:
+            os.replace(os.path.join(HIER, x), os.path.join(ziel, x))
+        except OSError:
+            pass
+    text = (f"In die Datenbank übernommen: {n['daten']} Einstellungsbereiche, {n['journal']} Protokollzeilen, {n['register']} Register-Einträge, "
+            f"{n['dateien']} Dateien (Passwörter je Parzelle, Sicherungen, Logo). Die alten Dateien liegen in {ziel}.")
+    print(text)
+    LOG.info(text)
+    journal(text)
+
+
 # =============================================================== Einstellungen (JSON)
 def lade():
-    try:
-        with open(DATEI, encoding="utf-8") as f:
-            d = json.load(f)
-    except (OSError, ValueError):
-        d = {}
+    if DB:
+        stand = {k: v for k, v in DB.sql("SELECT schluessel, wert FROM sn_daten", alle=True)}
+        d = Daten()
+        for k, v in stand.items():
+            try:
+                d[k] = json.loads(v)
+            except ValueError:
+                LOG.error("Datenbank: Wert „%s“ ist kein gültiges JSON – übersprungen", k)
+        d._stand = stand
+    else:
+        try:
+            with open(DATEI, encoding="utf-8") as f:
+                d = Daten(json.load(f))
+        except (OSError, ValueError):
+            d = Daten()
     d.setdefault("cloud_key", ""); d.setdefault("konsole_id", ""); d.setdefault("konsole_name", "")
     d.setdefault("plan", copy.deepcopy(STANDARD_PLAN))
     d.setdefault("log_aktiv", False)
@@ -207,6 +434,18 @@ def lade():
 
 
 def speichere(d):
+    if DB:
+        neu = {k: json.dumps(v, ensure_ascii=False) for k, v in d.items()}
+        alt = getattr(d, "_stand", None) or {}
+        geaendert = [(k, v) for k, v in neu.items() if alt.get(k) != v]
+        if geaendert:
+            DB.sql("INSERT INTO sn_daten (schluessel, wert) VALUES (%s, %s) ON DUPLICATE KEY UPDATE wert = VALUES(wert)", geaendert, viele=True)
+        for k in alt:
+            if k not in neu:
+                DB.sql("DELETE FROM sn_daten WHERE schluessel = %s", (k,))
+        if isinstance(d, Daten):
+            d._stand = neu
+        return
     with open(DATEI, "w", encoding="utf-8") as f:
         json.dump(d, f, ensure_ascii=False, indent=2)
     try:
@@ -293,9 +532,12 @@ JOURNAL = os.path.join(HIER, "SparteNet_Aenderungen.log")
 def journal(text):
     """Änderungsprotokoll – immer an, ohne Passwörter"""
     try:
-        with open(JOURNAL, "a", encoding="utf-8") as f:
-            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} | {text}\n")
-    except OSError:
+        if DB:
+            DB.sql("INSERT INTO sn_journal (zeit, text) VALUES (%s, %s)", (time.strftime("%Y-%m-%d %H:%M:%S"), text))
+        else:
+            with open(JOURNAL, "a", encoding="utf-8") as f:
+                f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} | {text}\n")
+    except (OSError, Fehler):
         pass
     LOG.info("ÄNDERUNG: %s", text)
 
@@ -493,6 +735,8 @@ def _hash(pw):
 
 
 def _register_lesen():
+    if DB:
+        return {r[0] for r in DB.sql("SELECT pruefsumme FROM sn_passwort_register", alle=True)}
     try:
         with open(REGISTER, encoding="utf-8") as f:
             return {z.strip() for z in f if z.strip()}
@@ -504,7 +748,9 @@ def register_eintragen(passwoerter):
     """Merkt sich jedes jemals vergebene Passwort (nur als Prüfsumme, nicht im Klartext)."""
     vorhanden = _register_lesen()
     neu = [_hash(p) for p in passwoerter if p and _hash(p) not in vorhanden]
-    if neu:
+    if neu and DB:
+        DB.sql("INSERT IGNORE INTO sn_passwort_register (pruefsumme) VALUES (%s)", [(h,) for h in neu], viele=True)
+    elif neu:
         with open(REGISTER, "a", encoding="utf-8") as f:
             f.write("\n".join(neu) + "\n")
         try:
@@ -516,12 +762,11 @@ def register_eintragen(passwoerter):
 def alle_belegten():
     """Klartext aller aktuell vergebenen Passwörter aller Sparten (PPSK_*.csv)"""
     belegt = set()
-    for f in os.listdir(HIER):
-        if f.startswith("PPSK_") and f.endswith(".csv"):
-            try:
-                belegt |= {z.get("Passwort", "") for z in lese_ppsk(f[5:-4])}
-            except Exception:
-                pass
+    for f in ablage_liste("PPSK_", ".csv"):
+        try:
+            belegt |= {z.get("Passwort", "") for z in lese_ppsk(f[5:-4])}
+        except Exception:
+            pass
     belegt.discard("")
     return belegt
 
@@ -559,24 +804,21 @@ def passwort_fehler(pw):
 
 
 def ppsk_datei(kz):
-    return os.path.join(HIER, f"PPSK_{kz}.csv")
+    return f"PPSK_{kz}.csv"
 
 
 def lese_ppsk(kz):
-    if not os.path.exists(ppsk_datei(kz)):
+    roh = ablage_lesen(ppsk_datei(kz))
+    if roh is None:
         return []
-    with open(ppsk_datei(kz), encoding="utf-8-sig") as f:
-        return list(csv.DictReader(f, delimiter=";"))
+    return list(csv.DictReader(io.StringIO(roh.decode("utf-8-sig")), delimiter=";"))
 
 
 def schreibe_ppsk(kz, zeilen):
-    with open(ppsk_datei(kz), "w", newline="", encoding="utf-8-sig") as f:
-        w = csv.DictWriter(f, fieldnames=["Parzelle", "Netz", "VLAN", "WLAN", "Passwort"], delimiter=";", extrasaction="ignore")
-        w.writeheader(); w.writerows(zeilen)
-    try:
-        os.chmod(ppsk_datei(kz), 0o600)
-    except OSError:
-        pass
+    f = io.StringIO(newline="")
+    w = csv.DictWriter(f, fieldnames=["Parzelle", "Netz", "VLAN", "WLAN", "Passwort"], delimiter=";", extrasaction="ignore")
+    w.writeheader(); w.writerows(zeilen)
+    ablage_schreiben(ppsk_datei(kz), f.getvalue().encode("utf-8-sig"))
 
 
 def wo_ist(ip, plan):
@@ -998,8 +1240,8 @@ def akt_ppsk_speichern(d, kz, aenderungen):
                 fehler.append(f"Parzelle {z['Parzelle']}: gleiches Passwort wie Parzelle {gesehen[z['Passwort']]} – jedes Passwort darf im WLAN nur einmal vorkommen")
             gesehen.setdefault(z["Passwort"], z["Parzelle"])
     andere = set()
-    for f in os.listdir(HIER):
-        if f.startswith("PPSK_") and f.endswith(".csv") and f != f"PPSK_{kz}.csv":
+    for f in ablage_liste("PPSK_", ".csv"):
+        if f != f"PPSK_{kz}.csv":
             andere |= {(z.get("Passwort"), f[5:-4], z.get("Parzelle")) for z in lese_ppsk(f[5:-4]) if z.get("Passwort")}
     for p, pw in aenderungen.items():
         for apw, akz, ap in andere:
@@ -1122,21 +1364,12 @@ def akt_vergleich(d, kz):
 
 
 def _sicherung_schreiben(kz, wlan, ssid):
-    pfad = os.path.join(HIER, f"SparteNet_Sicherung_{kz}_{time.strftime('%Y%m%d_%H%M%S')}.json")
-    with open(pfad, "w", encoding="utf-8") as f:
-        json.dump({"zeit": time.strftime("%Y-%m-%d %H:%M:%S"), "ssid": ssid, "wlan_id": wlan.get("_id"),
-                   "private_preshared_keys_enabled": wlan.get("private_preshared_keys_enabled"),
-                   "private_preshared_keys": wlan.get("private_preshared_keys") or []}, f, ensure_ascii=False, indent=1)
-    try:
-        os.chmod(pfad, 0o600)
-    except OSError:
-        pass
-    alte = sorted(x for x in os.listdir(HIER) if x.startswith(f"SparteNet_Sicherung_{kz}_"))
-    for x in alte[:-10]:
-        try:
-            os.remove(os.path.join(HIER, x))
-        except OSError:
-            pass
+    pfad = f"SparteNet_Sicherung_{kz}_{time.strftime('%Y%m%d_%H%M%S')}.json"
+    ablage_schreiben(pfad, json.dumps({"zeit": time.strftime("%Y-%m-%d %H:%M:%S"), "ssid": ssid, "wlan_id": wlan.get("_id"),
+                                       "private_preshared_keys_enabled": wlan.get("private_preshared_keys_enabled"),
+                                       "private_preshared_keys": wlan.get("private_preshared_keys") or []}, ensure_ascii=False, indent=1))
+    for x in ablage_liste(f"SparteNet_Sicherung_{kz}_")[:-10]:
+        ablage_loeschen(x)
     return pfad
 
 
@@ -1188,17 +1421,16 @@ def akt_uebertragen(d, kz, parzellen, netze, ausfuehren):
 
 
 def akt_rueckgaengig(d, kz):
-    dateien = sorted(x for x in os.listdir(HIER) if x.startswith(f"SparteNet_Sicherung_{kz}_") and x.endswith(".json"))
+    dateien = ablage_liste(f"SparteNet_Sicherung_{kz}_", ".json")
     if not dateien:
         raise Fehler("Keine Sicherung vorhanden.")
-    with open(os.path.join(HIER, dateien[-1]), encoding="utf-8") as f:
-        sich = json.load(f)
+    sich = json.loads(ablage_lesen(dateien[-1]).decode("utf-8"))
     g = Gateway(d)
     wlan = next((w for w in g.legacy("GET", "rest/wlanconf") if w.get("_id") == sich["wlan_id"]), None)
     if not wlan:
         raise Fehler("Das WLAN aus der Sicherung gibt es am Gateway nicht mehr.")
     bestaetigt = _ppsk_schreiben_und_pruefen(g, wlan, sich["ssid"], sich["private_preshared_keys"])
-    os.replace(os.path.join(HIER, dateien[-1]), os.path.join(HIER, dateien[-1][:-5] + ".zurueckgespielt"))
+    ablage_umbenennen(dateien[-1], dateien[-1][:-5] + ".zurueckgespielt")
     journal(f"Rückgängig {kz} → „{sich['ssid']}“: Stand vom {sich['zeit']} wiederhergestellt · {'bestätigt' if bestaetigt else 'NICHT bestätigt'}")
     return {"log": [f"✔ Passwörter im WLAN „{sich['ssid']}“ auf den Stand vom {sich['zeit']} zurückgesetzt ({len(sich['private_preshared_keys'])} Einträge)."
                     + (" Am Gateway bestätigt." if bestaetigt else " ⚠ Nicht bestätigt – bitte prüfen."),
@@ -1206,6 +1438,9 @@ def akt_rueckgaengig(d, kz):
 
 
 def akt_journal():
+    if DB:
+        z = DB.sql("SELECT zeit, text FROM sn_journal ORDER BY id DESC LIMIT 300", alle=True)
+        return {"log": [f"{a:%Y-%m-%d %H:%M:%S} | {t}" for a, t in z] or ["(noch keine Änderungen übertragen)"]}
     if not os.path.exists(JOURNAL):
         return {"log": ["(noch keine Änderungen übertragen)"]}
     with open(JOURNAL, encoding="utf-8") as f:
@@ -2029,20 +2264,12 @@ def akt_tarif_vergleich(d):
 
 
 def _tarif_sicherung(netze, eigene):
-    pfad = os.path.join(HIER, f"{TARIF_SICHERUNG}{time.strftime('%Y%m%d_%H%M%S')}.json")
-    with open(pfad, "w", encoding="utf-8") as f:
-        json.dump({"zeit": time.strftime("%Y-%m-%d %H:%M:%S"),
-                   "netze": [{k: n.get(k) for k in ("_id", "name", "ip_subnet", "dhcpd_start", "dhcpd_stop")} for n in netze],
-                   "regeln": eigene}, f, ensure_ascii=False, indent=1)
-    try:
-        os.chmod(pfad, 0o600)
-    except OSError:
-        pass
-    for x in sorted(x for x in os.listdir(HIER) if x.startswith(TARIF_SICHERUNG) and x.endswith(".json"))[:-10]:
-        try:
-            os.remove(os.path.join(HIER, x))
-        except OSError:
-            pass
+    pfad = f"{TARIF_SICHERUNG}{time.strftime('%Y%m%d_%H%M%S')}.json"
+    ablage_schreiben(pfad, json.dumps({"zeit": time.strftime("%Y-%m-%d %H:%M:%S"),
+                                       "netze": [{k: n.get(k) for k in ("_id", "name", "ip_subnet", "dhcpd_start", "dhcpd_stop")} for n in netze],
+                                       "regeln": eigene}, ensure_ascii=False, indent=1))
+    for x in ablage_liste(TARIF_SICHERUNG, ".json")[:-10]:
+        ablage_loeschen(x)
     return pfad
 
 
@@ -2097,11 +2324,10 @@ def akt_tarif_uebertragen(d, netze_ids, regeln, ausfuehren):
 
 
 def akt_tarif_rueckgaengig(d):
-    dateien = sorted(x for x in os.listdir(HIER) if x.startswith(TARIF_SICHERUNG) and x.endswith(".json"))
+    dateien = ablage_liste(TARIF_SICHERUNG, ".json")
     if not dateien:
         raise Fehler("Keine Tarif-Sicherung vorhanden.")
-    with open(os.path.join(HIER, dateien[-1]), encoding="utf-8") as f:
-        sich = json.load(f)
+    sich = json.loads(ablage_lesen(dateien[-1]).decode("utf-8"))
     g = Gateway(d)
     netze = {n["_id"]: n for n in _tarif_netze(g)}
     jetzt = {r["_id"]: r for r in _qos_regeln(g) if _ist_eigene(r)}
@@ -2123,7 +2349,7 @@ def akt_tarif_rueckgaengig(d):
         felder = {k: a[k] for k in ("ip_subnet", "dhcpd_start", "dhcpd_stop") if a.get(k) is not None and n.get(k) != a[k]}
         if felder:
             g.legacy("PUT", f"rest/networkconf/{a['_id']}", {**n, **felder}); n_netz += 1
-    os.replace(os.path.join(HIER, dateien[-1]), os.path.join(HIER, dateien[-1][:-5] + ".zurueckgespielt"))
+    ablage_umbenennen(dateien[-1], dateien[-1][:-5] + ".zurueckgespielt")
     journal(f"Tarife rückgängig: Stand vom {sich['zeit']} · {n_qos} QoS-Regel(n), {n_netz} Netz(e) zurückgesetzt")
     return {"log": [f"✔ Stand vom {sich['zeit']} wiederhergestellt: {n_qos} QoS-Regel(n), {n_netz} Netz(e)."] + log
             + ["ℹ Die Tarif-Zuordnung im Manager bleibt wie sie ist – „Unterschiede ermitteln“ zeigt die Abweichung."]}
@@ -3497,6 +3723,19 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
+    def _lade(self):
+        """Einstellungen laden; ist die Datenbank weg, verständliche Antwort statt Verbindungsabbruch"""
+        try:
+            return lade()
+        except Fehler as e:
+            if self.path.split("?")[0] == "/":
+                self._send(503, ("<!doctype html><meta charset='utf-8'><title>SparteNet Manager</title><body style='font-family:sans-serif;padding:24px'>"
+                                 "<h2>Datenspeicher nicht erreichbar</h2><p>" + str(e).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;") + "</p>"
+                                 "<p>Bitte die Datenbank prüfen und die Seite neu laden.</p>").encode("utf-8"), "text/html")
+            else:
+                self._send(503, {"fehler": str(e)})
+            return None
+
     def _send(self, code, daten, typ="application/json", extra=None):
         roh = daten if isinstance(daten, bytes) else json.dumps(daten, ensure_ascii=False).encode("utf-8")
         self.send_response(code)
@@ -3549,7 +3788,9 @@ class Handler(BaseHTTPRequestHandler):
         u = urllib.parse.urlparse(self.path)
         if u.path in PWA_ICONS or u.path in ("/manifest.webmanifest", "/sw.js", "/offline.html"):
             return self._statisch(u.path)
-        d = lade()
+        d = self._lade()
+        if d is None:
+            return
         if u.path == "/":
             if not self._erlaubt(d):
                 return self._send(200, LOGIN_HTML.replace("__INHALT__", LOGIN_FORM).encode("utf-8"), "text/html")
@@ -3575,7 +3816,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(400, {"fehler": "Ungültige Anfrage."})
         if not isinstance(b, dict):
             return self._send(400, {"fehler": "Ungültige Anfrage."})
-        d = lade()
+        d = self._lade()
+        if d is None:
+            return
         geheim = b.get("passwort", b.get("pin"))
         try:
             passwort_pruefen(geheim, self.client_address[0])
@@ -3600,7 +3843,9 @@ class Handler(BaseHTTPRequestHandler):
         u = urllib.parse.urlparse(self.path)
         if u.path == "/login":
             return self._anmelden()
-        d = lade()
+        d = self._lade()
+        if d is None:
+            return
         if u.path == "/abmelden":
             auth_sitzung_entfernen(self._auth_sitzung())
             t = self._sitzung()
@@ -3627,7 +3872,7 @@ class Handler(BaseHTTPRequestHandler):
             if pfad == "/api/einstellungen":
                 if b is None:
                     return self._send(200, {"konsole_id": d["konsole_id"], "konsole_name": d["konsole_name"], "cloud_key_gesetzt": bool(d["cloud_key"]),
-                                            "log_aktiv": d["log_aktiv"], "logdatei": LOGDATEI, "ansicht": ansicht_pruefen(d.get("ansicht"))})
+                                            "log_aktiv": d["log_aktiv"], "logdatei": LOGDATEI, "speicher": speicher_text(), "ansicht": ansicht_pruefen(d.get("ansicht"))})
                 if "log_aktiv" in b:
                     d["log_aktiv"] = bool(b["log_aktiv"]); speichere(d); log_einrichten(d["log_aktiv"])
                     return self._send(200, {"log": [f"✔ Protokoll {'eingeschaltet – Datei: ' + LOGDATEI if d['log_aktiv'] else 'ausgeschaltet'}"]})
@@ -3739,6 +3984,7 @@ def main():
         raise SystemExit("Zugriffsschutz fehlt: SPARTENET_PASSWORD oder SPARTENET_PASSWORD_FILE setzen.")
     if len(AUTH_PASSWORD) < 12:
         raise SystemExit("Das Manager-Passwort muss mindestens 12 Zeichen lang sein.")
+    datenbank_starten()
     d = lade()
     log_einrichten(d["log_aktiv"])
     f = fern_daten(d)
@@ -3751,6 +3997,7 @@ def main():
         print(f"Port {PORT} belegt – läuft der Manager schon? http://127.0.0.1:{PORT}")
         webbrowser.open(f"http://127.0.0.1:{PORT}"); return
     url = f"http://127.0.0.1:{PORT}"
+    print(f"Datenspeicher: {speicher_text()}")
     print(f"SparteNet Manager {VERSION} (Cloud) läuft: {url}\nFenster offen lassen. Beenden mit Strg+C oder im Browser „Beenden“.")
     if SERVER_HOST == "0.0.0.0":
         print("Handy/Tablet im Heimnetz: " + ", ".join(f"http://{ip}:{PORT}" for ip in lan_adressen()) + " (Manager-Passwort oder Handy-PIN)")
@@ -3917,11 +4164,12 @@ nav{position:sticky;top:0;z-index:20}
 <p class="hint">QR-Code mit der Kamera scannen → Manager-Passwort oder Handy-PIN eingeben → <b>Android (Chrome):</b> Menü ⋮ → „App installieren“ bzw. „Zum Startbildschirm hinzufügen“ · <b>iPhone/iPad (Safari):</b> Teilen □↑ → „Zum Home-Bildschirm“.</p>
 <div class="qrs" id="fern_qr"></div><div class="knoepfe"><button class="k" onclick="fernLaden()">Aktualisieren</button></div><div class="log" id="log_fern"></div></div>
 <div class="karte"><h2>Verbindung über die UniFi-Cloud</h2>
-<p class="hint">Kein lokaler Zugriff nötig – alles läuft über api.ui.com. Die Daten bleiben auf diesem Rechner (SparteNet_Manager.json).</p>
+<p class="hint">Kein lokaler Zugriff nötig – alles läuft über api.ui.com. Die Daten bleiben bei Ihnen (Datenordner oder eigene MariaDB-Datenbank).</p>
 <div class="reihe"><div><label>Site-Manager-API-Key (unifi.ui.com → Einstellungen → API Keys) <span id="key_st" class="status"></span></label><input id="cloud_key" type="password" placeholder="leer lassen = unverändert"></div>
 <div><label>Konsole</label><select id="konsole"><option value="">– erst „Konsolen laden“ –</option></select></div></div>
 <div class="knoepfe"><button class="k" onclick="konsolenLaden()">Konsolen laden</button><button class="k p" onclick="speichern()">Speichern</button><button class="k" onclick="testen()">Verbindung testen</button></div>
 <div class="log" id="log_v"></div></div>
+<div class="karte"><h2>Datenspeicher</h2><p class="hint">Hier liegen Einstellungen, Planung, Buchungen, Passwörter je Parzelle, Sicherungen und das Änderungsprotokoll: <b id="speicherort">…</b></p></div>
 <div class="karte"><h2>Protokoll zur Fehlersuche</h2><p class="hint">Zeichnet alle Anfragen an die Cloud mit Antwort und Fehlern in <span id="logpfad">SparteNet_Manager.log</span> auf (Passwörter und Key werden nicht gespeichert). Nur bei Bedarf einschalten.</p>
 <label style="display:flex;align-items:center;gap:10px;font-size:15px;color:var(--text)"><input type="checkbox" id="log_aktiv" style="width:auto" onchange="logSchalten()"> Protokoll einschalten</label>
 <div class="knoepfe"><button class="k" onclick="logZeigen()">Protokoll anzeigen</button><button class="k" onclick="logLoeschen()">Protokoll leeren</button></div>
@@ -4126,7 +4374,7 @@ function csvSpeichern(d,name){if(!d||!d.zeilen.length)return alert("Keine Daten.
 async function logSchalten(){await api("/api/einstellungen",{log_aktiv:$("log_aktiv").checked},"log_datei")}
 async function logZeigen(){await api("/api/log",undefined,"log_datei");const el=$("log_datei");el.scrollTop=el.scrollHeight}
 async function logLoeschen(){if(confirm("Protokoll leeren?"))await api("/api/log-loeschen",{},"log_datei")}
-async function einst(){EINST=await api("/api/einstellungen");if(FERN){try{const a=JSON.parse(localStorage.getItem("sn_ansicht")||"null");if(a){ANS={...ANS_STD,...a};ansAnwenden()}}catch(e){}}else if(EINST.ansicht){ANS={...ANS_STD,...EINST.ansicht};ansAnwenden()}$("log_aktiv").checked=!!EINST.log_aktiv;$("logpfad").textContent=EINST.logdatei;const e=$("key_st");e.textContent=EINST.cloud_key_gesetzt?"hinterlegt":"fehlt";e.className="status"+(EINST.cloud_key_gesetzt?" ok":"");
+async function einst(){EINST=await api("/api/einstellungen");if(FERN){try{const a=JSON.parse(localStorage.getItem("sn_ansicht")||"null");if(a){ANS={...ANS_STD,...a};ansAnwenden()}}catch(e){}}else if(EINST.ansicht){ANS={...ANS_STD,...EINST.ansicht};ansAnwenden()}$("log_aktiv").checked=!!EINST.log_aktiv;$("logpfad").textContent=EINST.logdatei;$("speicherort").textContent=EINST.speicher||"";const e=$("key_st");e.textContent=EINST.cloud_key_gesetzt?"hinterlegt":"fehlt";e.className="status"+(EINST.cloud_key_gesetzt?" ok":"");
  if(EINST.konsole_id)$("konsole").innerHTML=`<option value="${esc(EINST.konsole_id)}">${esc(EINST.konsole_name||EINST.konsole_id)}</option>`;$("verb").textContent=EINST.konsole_name?"· "+EINST.konsole_name:"";
  if(!EINST.cloud_key_gesetzt||!EINST.konsole_id)zeige("verbindung");else if(document.querySelector("section.aktiv")?.id=="start"&&!$("st_k").innerHTML)startLaden().catch(()=>{})}
 async function konsolenLaden(){const d=await api("/api/konsolen",{cloud_key:$("cloud_key").value},"log_v");$("log_v").textContent="✔ "+d.konsolen.length+" Konsole(n) gefunden – wählen und speichern.";

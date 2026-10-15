@@ -1,8 +1,8 @@
-SparteNet Manager 4.2 (Cloud)
+SparteNet Manager 4.3 (Cloud)
 ===============================
 
 Funktioniert komplett über die UniFi-Cloud (api.ui.com). Kein lokaler Zugriff, kein VPN.
-Benötigt nur Python 3 – keine Zusatzpakete.
+Benötigt nur Python 3 – keine Zusatzpakete (nur für MariaDB/MySQL: PyMySQL, im Docker-Image enthalten).
 
 ### STARTEN
   - Linux (Nobara):  einmal ./installieren.sh (Menüeintrag), danach aus dem Anwendungsmenü  
@@ -68,6 +68,25 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   Oben: Gesamtauslastung aller Sparten mit Buchungen, Umsatz, Ergebnis, Kleinunternehmer-Grenze.
   "Prognose": Sparten ohne Buchungen mit der Buchungsquote aus den Annahmen hochrechnen.
   Tarifpreise (€ pro Jahr) stehen im Reiter "Tarife".
+
+### DATENBANK (MariaDB/MySQL) – neu in 4.3
+  Mit SPARTENET_DB_HOST speichert der Manager alles in der Datenbank statt in Dateien: Einstellungen,
+  Planung, Buchungen, Netzplanung, Passwörter je Parzelle (PPSK), Sicherungen, Änderungsprotokoll,
+  Passwort-Register (nur Prüfsummen) und Kartenlogo. Nur das technische Protokoll bleibt eine Datei.
+  Docker Compose:
+    1. .env.example nach .env kopieren, SPARTENET_DB_HOST/PORT/NAME/USER eintragen
+       (MariaDB-Container im selben Compose-Netz: Dienstname; MariaDB auf dem Docker-Host: host.docker.internal).
+    2. Datenbank-Passwort nur in ./secrets/spartenet_db_password.txt (eine Zeile) – nicht in .env, nicht ins Git.
+       Die Datei muss für den Container-Benutzer (UID 10001) lesbar sein, wie spartenet_password.txt.
+    3. docker compose up -d --build
+  Rechte des Datenbank-Benutzers: CREATE, SELECT, INSERT, UPDATE, DELETE auf die Datenbank, z. B.
+    GRANT CREATE, SELECT, INSERT, UPDATE, DELETE ON spartenet.* TO 'spartenet'@'%';
+  Beim ersten Start legt der Manager die Tabellen an (sn_daten, sn_dateien, sn_journal,
+  sn_passwort_register, sn_meta). Ist die Datenbank leer, übernimmt er die bisherigen Dateien aus /data
+  und verschiebt sie nach /data/in_Datenbank_uebernommen_<Datum>/ (enthält Passwörter – nach Prüfung löschen).
+  Weitere Variablen: SPARTENET_DB_SSL=1 (TLS), SPARTENET_DB_SSL_CA=/pfad/ca.pem.
+  Wo gespeichert wird, steht im Reiter „Verbindung“ unter „Datenspeicher“ und beim Start im Container-Log.
+  Sicherung: regelmäßig mysqldump der Datenbank (enthält WLAN-Passwörter und den Cloud-Key – sicher aufbewahren).
 
 ### NETZPLANUNG & EINNAHMEN (Reiter "Netzplanung") – neu in 4.2
   Gleiche Rechnung wie Kleingarten_Gateway_Planung.xlsx (liegt im Ordner): 88 Kleingartenanlagen aus dem

@@ -11,6 +11,16 @@ services:
       SPARTENET_DATA_DIR: "/data"
       SPARTENET_KEIN_BROWSER: "1"
       SPARTENET_PASSWORD_FILE: /run/secrets/spartenet_password
+      # MariaDB/MySQL – Werte in .env (siehe .env.example); ohne SPARTENET_DB_HOST speichert der Manager in /data
+      SPARTENET_DB_HOST: ${SPARTENET_DB_HOST:-}
+      SPARTENET_DB_PORT: ${SPARTENET_DB_PORT:-3306}
+      SPARTENET_DB_NAME: ${SPARTENET_DB_NAME:-spartenet}
+      SPARTENET_DB_USER: ${SPARTENET_DB_USER:-spartenet}
+      SPARTENET_DB_SSL: ${SPARTENET_DB_SSL:-0}
+      SPARTENET_DB_PASSWORD_FILE: /run/secrets/spartenet_db_password
+    # MariaDB direkt auf dem Docker-Host: SPARTENET_DB_HOST=host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - spartenet-daten:/data
     read_only: true
@@ -22,10 +32,13 @@ services:
       - no-new-privileges:true
     secrets:
       - spartenet_password
+      - spartenet_db_password
 
 secrets:
   spartenet_password:
     file: ./secrets/spartenet_password.txt
+  spartenet_db_password:
+    file: ./secrets/spartenet_db_password.txt
 
 volumes:
   spartenet-daten:
