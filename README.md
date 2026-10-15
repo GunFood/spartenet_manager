@@ -69,20 +69,26 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   "Prognose": Sparten ohne Buchungen mit der Buchungsquote aus den Annahmen hochrechnen.
   Tarifpreise (€ pro Jahr) stehen im Reiter "Tarife".
 
-### BENUTZERKONTEN UND ZUGRIFFSRECHTE (Reiter "Benutzer") – neu in 4.4
+### BENUTZERKONTEN UND ZUGRIFFSRECHTE JE BEREICH (Reiter "Benutzer") – neu in 4.4
   Anmeldung mit Benutzername und Passwort. Das Konto "admin" ist fest eingebaut: Benutzername leer lassen
   oder "admin" und das Manager-Passwort (SPARTENET_PASSWORD bzw. Secret spartenet_password).
-  Der Administrator legt im Reiter "Benutzer" weitere Konten an und vergibt das Recht:
-    Administrator        alles, auch Benutzerkonten und Verbindungs-Einstellungen (Cloud-Key, Handy-PIN, Beenden)
-    Lesen und schreiben  alles ansehen, planen, ändern und ans Gateway übertragen
-    Nur lesen            alles ansehen, Vorschauen, Zugangskarten drucken – nichts ändern, nichts übertragen
-    Gesperrt             keine Anmeldung; offene Sitzungen werden sofort beendet
-  Recht ändern, sperren, Passwort neu setzen und löschen direkt in der Tabelle. Jeder kann im Reiter
-  ("Mein Konto") sein eigenes Passwort ändern. Passwörter mind. 12 Zeichen, gespeichert nur als
-  PBKDF2-Prüfsumme (Datei bzw. MariaDB, Bereich "benutzer"). 5 Fehlversuche → 5 Minuten Sperre.
-  Das Änderungsprotokoll nennt, wer etwas geändert hat. Die Handy-PIN gilt wie "Lesen und schreiben".
+  Der Administrator legt im Reiter "Benutzer" weitere Konten an. Kontoart:
+    Administrator      alles, auch Benutzerkonten
+    Gesperrt           keine Anmeldung; offene Sitzungen werden sofort beendet (Bereichsrechte bleiben gespeichert)
+    Rechte je Bereich  für jedes Arbeitsblatt bzw. jede Funktion einzeln: kein Zugriff (ausgeblendet),
+                       lesen (ansehen, Vorschau) oder lesen und schreiben (ändern, ans Gateway übertragen)
+  Bereiche: Start · Auslesen/Abgleich/Systeminfo/Alle Daten · Planung · Netze und WLANs anlegen ·
+    WLAN-Passwörter je Parzelle · Tarife festlegen und übertragen · Tarif buchen (Parzelle ↔ Tarif, Buchungen) ·
+    Kalkulation · Netzplanung · Zugangskarten/Kartendesign · Gast-Voucher · Verbindung/Protokoll/Diagnose
+  Vorlagen zum schnellen Start: Nur lesen · Lesen und schreiben · Vorstand Sparte (lesen + WLAN-Passwörter,
+    Tarif buchen, Karten, Voucher) · Kasse (Tarif buchen und Kalkulation, sonst lesen) – danach je Bereich anpassen.
+  Beispiel: Vorlage "Nur lesen", dann "WLAN-Passwörter" und "Tarif buchen" auf "lesen und schreiben".
+  Der Server prüft jede Anfrage; Reiter ohne Zugriff sind ausgeblendet, Bereiche mit "lesen" zeigen "nur lesen".
+  Jeder sieht unter "Mein Konto" seine Rechte und kann sein Passwort ändern. Passwörter mind. 12 Zeichen,
+  nur als PBKDF2-Prüfsumme gespeichert; 5 Fehlversuche → 5 Minuten Sperre. Das Änderungsprotokoll nennt,
+  wer etwas geändert hat. Die Handy-PIN darf alles außer Verbindungs-Einstellungen und Benutzerverwaltung.
 
-PROGRAMMAUFBAU – neu in 4.4
+### PROGRAMMAUFBAU – neu in 4.4
   SparteNet_Manager.py startet nur noch; der Code liegt im Ordner spartenet/ – je Aufgabe eine Datei
   (basis, speicher, einstellungen, cloud, plan, qrcode, ppsk, system, karten, tarife, auth, fern, pwa,
   kalkulation, netzplanung_daten, netzplanung, benutzer, oberflaeche, webserver). Beim Kopieren oder
