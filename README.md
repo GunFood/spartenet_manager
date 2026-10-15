@@ -1,4 +1,4 @@
-SparteNet Manager 4.4 (Cloud)
+SparteNet Manager 4.5 (Cloud)
 ===============================
 
 Funktioniert komplett über die UniFi-Cloud (api.ui.com). Kein lokaler Zugriff, kein VPN.
@@ -69,7 +69,7 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   "Prognose": Sparten ohne Buchungen mit der Buchungsquote aus den Annahmen hochrechnen.
   Tarifpreise (€ pro Jahr) stehen im Reiter "Tarife".
 
-### BENUTZERKONTEN UND ZUGRIFFSRECHTE JE BEREICH (Reiter "Benutzer") – neu in 4.4
+### BENUTZERKONTEN UND ZUGRIFFSRECHTE JE BEREICH (Reiter "Benutzer") – Konten seit 4.4, Rechte je Bereich neu in 4.5
   Anmeldung mit Benutzername und Passwort. Das Konto "admin" ist fest eingebaut: Benutzername leer lassen
   oder "admin" und das Manager-Passwort (SPARTENET_PASSWORD bzw. Secret spartenet_password).
   Der Administrator legt im Reiter "Benutzer" weitere Konten an. Kontoart:
