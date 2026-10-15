@@ -1,4 +1,4 @@
-SparteNet Manager 4.1 (Cloud)
+SparteNet Manager 4.2 (Cloud)
 ===============================
 
 Funktioniert komplett über die UniFi-Cloud (api.ui.com). Kein lokaler Zugriff, kein VPN.
@@ -68,6 +68,23 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   Oben: Gesamtauslastung aller Sparten mit Buchungen, Umsatz, Ergebnis, Kleinunternehmer-Grenze.
   "Prognose": Sparten ohne Buchungen mit der Buchungsquote aus den Annahmen hochrechnen.
   Tarifpreise (€ pro Jahr) stehen im Reiter "Tarife".
+
+### NETZPLANUNG & EINNAHMEN (Reiter "Netzplanung") – neu in 4.2
+  Gleiche Rechnung wie Kleingarten_Gateway_Planung.xlsx (liegt im Ordner): 88 Kleingartenanlagen aus dem
+  Kleingartenentwicklungskonzept 2040 sind eingebaut, ein Excel-Import ist nicht nötig.
+  1. Tabelle "Je Sparte" (gelbe Felder, sofort gespeichert): Standort = Nr. der Sparte mit den Gateways,
+     Zuleitung von = Nr. der Sparte, von der die Glasfaser kommt (Kette A -> B -> C -> D möglich),
+     Reihenfolge, Glasfaser m, Quote %, Parzellen. Leer = Vorschlag bzw. berechneter Wert.
+  2. 55 Parzellen je Gateway, der Reihe nach gefüllt; ein Internet-Anschluss je Standort (ein weiterer
+     erst, wenn der Bedarf größer ist). Kein Richtfunk, Tiefbau 0 €/m (änderbar).
+  3. Theoretische Einnahme je Sparte = Parzellen × Buchungsquote × Ø Tarifpreis; oben die Summe aller
+     Sparten pro Jahr und Monat. Ø Preis aus den Tarifpreisen (Reiter "Tarife") und dem Tarifmix
+     oder ein fester Preis. Buchungsquote: aus Alter und Leerstand (heute / in 5 Jahren) oder fest;
+     "Quote %" je Sparte gilt immer vorrangig. Wo im Reiter "Kalkulation" schon gebucht ist, steht
+     die tatsächliche Buchung daneben.
+  4. Standorte (Gateways, Internet, Kosten), Investition, laufende Kosten, Deckungsbeitrag,
+     Amortisation, Vergleich "jede Sparte eigenständig", Prüfung der Zuordnung, CSV-Export.
+  5. "Aus Excel übernehmen": Kleingarten_Gateway_Planung.xlsx (Sparten, gelbe Spalten, Annahmen).
 
 ### VLAN-PLANER (VLAN_Planer_SparteNet.xlsx) – MEHRERE GATEWAYS
   Blatt "Sparten": alle 88 Kleingartenanlagen (Kleingartenentwicklungskonzept 2040) mit Parzellen.

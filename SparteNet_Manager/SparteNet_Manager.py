@@ -22,7 +22,7 @@ import logging, logging.handlers, traceback
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from http.cookies import SimpleCookie, CookieError
 
-VERSION = "4.1"
+VERSION = "4.2"
 HIER = os.path.abspath(os.environ.get("SPARTENET_DATA_DIR") or os.path.dirname(os.path.abspath(sys.argv[0])))
 os.makedirs(HIER, exist_ok=True)
 DATEI = os.path.join(HIER, "SparteNet_Manager.json")
@@ -2921,6 +2921,577 @@ def akt_kalk_import(d, roh):
     return {"log": log}
 
 
+# =============================================================== Netzplanung (Gateway-Standorte, Glasfaser-Kette, Buchungsquote, theoretische Einnahmen)
+# gleiche Rechnung wie Kleingarten_Gateway_Planung.xlsx – Daten: Kleingartenentwicklungskonzept 2040 Brandenburg a. d. H., Anlage 1 + 2
+GWP_ANLAGEN = [  # Nr, Name, Adresse, Stufe, Eigentum, Parzellen, lt. Konzept, Leerstand, Fläche m², Alter bis30/30-50/50-70/70-90/ab90, x km, y km, Vorschlag Standort, Vorschlag Zuleitung
+    (1, '1. März', 'Willibald-Alexis-Straße 38', 'B – Beobachtung', 'Stadt BRB', 30, 30, 2, 8547, (0.4, 24.3, 10.8, 4.1, 0.0), 9.22, 7.78, 33, 6),
+    (2, 'Abendfrieden', 'Ziesarer Landstraße 24', 'C – Qualifizierung', 'Stadt / Kirche', 75, 75, 4, 34727, (0.0, 36.8, 33.3, 12.7, 0.0), 9.12, 2.09, 41, 20),
+    (3, 'Abendrot', 'Am Gallberg 3', 'A – Stabil', 'Stadt / privat', 137, 137, 0, 64614, (1.6, 42.5, 105.7, 51.9, 0.0), 9.64, 6.32, 30, 30),
+    (4, 'Abendruh', 'Mahlerstraße 21', 'A – Stabil', 'Stadt BRB', 142, 142, 0, 75974, (2.8, 46.9, 71.4, 52.9, 2.8), 8.01, 7.51, 30, 30),
+    (5, 'Abendsonne', 'Bayernstraße 9a', 'A – Stabil', 'Privat', 67, 67, 13, 17033, (1.7, 21.5, 30.3, 8.1, 0.0), 8.03, 5.22, 23, 24),
+    (6, 'Altstadt Forst', 'Rathenower Landstraße 3', 'A – Stabil', 'Stadt / privat', 88, 88, 0, 46549, (2.8, 46.9, 71.4, 52.9, 2.8), 8.52, 8.34, 33, 33),
+    (7, 'Am Beetzseeufer', 'Beetzseeufer 8', 'A – Stabil', 'Stadt BRB', 77, 76, 0, 38607, (0.1, 44.9, 59.7, 11.7, 0.0), 11.55, 6.05, 49, 88),
+    (8, 'Am Büttelhandfassgraben', 'Am Bittelhandfassgraben 14', 'B – Beobachtung', 'Privat', 5, 5, 0, 2345, (1.1, 0.0, 1.7, 0.0, 0.0), 10.02, 3.54, 49, 50),
+    (9, 'Am Eichenweg', 'Ziesarer Landstraße 1', 'C – Qualifizierung', 'Stadt / Kirche', 54, 54, 2, 33743, (0.9, 33.0, 22.2, 8.9, 0.0), 9.1, 2.38, 17, 17),
+    (10, 'Am Jakobsgraben', 'Otto-Gartz-Straße 10a', 'D – Planungskonflikt', 'Stadt BRB', 41, 41, 0, 21966, (0.4, 17.5, 22.6, 9.6, 0.0), 10.92, 3.53, 17, 27),
+    (11, 'Am Schafdamm', 'Schafdamm 3', 'C – Qualifizierung', 'Stadt / privat', 10, 10, 0, 6123, (0.0, 1.6, 5.1, 5.0, 0.0), 8.11, 9.91, 33, 12),
+    (12, 'Am Schlangenpfad', 'Schlangenpfad 21', 'C – Qualifizierung', 'Stadt BRB', 19, 19, 0, 11021, (0.0, 2.9, 8.6, 14.6, 0.0), 8.03, 9.59, 33, 13),
+    (13, 'Am Waldesrand', 'Schafdamm 1', 'B – Beobachtung', 'Stadt BRB', 96, 96, 2, 48263, (5.7, 27.5, 44.1, 37.0, 0.9), 8.11, 9.33, 33, 33),
+    (14, 'An der Plane I', 'Planeweg 1', 'C – Qualifizierung', 'Kirche', 16, 16, 0, 12898, (0.0, 2.8, 9.7, 6.2, 0.0), 9.37, 2.57, 73, 68),
+    (15, 'Bergeshöh', 'Triglafweg 20', 'A – Stabil', 'Stadt BRB', 14, 14, 1, 7551, (0.0, 12.6, 3.3, 3.2, 0.0), 10.6, 5.33, 28, 83),
+    (16, 'Bergfrieden', 'Wusterwitzer Str. 71', 'C – Qualifizierung', 'Stadt BRB', 130, 139, 17, 55513, (5.0, 38.9, 45.7, 47.0, 0.1), 0.27, 3.02, 16, None),
+    (17, 'Birkenwäldchen', 'Wittstocker Gäßchen 36', 'B – Beobachtung', 'Stadt / privat', 56, 56, 3, 30065, (0.0, 16.8, 54.2, 3.3, 0.0), 9.78, 1.18, 17, None),
+    (18, 'BKV Pfefferland', 'Pfefferlander Weg 11', 'B – Beobachtung', 'Privat', 64, 64, 0, 32712, (0.3, 28.5, 44.4, 14.5, 0.0), 7.78, 1.54, 73, 73),
+    (19, 'Brielower Dreieck', 'Am Industriegelande 1', 'A – Stabil', 'Stadt BRB', 35, 35, 0, 15539, (1.3, 4.4, 30.4, 6.9, 0.0), 10.78, 6.72, 81, 81),
+    (20, 'Buchenweg', 'Buchenweg 77', 'B – Beobachtung', 'Stadt BRB', 86, 86, 1, 49614, (5.4, 44.2, 38.1, 20.6, 0.0), 9.3, 1.65, 41, 41),
+    (21, 'Butterlake', 'Brielower Aue 30', 'B – Beobachtung', 'Stadt / privat', 75, 75, 1, 34343, (0.0, 37.3, 42.3, 32.1, 0.3), 8.22, 9.04, 33, 33),
+    (22, 'Eichhorstweg', 'Eichhorstweg 15', 'B – Beobachtung', 'Privat', 38, 38, 1, 20436, (1.2, 13.9, 21.9, 11.6, 0.0), 9.53, 0.95, 22, None),
+    (23, 'Eigener Fleiß', 'Hannoversche Str. 38', 'A – Stabil', 'Stadt BRB', 123, 123, 0, 63177, (6.1, 44.7, 81.9, 49.7, 0.0), 7.81, 4.85, 23, None),
+    (24, 'Einheit', 'Thuringer Str. 18', 'A – Stabil', 'Stadt BRB', 99, 99, 1, 49589, (4.8, 45.8, 49.2, 21.1, 0.0), 8.32, 4.92, 23, 23),
+    (25, 'Einigkeit', 'Klingenbergstr. 2b', 'A – Stabil', 'Stadt BRB', 14, 14, 0, 4670, (0.5, 3.2, 8.8, 1.2, 0.0), 9.44, 4.39, 56, 56),
+    (26, 'Eintracht I', 'Franz-Ziegler-Str. 29b', 'A – Stabil', 'Stadt / privat', 32, 32, 1, 9606, (0.2, 7.9, 18.3, 4.2, 0.0), 10.46, 3.81, 23, 55),
+    (27, 'Eintracht II', 'Gottiner Landstr. 17', 'A – Stabil', 'k. A.', 42, 42, 2, 15820, (0.0, 24.0, 26.7, 8.7, 0.0), 10.2, 2.67, 17, 9),
+    (28, 'Erdenglück', 'Johannisburger Anger 26', 'B – Beobachtung', 'Stadt / privat', 99, 96, 2, 40185, (0.8, 39.9, 46.1, 42.3, 0.0), 6.72, 7.19, 28, None),
+    (29, 'Erntesegen', 'Brahmsstr. 12b', 'A – Stabil', 'Stadt / privat', 92, 91, 1, 43349, (4.4, 43.6, 42.2, 19.8, 0.4), 7.97, 6.74, 28, 28),
+    (30, 'Feierabend', 'Beethovenstr. 31', 'A – Stabil', 'Stadt BRB', 190, 190, 5, 99039, (7.9, 61.8, 79.2, 81.3, 1.1), 8.64, 6.96, 30, None),
+    (31, 'Feldstraße', 'Feldstraße 1c', 'C – Qualifizierung', 'Stadt BRB', 68, 68, 4, 35041, (1.1, 24.4, 32.2, 21.3, 0.0), 9.65, 2.54, 41, 60),
+    (32, 'Finkenhain', 'Mendelssohnstr. 13', 'C – Qualifizierung', 'Stadt BRB', 8, 8, 0, 5992, (0.0, 0.0, 5.7, 1.5, 0.0), 7.35, 7.18, 28, 82),
+    (33, 'Fohrder Landstraße', 'Brielower Aue 33', 'A – Stabil', 'Stadt / privat', 127, 127, 1, 71463, (1.5, 54.0, 51.7, 49.4, 1.6), 8.35, 8.76, 33, None),
+    (34, 'Freiheit', 'Feldstr. 1b', 'C – Qualifizierung', 'Stadt BRB', 55, 55, 6, 28864, (0.0, 30.6, 18.3, 6.9, 0.0), 9.86, 2.55, 49, 64),
+    (35, 'Freizeit', 'Ziesarer Landstr. 64', 'B – Beobachtung', 'Stadt / privat', 63, 63, 1, 32286, (1.7, 20.7, 28.8, 20.9, 0.0), 8.93, 1.91, 41, 2),
+    (36, 'Friedland', 'Klingenbergstr. 19', 'A – Stabil', 'k. A.', 64, 64, 1, 29654, (0.0, 30.9, 24.3, 23.3, 0.0), 8.93, 4.49, 23, 24),
+    (37, 'Frisch Auf', 'Klingenbergstr. 4', 'B – Beobachtung', 'Stadt BRB', 19, 19, 1, 9927, (0.0, 3.7, 12.4, 4.9, 0.0), 9.24, 4.36, 56, 56),
+    (38, 'Frohsinn', 'Ziesarer Landstr. 3', 'C – Qualifizierung', 'Stadt / Kirche', 54, 54, 3, 29762, (0.4, 23.7, 33.5, 12.4, 0.0), 8.62, 1.78, 17, 9),
+    (39, 'Gartenfreunde Brielower Aue', 'Brielower Aue 47', 'B – Beobachtung', 'Stadt / privat', 69, 69, 1, 39053, (2.4, 27.5, 27.7, 14.1, 0.0), 9.37, 9.04, 33, 33),
+    (40, 'Glück Auf', 'Ziesarer Landstr. 117', 'B – Beobachtung', 'Stadt BRB', 34, 34, 2, 19944, (0.1, 12.7, 13.4, 7.1, 0.0), 8.31, 1.36, 73, 73),
+    (41, 'Glück im Winkel', 'Eichhorstweg 3', 'B – Beobachtung', 'Stadt BRB', 139, 139, 3, 96483, (8.4, 51.3, 60.8, 40.7, 0.0), 9.85, 1.48, 41, None),
+    (42, 'Grüne Ecke', 'Pfefferlander Weg 48', 'A – Stabil', 'Stadt / privat', 50, 50, 0, 30158, (0.0, 14.6, 38.7, 16.7, 0.0), 8.33, 1.88, 17, 38),
+    (43, 'Grüner Kranz', 'GutsMuthsstr. 21a', 'A – Stabil', 'Stadt BRB', 70, 70, 2, 31984, (4.5, 27.8, 30.1, 12.1, 0.0), 11.18, 6.17, 49, 7),
+    (44, 'Grünes Heim', 'Ferdinand-Lassalle-Str. 12', 'B – Beobachtung', 'Kirche', 23, 23, 1, 9696, (0.4, 10.4, 10.4, 0.1, 0.0), 9.78, 4.5, 56, 56),
+    (45, 'Gut Wetter', 'Fohrder Landstr. 9', 'A – Stabil', 'Stadt BRB', 17, 17, 0, 8997, (0.0, 4.8, 6.7, 4.0, 0.0), 10.01, 6.78, 30, 3),
+    (46, 'Handwerker', 'Planeweg 1b', 'C – Qualifizierung', 'Kirche', 36, 36, 1, 15873, (2.6, 15.3, 20.0, 12.0, 0.0), 9.22, 2.78, 23, 79),
+    (47, 'Harmonie', 'August-Bebel-Str. 19', 'D – Planungskonflikt', 'Stadt BRB', 60, 62, 20, 22450, (2.0, 10.4, 17.5, 12.0, 0.0), 9.6, 5.81, 30, 3),
+    (48, 'Heidekrug', 'Plauer Landstr. 42', 'B – Beobachtung', 'Stadt BRB', 34, 34, 0, 14955, (2.1, 6.7, 25.0, 12.0, 0.0), 5.88, 5.58, 48, None),
+    (49, 'Helgoland', 'Grune Aue 31', 'A – Stabil', 'Stadt / Kirche', 110, 110, 6, 50704, (0.0, 51.1, 39.0, 15.3, 0.0), 10.37, 3.98, 49, None),
+    (50, 'Hoffnung', 'Baebenrothufer 7', 'B – Beobachtung', 'Stadt BRB', 7, 7, 1, 4673, (0.0, 4.8, 1.8, 2.1, 0.0), 9.96, 3.51, 49, 65),
+    (51, 'Holland', 'Klingenbergstr. 2', 'B – Beobachtung', 'Stadt BRB', 9, 9, 1, 3365, (0.0, 8.6, 4.6, 0.0, 0.0), 9.55, 4.66, 56, 44),
+    (52, 'Im Mittelbruch I', 'Krakauer Str. 28', 'C – Qualifizierung', 'Stadt / privat', 33, 33, 0, 27542, (0.0, 11.3, 23.0, 11.0, 0.0), 12.71, 5.58, 85, 61),
+    (53, 'Im Mittelbruch II', 'Krakauer Str. 29', 'C – Qualifizierung', 'Stadt / privat', 47, 47, 1, 23601, (0.0, 25.9, 20.0, 26.3, 1.4), 12.18, 5.37, 85, 61),
+    (54, 'Immergrün', 'Gordenallee 169', 'A – Stabil', 'Stadt BRB', 57, 57, 0, 28680, (6.3, 21.9, 25.1, 14.7, 0.5), 8.94, 6.43, 28, 29),
+    (55, 'Jakobswerder', 'Grune Aue 48', 'B – Beobachtung', 'Stadt / Kirche', 49, 49, 1, 22337, (3.0, 19.5, 24.1, 12.1, 0.0), 9.88, 3.99, 23, 36),
+    (56, 'Kammgarn', 'Klingenbergstr. 2a', 'B – Beobachtung', 'Privat', 28, 28, 10, 9938, (1.8, 9.4, 15.0, 0.0, 0.0), 9.62, 4.34, 56, None),
+    (57, 'Kirchmöser-Dorf', 'Bahnhofstr. 3', 'C – Qualifizierung', 'Stadt / privat', 48, 48, 2, 34296, (0.0, 10.8, 23.5, 16.3, 0.0), 1.57, 1.76, 57, None),
+    (58, 'Kirchmöser-Lehmgarten', 'Uferstr. 71b', 'B – Beobachtung', 'Stadt BRB', 38, 38, 1, 13623, (1.0, 14.1, 23.6, 8.1, 0.0), 2.69, 2.18, 59, 59),
+    (59, 'Kirchmöser-Ost', 'Kurze Str. 17', 'A – Stabil', 'Stadt BRB', 66, 71, 0, 24565, (0.0, 15.9, 39.1, 32.9, 0.0), 3.21, 2.06, 59, None),
+    (60, 'Landheim', 'Wilhelmsdorfer Landstr. 65', 'A – Stabil', 'Stadt BRB', 109, 109, 11, 52025, (2.3, 42.6, 44.4, 28.0, 0.0), 9.6, 2.79, 41, 41),
+    (61, 'Märkische Aue', 'Krakauer Str. 27', 'B – Beobachtung', 'Stadt / privat', 73, 73, 0, 36741, (0.0, 18.2, 54.1, 18.1, 0.0), 12.33, 5.83, 85, 85),
+    (62, 'Mittelweg', 'Buchenweg 63a', 'C – Qualifizierung', 'Privat', 36, 36, 2, 15206, (0.0, 11.9, 19.5, 13.4, 0.0), 9.3, 1.15, 22, 22),
+    (63, 'Morgenrot', 'Ziesarer Landstr. 66', 'B – Beobachtung', 'Stadt BRB', 25, 25, 1, 14070, (1.6, 21.7, 4.2, 0.0, 0.0), 9.02, 1.75, 73, 74),
+    (64, 'Neues Leben', 'Koppehlstr. 7', 'C – Qualifizierung', 'Stadt BRB', 62, 76, 3, 34980, (0.4, 25.6, 32.3, 12.7, 0.0), 10.33, 3.32, 49, 65),
+    (65, 'Neu-Sanssouci', 'Grune Aue 46', 'A – Stabil', 'Stadt / Kirche', 77, 62, 0, 30770, (0.0, 36.7, 34.9, 14.2, 0.0), 9.91, 3.76, 49, 49),
+    (66, 'Oase', 'Brahmsstr. 14b', 'A – Stabil', 'Stadt BRB', 47, 47, 0, 25083, (3.8, 29.0, 25.0, 0.8, 0.0), 8.3, 7.37, 28, 29),
+    (67, 'Pferdewiese', 'Seestr. 50', 'C – Qualifizierung', 'Stadt BRB', 55, 55, 1, 30105, (1.9, 15.4, 42.0, 18.1, 0.0), 0.83, 3.84, 16, 16),
+    (68, 'Plane II', 'Planeweg 4&', 'C – Qualifizierung', 'Stadt / privat', 28, 28, 0, 14775, (0.7, 9.0, 19.7, 5.7, 0.0), 8.86, 2.58, 73, 40),
+    (69, 'Platz der Einheit', 'Platz der Einheit 19', 'C – Qualifizierung', 'Stadt BRB', 48, 48, 1, 18906, (0.0, 26.4, 26.8, 7.6, 0.0), 1.21, 2.22, 57, 57),
+    (70, 'Sandfurth-Oase', 'Sandfurthweg 27', 'B – Beobachtung', 'Privat', 15, 15, 0, 7765, (0.5, 4.8, 11.1, 3.3, 0.0), 7.72, 1.92, 73, 18),
+    (71, 'Sanssouci', 'Wilhelmsdorfer Landstr. 55', 'A – Stabil', 'Stadt / privat', 39, 39, 5, 16848, (0.0, 21.5, 12.2, 5.0, 0.0), 9.88, 3.05, 23, 55),
+    (72, 'Sommerfreude I', 'Eichhorstweg 9', 'B – Beobachtung', 'Stadt / privat', 49, 49, 1, 24945, (0.0, 15.2, 32.2, 17.2, 0.0), 9.61, 1.1, 17, 17),
+    (73, 'Sommerfreude II', 'Pfefferlander Weg 9', 'A – Stabil', 'Stadt / privat', 130, 130, 1, 75448, (7.7, 41.2, 59.1, 50.9, 0.0), 7.94, 1.38, 73, None),
+    (74, 'Sonnenrot', 'Ziesarer Landstr. 68', 'A – Stabil', 'Privat', 28, 28, 0, 12438, (2.1, 13.2, 13.9, 8.9, 0.0), 8.87, 1.75, 73, 40),
+    (75, 'Sonnenschein', 'Mahlerstr. 22', 'A – Stabil', 'Stadt BRB', 40, 40, 1, 19604, (2.4, 23.6, 22.9, 6.8, 0.0), 7.79, 7.59, 28, 82),
+    (76, 'Sonnenwinkel', 'Buchenweg 65a', 'A – Stabil', 'Stadt / privat', 48, 48, 0, 22186, (0.5, 25.6, 21.7, 14.8, 0.0), 9.45, 1.29, 17, 72),
+    (77, 'Sorgenfrei I', 'Ziesarer Landstr. 76', 'B – Beobachtung', 'Stadt BRB', 45, 45, 2, 23588, (1.6, 20.0, 18.9, 7.1, 0.0), 8.91, 1.61, 17, 38),
+    (78, 'Sorgenfrei II', 'Buchenweg 62', 'B – Beobachtung', 'Privat', 23, 23, 2, 16763, (0.0, 10.2, 16.0, 3.9, 0.0), 9.03, 1.43, 73, 63),
+    (79, 'Sportpark', 'Wilhelmsdorfer Landstr. 90', 'C – Qualifizierung', 'Privat', 37, 37, 1, 19323, (0.7, 11.9, 17.0, 18.5, 0.6), 9.33, 2.94, 23, 71),
+    (80, 'Stiller Winkel', 'Pfefferlander Weg 50', 'B – Beobachtung', 'Stadt / privat', 50, 50, 2, 27635, (0.3, 19.8, 24.7, 18.2, 0.0), 8.56, 2.02, 17, 38),
+    (81, 'Traumland', 'Fritze-Bollmann-Weg 82', 'B – Beobachtung', 'Stadt BRB', 49, 49, 1, 21764, (0.0, 16.9, 26.4, 8.8, 0.0), 11.1, 7.69, 81, None),
+    (82, 'Waldfrieden', 'Weberstr. 59', 'A – Stabil', 'Stadt / privat', 90, 90, 3, 51208, (2.3, 47.0, 42.1, 23.5, 0.0), 7.54, 7.41, 28, 29),
+    (83, 'Weinmeisterweg', 'Weinmeisterweg 10', 'A – Stabil', 'Privat', 26, 26, 1, 8902, (0.0, 13.2, 7.4, 8.8, 0.0), 9.97, 5.72, 28, 54),
+    (84, 'Wittstocker Gäßchen', 'Wittstocker Gäßchen 15', 'B – Beobachtung', 'Stadt / Kirche', 54, 54, 0, 36135, (0.9, 16.7, 22.5, 24.1, 0.0), 9.54, 1.72, 17, 17),
+    (85, 'Zukunft', 'Hagelberger Str. 3', 'A – Stabil', 'Privat', 85, 85, 3, 47523, (2.9, 33.3, 65.8, 11.4, 0.0), 12.47, 6.53, 85, None),
+    (86, 'Zum Burgweg', 'Burgweg 4a', 'A – Stabil', 'Stadt BRB', 9, 9, 0, 5216, (0.0, 1.9, 7.5, 2.4, 0.0), 11.66, 5.29, 85, 87),
+    (87, 'Zum kühlen Grunde', 'Grillendamm 8', 'A – Stabil', 'Stadt BRB', 26, 26, 0, 14389, (2.6, 8.1, 15.7, 9.0, 0.0), 11.67, 5.46, 85, 53),
+    (88, 'Zur Insel', 'Domkietz 8a', 'A – Stabil', 'Stadt / privat', 86, 86, 0, 54091, (0.0, 21.8, 53.6, 28.7, 0.0), 11.24, 5.17, 49, 49),
+]
+
+GWP_STANDARD = {
+    "PG": 55, "Max_GW": 10, "Vorschlag_nutzen": 1, "Umweg": 1.3, "Uplink_Kap": 1000, "Ueberbuchung": 8, "Bandbreite": 30, "Jahre": 5,
+    "P_UCG": 250, "P_Agg": 240, "P_DAC": 20, "P_KVz": 1500, "P_USV": 250, "P_SFP": 21.9, "P_Flex": 179, "P_NT": 70, "P_Halter": 8.5,
+    "P_Luefter": 45, "P_Spleiss": 32.9, "P_Saeule": 300, "P_Ueber": 80, "P_Surge": 12, "P_AP": 250, "P_Mast": 392, "P_Fund": 120,
+    "P_Faser": 1.5, "P_Kupfer": 1.2, "P_Tiefbau": 0, "P_MontStandort": 500, "P_MontMast": 150, "P_MontZul": 150,
+    "KU": 1, "USt": 0.19,
+    "Parz_je_AP": 3.6, "AP_je_Mast": 2.2, "Anteil_Technik": 0.5, "Leitung_k": 2.806, "Faser_f": 1.66, "Kupfer_f": 1.06, "Kabel_je_AP": 0.42, "Ports_Agg": 8,
+    "Uplink_Monat": 75, "Strom_Standort": 80, "Strom_GW": 25, "Strom_Mast": 50, "Wartung": 0.03, "Zahlung": 0.03, "Preis_Jahr": 120,
+    "Quote_Modus": 1, "Quote_fest": 0.6, "Szenario": 1,
+    "Neig_1": 0.80, "Neig_2": 0.75, "Neig_3": 0.60, "Neig_4": 0.35, "Neig_5": 0.10,
+    "Stufe_A": 1.0, "Stufe_B": 1.0, "Stufe_C": 0.9, "Stufe_D": 0.75,
+    "Abg_1": 0.05, "Abg_2": 0.05, "Abg_3": 0.10, "Abg_4": 0.30, "Abg_5": 0.60, "Nachbes": 0.7, "Nachbes_Leer": 2,
+}
+# Gruppen, Texte und Einheit für das Formular („%“ = intern Anteil 0–1, im Formular Prozent)
+GWP_FELDER = [
+    ("Netz-Regeln", [("PG", "Parzellen je Gateway", ""), ("Max_GW", "Gateways je Standort (Warnung darüber)", ""),
+                     ("Vorschlag_nutzen", "Standort-Vorschlag nutzen, wo nichts gewählt (1 = ja, 0 = eigenständig)", ""),
+                     ("Umweg", "Umwegfaktor Glasfaser (Trasse statt Luftlinie)", ""), ("Uplink_Kap", "Kapazität Internet-Anschluss (Mbit/s)", ""),
+                     ("Ueberbuchung", "Überbuchungsfaktor (1:x)", ""), ("Bandbreite", "Ø Bandbreite je Kunde (Mbit/s)", ""), ("Jahre", "Betrachtungszeitraum (Jahre)", "")]),
+    ("Buchungsquote", [("Quote_Modus", "Modus (1 = aus Alter und Leerstand, 2 = feste Quote)", ""), ("Quote_fest", "Feste Quote (Modus 2)", "%"),
+                       ("Szenario", "Modus 1 rechnet mit (1 = heute, 2 = in 5 Jahren)", ""),
+                       ("Neig_1", "Buchungsneigung Pächter bis 30", "%"), ("Neig_2", "Buchungsneigung 30–50", "%"), ("Neig_3", "Buchungsneigung 50–70", "%"),
+                       ("Neig_4", "Buchungsneigung 70–90", "%"), ("Neig_5", "Buchungsneigung ab 90", "%"),
+                       ("Stufe_A", "Faktor Entwicklungsstufe A", "%"), ("Stufe_B", "Faktor Stufe B", "%"), ("Stufe_C", "Faktor Stufe C", "%"), ("Stufe_D", "Faktor Stufe D", "%"),
+                       ("Abg_1", "Pachtaufgabe in 5 J., bis 30", "%"), ("Abg_2", "Pachtaufgabe 30–50", "%"), ("Abg_3", "Pachtaufgabe 50–70", "%"),
+                       ("Abg_4", "Pachtaufgabe 70–90", "%"), ("Abg_5", "Pachtaufgabe ab 90", "%"),
+                       ("Nachbes", "Nachbesetzung frei werdender Parzellen", "%"), ("Nachbes_Leer", "Abschlag je Prozentpunkt Leerstand", "")]),
+    ("Laufende Kosten und Erlös", [("Preis_Jahr", "Fester Preis je Kunde und Jahr (€) – wenn nicht nach Tarifmix", ""),
+                                   ("Uplink_Monat", "Internet-Anschluss je Monat (€ netto)", ""), ("Strom_Standort", "Strom Standort je Jahr (€)", ""),
+                                   ("Strom_GW", "Strom je Gateway und Jahr (€)", ""), ("Strom_Mast", "Strom je Mast mit Technik und Jahr (€)", ""),
+                                   ("Wartung", "Wartung (Anteil der Investition je Jahr)", "%"), ("Zahlung", "Zahlungsabwicklung (Anteil vom Umsatz)", "%"),
+                                   ("KU", "Kleinunternehmer (1 = ja, 0 = nein)", ""), ("USt", "Umsatzsteuersatz", "%")]),
+    ("Preise (netto, €)", [("P_UCG", "Gateway (Cloud Gateway Fiber)", ""), ("P_Agg", "Switch Aggregation (8× SFP+)", ""), ("P_DAC", "DAC-Kabel je Gateway", ""),
+                           ("P_KVz", "Außenschrank Standort", ""), ("P_USV", "USV + Überspannungsschutz Standort", ""), ("P_SFP", "SFP 1G Singlemode", ""),
+                           ("P_Flex", "Switch Flex 2.5G PoE", ""), ("P_NT", "Netzteil Flex", ""), ("P_Halter", "Hutschienen-Halter", ""), ("P_Luefter", "Lüfter mit Thermostat", ""),
+                           ("P_Spleiss", "Mini-Spleißbox", ""), ("P_Saeule", "Strom-Säule", ""), ("P_Ueber", "Überspannungsschutz + LS/FI Säule", ""),
+                           ("P_Surge", "Ethernet Surge Protection", ""), ("P_AP", "Access Point U7 Pro Outdoor", ""), ("P_Mast", "Mast 5 m", ""), ("P_Fund", "Mastfundament", ""),
+                           ("P_Faser", "Glasfaser €/m", ""), ("P_Kupfer", "Erdkabel Cat 7 €/m", ""), ("P_Tiefbau", "Tiefbau €/m (0 = keine)", ""),
+                           ("P_MontStandort", "Montage Standort", ""), ("P_MontMast", "Montage je Mast", ""), ("P_MontZul", "Montage je Glasfaser-Zuleitung", "")]),
+    ("Mengen in der Sparte (Faustregeln)", [("Parz_je_AP", "Parzellen je Access Point", ""), ("AP_je_Mast", "Access Points je Mast", ""),
+                                            ("Anteil_Technik", "Anteil Masten mit Technik", "%"), ("Leitung_k", "Leitungsweg-Faktor (m = k × √Fläche)", ""),
+                                            ("Faser_f", "Glasfaser m je m Leitungsweg", ""), ("Kupfer_f", "Kupfer m je m Leitungsweg", ""),
+                                            ("Kabel_je_AP", "Kupferkabel je AP", ""), ("Ports_Agg", "Anschlüsse je Aggregation-Switch", "")]),
+]
+GWP_WAHL = ("standort", "zuleitung", "reihenfolge", "entfernung", "quote", "aps", "masten", "leitung", "parz", "leer")
+
+
+def _ceil(x):
+    return int(-(-x // 1)) if x > 0 else 0
+
+
+def _rund(x):
+    return int(x + 0.5) if x >= 0 else -int(-x + 0.5)
+
+
+def gwp_anlagen(d):
+    g = d.get("gwplan") or {}
+    if g.get("anlagen"):
+        return g["anlagen"]
+    return [{"nr": t[0], "name": t[1], "adresse": t[2], "stufe": t[3], "eigentum": t[4], "parz": t[5], "parz_konzept": t[6], "leer": t[7],
+             "flaeche": t[8], "alter": list(t[9]), "x": t[10], "y": t[11], "vs_standort": t[12], "vs_zuleitung": t[13]} for t in GWP_ANLAGEN]
+
+
+def gwp_annahmen(d):
+    roh = ((d.get("gwplan") or {}).get("annahmen")) or {}
+    a = dict(GWP_STANDARD)
+    for k, v in roh.items():
+        if k in a:
+            try:
+                a[k] = float(v)
+            except (TypeError, ValueError):
+                pass
+    return a
+
+
+def gwp_preis(d, a):
+    """Ø Preis je Kunde und Jahr: nach Tarifmix aus den Tarifen des Managers oder fest"""
+    g = d.get("gwplan") or {}
+    tarife = [t for t in tarife_pruefen(d["tarife"])]
+    mix = g.get("tarifmix") or ({tarife[0]["name"]: 100} if tarife else {})
+    quelle = g.get("preis_quelle", "tarife")
+    anteile = {t["name"]: max(0.0, float(mix.get(t["name"], 0) or 0)) for t in tarife}
+    summe = sum(anteile.values())
+    if quelle == "tarife" and summe > 0:
+        preis = sum(anteile[t["name"]] * float(t.get("preis") or 0) for t in tarife) / summe
+        anteile = {k: v / summe for k, v in anteile.items()}
+    else:
+        quelle, preis, anteile = "fest", a["Preis_Jahr"], {}
+    return quelle, preis, anteile, [{"name": t["name"], "preis": float(t.get("preis") or 0), "down": t.get("down"), "anteil": anteile.get(t["name"], 0),
+                                     "mix": float(mix.get(t["name"], 0) or 0)} for t in tarife]
+
+
+def gwplan_berechnen(d):
+    a = gwp_annahmen(d)
+    A = [dict(x) for x in gwp_anlagen(d)]
+    wahl = ((d.get("gwplan") or {}).get("wahl")) or {}
+    EK = 1 + a["USt"] if a["KU"] == 1 else 1.0
+    PG = max(1, int(a["PG"]))
+    idx = {s["nr"]: s for s in A}
+    for i, s in enumerate(A):
+        w = wahl.get(str(s["nr"])) or {}
+        s["w"] = w
+        s["row"] = i + 5
+        if w.get("parz") is not None:
+            s["parz"] = int(w["parz"])
+        if w.get("leer") is not None:
+            s["leer"] = int(w["leer"])
+    vn = a["Vorschlag_nutzen"] == 1
+    # wirksamer Standort und Zuleitung
+    for s in A:
+        w, nr = s["w"], s["nr"]
+        s["C"] = w["standort"] if w.get("standort") is not None else (s["vs_standort"] if vn else nr)
+        if s["C"] == nr:
+            s["D"] = None
+        elif w.get("zuleitung") is not None:
+            s["D"] = w["zuleitung"]
+        elif w.get("standort") is None and vn and s.get("vs_zuleitung") is not None:
+            s["D"] = s["vs_zuleitung"]
+        else:
+            s["D"] = s["C"]
+    zahl_am = {}
+    for s in A:
+        zahl_am[s["C"]] = zahl_am.get(s["C"], 0) + 1
+    uv = (a["P_Saeule"] + a["P_Flex"] + a["P_NT"] + a["P_Halter"] + a["P_Luefter"] + a["P_Spleiss"] + a["P_Ueber"]) * EK
+    for s in A:
+        w, nr = s["w"], s["nr"]
+        eigen = s["C"] == nr
+        q = idx.get(s["D"])
+        s["rolle"] = ("Gateway-Standort" if zahl_am.get(nr, 0) > 1 else "eigenständig") if eigen else "über " + (q["name"] if q else "?")
+        if eigen:
+            km = 0.0
+        elif w.get("entfernung") is not None:
+            km = w["entfernung"] / 1000
+        else:
+            km = ((s["x"] - q["x"]) ** 2 + (s["y"] - q["y"]) ** 2) ** 0.5 if q else 0.0
+        s["km"] = km
+        s["faser_zul"] = 0.0 if eigen else (w["entfernung"] if w.get("entfernung") is not None else km * 1000 * a["Umweg"])
+        s["zul_eur"] = 0.0 if eigen else (s["faser_zul"] * (a["P_Faser"] + a["P_Tiefbau"]) + 2 * a["P_SFP"] + a["P_MontZul"]) * EK
+        s["uv_eur"] = 0.0 if eigen else uv
+        s["sort"] = w["reihenfolge"] if w.get("reihenfolge") is not None else (500 if eigen else 1000) + s["row"]
+    for s in A:
+        vor = sum(t["parz"] for t in A if t["C"] == s["C"] and t["sort"] < s["sort"])
+        s["davor"] = vor
+        s["gw_von"] = vor // PG + 1
+        s["gw_bis"] = max(s["gw_von"], _ceil((vor + s["parz"]) / PG))
+        c = idx.get(s["C"])
+        s["versorgt"] = f"{c['name'] if c else '?'}: GW {s['gw_von']}" + (f"–{s['gw_bis']}" if s["gw_bis"] > s["gw_von"] else "")
+        nr = s["nr"]
+        if not c:
+            s["pruefung"] = "Fehler: Standort unbekannt"
+        elif s["C"] == nr:
+            s["pruefung"] = "OK"
+        elif c["C"] != s["C"]:
+            s["pruefung"] = "Fehler: Standort hängt selbst an anderem Standort"
+        elif s["D"] == nr:
+            s["pruefung"] = "Fehler: Zuleitung von sich selbst"
+        elif s["D"] not in idx:
+            s["pruefung"] = "Fehler: Zuleitung unbekannt"
+        elif idx[s["D"]]["C"] != s["C"]:
+            s["pruefung"] = "Fehler: Zuleitung hängt an anderem Standort"
+        else:
+            s["pruefung"] = "OK"
+    # Ring in der Zuleitung (kommt nie am Standort an)
+    for s in A:
+        if s["pruefung"] != "OK" or s["C"] == s["nr"]:
+            continue
+        x, gesehen = s, set()
+        while x and x["C"] != x["nr"] and x["nr"] not in gesehen:
+            gesehen.add(x["nr"]); x = idx.get(x["D"])
+        if not x or x["C"] != x["nr"]:
+            s["pruefung"] = "Fehler: Zuleitung im Kreis – führt nicht zum Standort"
+    # Buchungsquote
+    for s in A:
+        w, P, L = s["w"], max(1, s["parz"]), s["leer"]
+        sm = max(0.0001, sum(s["alter"]))
+        sh = [x / sm for x in s["alter"]]
+        neig = sum(sh[i] * a[f"Neig_{i + 1}"] for i in range(5))
+        sf = a.get("Stufe_" + str(s["stufe"])[:1].upper(), a["Stufe_D"])
+        lq = L / P
+        q_heute = neig * (1 - lq) * sf
+        abg = sum(sh[i] * a[f"Abg_{i + 1}"] for i in range(5))
+        nach = max(0.0, min(1.0, a["Nachbes"] - lq * a["Nachbes_Leer"]))
+        leer5 = L + (P - L) * abg * (1 - nach)
+        nb5 = sum(sh[i] * (1 - a[f"Abg_{i + 1}"]) * a[f"Neig_{i + 1}"] for i in range(5)) / max(0.0001, 1 - abg)
+        q5 = (P - L) * ((1 - abg) * nb5 + abg * nach * a["Neig_2"]) * sf / P
+        if w.get("quote") is not None:
+            q, herk = w["quote"], "manuell"
+        elif a["Quote_Modus"] == 2:
+            q, herk = a["Quote_fest"], "fest"
+        elif a["Szenario"] == 2:
+            q, herk = q5, "Alter, in 5 J."
+        else:
+            q, herk = q_heute, "Alter, heute"
+        s.update(leerq=lq, leer5=leer5, q_heute=q_heute, q5=q5, quote=q, herkunft=herk, kunden=s["parz"] * q)
+    # Technik in der Sparte und Vergleich eigenständig
+    for s in A:
+        w = s["w"]
+        aps = w["aps"] if w.get("aps") is not None else max(2, _ceil(s["parz"] / a["Parz_je_AP"]))
+        masten = w["masten"] if w.get("masten") is not None else _ceil(aps / a["AP_je_Mast"])
+        tech = max(1, _ceil(masten * a["Anteil_Technik"]))
+        leitung = w["leitung"] if w.get("leitung") is not None else a["Leitung_k"] * (s["flaeche"] ** 0.5)
+        faser, kupfer, kabel = leitung * a["Faser_f"], leitung * a["Kupfer_f"], _rund(aps * a["Kabel_je_AP"])
+        J = tech * (2 * a["P_SFP"] + a["P_Flex"] + a["P_NT"] + a["P_Halter"] + a["P_Luefter"] + a["P_Spleiss"] + a["P_Saeule"] + a["P_Ueber"]) * EK
+        K = (aps * a["P_AP"] + masten * (a["P_Mast"] + a["P_Fund"] + a["P_MontMast"]) + kabel * 2 * a["P_Surge"]) * EK
+        Lt = (faser * a["P_Faser"] + kupfer * a["P_Kupfer"] + leitung * a["P_Tiefbau"]) * EK
+        N = J + K + Lt + s["zul_eur"] + s["uv_eur"]
+        P_gw = _ceil(s["parz"] / PG)
+        Q = J + K + Lt + (a["P_KVz"] + a["P_USV"] + a["P_MontStandort"] + P_gw * (a["P_UCG"] + a["P_DAC"]) + a["P_Agg"] * _ceil((P_gw + tech) / a["Ports_Agg"])) * EK
+        R = (a["Uplink_Monat"] * 12 * max(1, _ceil(s["kunden"] * a["Bandbreite"] / a["Ueberbuchung"] / a["Uplink_Kap"])) + a["Strom_Standort"]
+             + P_gw * a["Strom_GW"] + tech * a["Strom_Mast"]) * EK + Q * a["Wartung"]
+        s.update(aps=aps, masten=masten, tech=tech, leitung=leitung, inv_sparte=N, lfd_sparte=tech * a["Strom_Mast"] * EK + N * a["Wartung"],
+                 gw_eigen=P_gw, inv_eigen=Q, lfd_eigen=R)
+    # Standorte
+    standorte = []
+    for s in A:
+        if s["C"] != s["nr"]:
+            continue
+        mit = [t for t in A if t["C"] == s["nr"]]
+        parz = sum(t["parz"] for t in mit)
+        gw = _ceil(parz / PG)
+        straenge = s["tech"] + sum(1 for t in A if t["D"] == s["nr"])
+        agg = _ceil((gw + straenge) / a["Ports_Agg"])
+        kunden = sum(t["kunden"] for t in mit)
+        bedarf = kunden * a["Bandbreite"] / a["Ueberbuchung"]
+        ans = max(1, _ceil(bedarf / a["Uplink_Kap"]))
+        inv = gw * (a["P_UCG"] + a["P_DAC"]) * EK + (a["P_KVz"] + a["P_USV"] + a["P_MontStandort"] + agg * a["P_Agg"]) * EK
+        lfd = (ans * a["Uplink_Monat"] * 12 + a["Strom_Standort"] + gw * a["Strom_GW"]) * EK + inv * a["Wartung"]
+        pr = f"Achtung: mehr als {int(a['Max_GW'])} Gateways" if gw > a["Max_GW"] else (f"OK – {ans} Internet-Anschlüsse nötig" if ans > 1 else "OK")
+        standorte.append({"nr": s["nr"], "name": s["name"], "sparten": len(mit), "namen": [t["name"] for t in sorted(mit, key=lambda t: t["sort"])],
+                          "parz": parz, "gw": gw, "belegung": parz / (gw * PG) if gw else 0, "straenge": straenge, "agg": agg, "kunden": round(kunden, 1),
+                          "bedarf": round(bedarf), "anschluesse": ans, "inv": round(inv, 2), "lfd": round(lfd, 2), "pruefung": pr})
+    st_idx = {x["nr"]: x for x in standorte}
+    # Einnahmen und Ergebnis
+    quelle, preis, anteile, tarife = gwp_preis(d, a)
+    netto = (lambda v: v) if a["KU"] == 1 else (lambda v: v / (1 + a["USt"]))
+    ist = {}
+    try:
+        for z in akt_kalkulation(d)["zeilen"]:
+            if z["gebucht"]:
+                ist[_norm(z["name"])] = z
+    except Exception:
+        pass
+    zeilen = []
+    for s in A:
+        so = st_idx.get(s["C"])
+        anteil = s["parz"] / so["parz"] if so and so["parz"] else 0
+        einnahme = s["kunden"] * preis
+        inv = s["inv_sparte"] + anteil * (so["inv"] if so else 0)
+        lfd = s["lfd_sparte"] + anteil * (so["lfd"] if so else 0) + netto(einnahme) * a["Zahlung"]
+        db = netto(einnahme) - lfd
+        treffer = next((z for k, z in ist.items() if k and (k == _norm(s["name"]) or (len(k) > 4 and (k in _norm(s["name"]) or _norm(s["name"]) in k)))), None)
+        zeilen.append({
+            "nr": s["nr"], "name": s["name"], "adresse": s["adresse"], "stufe": s["stufe"], "parz": s["parz"], "leer": s["leer"], "parz_konzept": s["parz_konzept"],
+            "standort": s["C"], "zuleitung": s["D"], "sort": s["sort"], "rolle": s["rolle"], "versorgt": s["versorgt"], "gw_von": s["gw_von"], "gw_bis": s["gw_bis"],
+            "km": round(s["km"], 3), "faser_zul": round(s["faser_zul"]), "pruefung": s["pruefung"],
+            "quote": s["quote"], "herkunft": s["herkunft"], "q_heute": s["q_heute"], "q5": s["q5"], "kunden": round(s["kunden"], 1),
+            "einnahme": round(einnahme, 2), "einnahme_monat": round(einnahme / 12, 2), "je_tarif": {k: round(s["kunden"] * v, 1) for k, v in anteile.items()},
+            "aps": s["aps"], "masten": s["masten"], "investition": round(inv, 2), "laufend": round(lfd, 2), "db": round(db, 2),
+            "amortisation": round(inv / db, 1) if db > 0 else None, "inv_kunde": round(inv / s["kunden"]) if s["kunden"] else None,
+            "ist_gebucht": treffer["gebucht"] if treffer else None, "ist_einnahme": treffer["umsatz_brutto"] if treffer else None,
+            "w": {k: s["w"].get(k) for k in GWP_WAHL if s["w"].get(k) is not None},
+            "vs_standort": s["vs_standort"], "vs_zuleitung": s["vs_zuleitung"]})
+    S = lambda liste, k: sum(float(x[k] or 0) for x in liste)
+    parz = S(A, "parz")
+    kunden = S(A, "kunden")
+    einnahme = S(zeilen, "einnahme")
+    inv_plan = S(A, "inv_sparte") + S(standorte, "inv")
+    lfd_plan = S(A, "lfd_sparte") + S(standorte, "lfd") + netto(einnahme) * a["Zahlung"]
+    lfd_plan_ohne_zahlung = S(A, "lfd_sparte") + S(standorte, "lfd")
+    db = netto(einnahme) - lfd_plan
+    fehler = sum(1 for s in A if s["pruefung"].startswith("Fehler"))
+    gesamt = {
+        "sparten": len(A), "parzellen": int(parz), "leerq": S(A, "leer") / parz if parz else 0, "leerq5": S(A, "leer5") / parz if parz else 0,
+        "quote": kunden / parz if parz else 0, "kunden": round(kunden, 1),
+        "preis": round(preis, 2), "preis_quelle": quelle, "einnahme": round(einnahme, 2), "einnahme_monat": round(einnahme / 12, 2), "einnahme_netto": round(netto(einnahme), 2),
+        "je_tarif": {k: {"kunden": round(kunden * v, 1), "einnahme": round(kunden * v * next(t["preis"] for t in tarife if t["name"] == k), 2)} for k, v in anteile.items()},
+        "standorte": len(standorte), "gateways": int(S(standorte, "gw")), "anschluesse": int(S(standorte, "anschluesse")), "faser": round(S(A, "faser_zul")),
+        "fehler": fehler, "investition": round(inv_plan, 2), "laufend": round(lfd_plan_ohne_zahlung, 2), "zahlung": round(netto(einnahme) * a["Zahlung"], 2), "db": round(db, 2),
+        "amortisation": round(inv_plan / db, 1) if db > 0 else None, "inv_kunde": round(inv_plan / kunden) if kunden else None,
+        "eigen": {"standorte": len(A), "gateways": int(S(A, "gw_eigen")), "anschluesse": len(A), "investition": round(S(A, "inv_eigen"), 2), "laufend": round(S(A, "lfd_eigen"), 2)},
+        "plan_laufend_ohne_zahlung": round(lfd_plan_ohne_zahlung, 2), "jahre": a["Jahre"],
+        "ist_gebucht": sum(z["ist_gebucht"] or 0 for z in zeilen), "ist_einnahme": round(sum(z["ist_einnahme"] or 0 for z in zeilen), 2),
+        "modus": "manuell je Sparte / " + ("feste Quote " + f"{a['Quote_fest']:.0%}" if a["Quote_Modus"] == 2 else ("aus Alter und Leerstand, in 5 Jahren" if a["Szenario"] == 2 else "aus Alter und Leerstand, heute")),
+    }
+    gesamt["eigen"]["zeitraum"] = round(gesamt["eigen"]["investition"] + gesamt["eigen"]["laufend"] * a["Jahre"], 2)
+    gesamt["zeitraum"] = round(inv_plan + lfd_plan_ohne_zahlung * a["Jahre"], 2)
+    log = [f"{len(A)} Sparten · {len(standorte)} Gateway-Standorte · {gesamt['gateways']} Gateways · {gesamt['kunden']:.0f} Kunden (Quote {gesamt['quote']:.1%})"]
+    if fehler:
+        log.append(f"⚠ {fehler} Sparte(n) mit Fehler in der Zuordnung – Spalte „Prüfung“.")
+    if any(x["pruefung"].startswith("Achtung") for x in standorte):
+        log.append(f"⚠ Mindestens ein Standort hat mehr als {int(a['Max_GW'])} Gateways.")
+    return {"zeilen": zeilen, "standorte": standorte, "gesamt": gesamt, "tarife": tarife, "annahmen": a, "felder": GWP_FELDER,
+            "quelle_daten": "Excel-Import" if (d.get("gwplan") or {}).get("anlagen") else "Kleingartenentwicklungskonzept 2040 (eingebaut)", "log": log}
+
+
+def _gwp_int(v, text, lo, hi):
+    if v in (None, ""):
+        return None
+    try:
+        x = float(str(v).replace(",", "."))
+    except ValueError:
+        raise Fehler(f"{text}: bitte eine Zahl eintragen.")
+    if x != int(x) or not lo <= x <= hi:
+        raise Fehler(f"{text}: ganze Zahl von {lo} bis {hi}.")
+    return int(x)
+
+
+def akt_gwplan_sparte(d, b):
+    nrs = {s["nr"]: s for s in gwp_anlagen(d)}
+    try:
+        nr = int(b.get("nr"))
+    except (TypeError, ValueError):
+        nr = None
+    if nr not in nrs:
+        raise Fehler("Sparte unbekannt.")
+    g = d.setdefault("gwplan", {})
+    w = dict((g.setdefault("wahl", {})).get(str(nr)) or {})
+    for feld, wert in b.items():
+        if feld not in GWP_WAHL:
+            continue
+        if feld in ("standort", "zuleitung"):
+            v = _gwp_int(wert, "Standort" if feld == "standort" else "Zuleitung von", 1, 9999)
+            if v is not None and v not in nrs:
+                raise Fehler(f"Sparte Nr. {v} gibt es nicht.")
+        elif feld == "reihenfolge":
+            v = _gwp_int(wert, "Reihenfolge", 1, 999)
+        elif feld == "quote":
+            v = _zahl_oder_none(wert, "Quote manuell")
+            if v is not None:
+                if v > 100:
+                    raise Fehler("Quote manuell: höchstens 100 %.")
+                v = v / 100
+        elif feld == "parz":
+            v = _gwp_int(wert, "Parzellen", 1, 2000)
+        elif feld == "leer":
+            v = _gwp_int(wert, "Leerstand", 0, 2000)
+        else:
+            v = _zahl_oder_none(wert, {"entfernung": "Entfernung (m)", "aps": "Access Points", "masten": "Masten", "leitung": "Leitungsweg (m)"}[feld])
+        if v is None:
+            w.pop(feld, None)
+        else:
+            w[feld] = v
+    p = w.get("parz", nrs[nr]["parz"])
+    if w.get("leer", nrs[nr]["leer"]) > p:
+        raise Fehler("Leerstand kann nicht größer sein als die Parzellenzahl.")
+    if w:
+        g["wahl"][str(nr)] = w
+    else:
+        g["wahl"].pop(str(nr), None)
+    speichere(d)
+    return gwplan_berechnen(d)
+
+
+def akt_gwplan_annahmen(d, b):
+    g = d.setdefault("gwplan", {})
+    neu = dict(g.get("annahmen") or {})
+    prozent = {k for _, gr in GWP_FELDER for k, _, e in gr if e == "%"}
+    texte = {k: t for _, gr in GWP_FELDER for k, t, _ in gr}
+    for k, v in (b.get("annahmen") or {}).items():
+        if k not in GWP_STANDARD:
+            continue
+        x = _zahl_oder_none(v, texte.get(k, k))
+        if x is None:
+            neu.pop(k, None)
+            continue
+        neu[k] = x / 100 if k in prozent else x
+    probe = {**GWP_STANDARD, **neu}
+    if probe["PG"] < 1 or probe["Ueberbuchung"] < 1 or probe["Uplink_Kap"] <= 0 or probe["Ports_Agg"] < 1 or probe["Parz_je_AP"] <= 0 or probe["AP_je_Mast"] <= 0:
+        raise Fehler("Parzellen je Gateway, Überbuchung, Uplink-Kapazität, Ports und Faustregeln müssen größer als 0 sein.")
+    if probe["Quote_Modus"] not in (1, 2) or probe["Szenario"] not in (1, 2) or probe["Vorschlag_nutzen"] not in (0, 1) or probe["KU"] not in (0, 1):
+        raise Fehler("Modus und Szenario sind 1 oder 2, Vorschlag und Kleinunternehmer 0 oder 1.")
+    g["annahmen"] = neu
+    if "tarifmix" in b and isinstance(b["tarifmix"], dict):
+        namen = {t["name"] for t in tarife_pruefen(d["tarife"])}
+        g["tarifmix"] = {k: _zahl_oder_none(v, f"Anteil {k}") or 0 for k, v in b["tarifmix"].items() if k in namen}
+    if b.get("preis_quelle") in ("tarife", "fest"):
+        g["preis_quelle"] = b["preis_quelle"]
+    speichere(d)
+    r = gwplan_berechnen(d)
+    r["log"] = ["✔ Einstellungen gespeichert."] + r["log"]
+    return r
+
+
+def akt_gwplan_zuruecksetzen(d, was):
+    g = d.setdefault("gwplan", {})
+    if was == "wahl":
+        g["wahl"] = {}
+        txt = "✔ Eigene Zuordnungen entfernt – es gilt wieder der Vorschlag."
+    elif was == "annahmen":
+        g.pop("annahmen", None); g.pop("tarifmix", None); g.pop("preis_quelle", None)
+        txt = "✔ Einstellungen auf Standard zurückgesetzt."
+    elif was == "daten":
+        g.pop("anlagen", None)
+        txt = "✔ Wieder mit den eingebauten Daten aus dem Kleingartenentwicklungskonzept."
+    else:
+        raise Fehler("Unbekannt.")
+    speichere(d)
+    r = gwplan_berechnen(d)
+    r["log"] = [txt] + r["log"]
+    return r
+
+
+def _xlsx_namen(roh_bytes):
+    """definierte Namen einer xlsx → {Name: (Blatt, Zelle)}"""
+    M = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+    z = zipfile.ZipFile(io.BytesIO(roh_bytes))
+    aus = {}
+    for n in ET.fromstring(z.read("xl/workbook.xml")).iter(M + "definedName"):
+        m = re.match(r"^'?(.+?)'?!\$?([A-Z]+)\$?(\d+)$", (n.text or "").strip())
+        if m:
+            aus[n.get("name")] = (m.group(1), m.group(2) + m.group(3))
+    return aus
+
+
+def akt_gwplan_import(d, roh):
+    """Kleingarten_Gateway_Planung.xlsx: Anlagen (Daten + gelbe Spalten) und Annahmen übernehmen"""
+    namen, lies = _xlsx_blaetter(roh)
+    if not {"Anlagen", "Netz", "Annahmen"} <= set(namen):
+        raise Fehler("Das ist nicht die Gateway-Planung (Kleingarten_Gateway_Planung.xlsx) – es fehlen die Blätter „Anlagen“, „Netz“ oder „Annahmen“.")
+    an = lies("Anlagen") or {}
+    zahl = lambda v: v if isinstance(v, (int, float)) else None
+    anlagen, wahl = [], {}
+    felder = {"S": "standort", "T": "zuleitung", "U": "reihenfolge", "V": "entfernung", "W": "quote", "X": "aps", "Y": "masten", "Z": "leitung"}
+    for r in range(5, 1000):
+        nr = zahl(an.get(f"A{r}"))
+        if nr is None:
+            if an.get(f"B{r}") is None:
+                break
+            continue
+        nr = int(nr)
+        parz = zahl(an.get(f"F{r}"))
+        if not parz:
+            raise Fehler(f"Anlagen Zeile {r}: Parzellenzahl fehlt.")
+        vs, vz = zahl(an.get(f"Q{r}")), zahl(an.get(f"R{r}"))
+        anlagen.append({"nr": nr, "name": str(an.get(f"B{r}") or f"Sparte {nr}"), "adresse": str(an.get(f"C{r}") or ""), "stufe": str(an.get(f"D{r}") or "D"),
+                        "eigentum": str(an.get(f"E{r}") or ""), "parz": int(parz), "parz_konzept": int(zahl(an.get(f"P{r}")) or parz),
+                        "leer": int(zahl(an.get(f"G{r}")) or 0), "flaeche": float(zahl(an.get(f"H{r}")) or 0),
+                        "alter": [float(zahl(an.get(f"{c}{r}")) or 0) for c in "IJKLM"], "x": float(zahl(an.get(f"N{r}")) or 0), "y": float(zahl(an.get(f"O{r}")) or 0),
+                        "vs_standort": int(vs) if vs else nr, "vs_zuleitung": int(vz) if vz else None})
+        w = {}
+        for c, f in felder.items():
+            v = zahl(an.get(f"{c}{r}"))
+            if v is not None:
+                w[f] = int(v) if f in ("standort", "zuleitung", "reihenfolge") else float(v)
+        if w:
+            wahl[str(nr)] = w
+    if not anlagen:
+        raise Fehler("Im Blatt „Anlagen“ stehen keine Sparten.")
+    nrs = {s["nr"] for s in anlagen}
+    for k, w in wahl.items():
+        for f in ("standort", "zuleitung"):
+            if w.get(f) is not None and w[f] not in nrs:
+                raise Fehler(f"Sparte {k}: {f} Nr. {w[f]} gibt es in der Liste nicht.")
+    neu = {}
+    try:
+        dn = _xlsx_namen(roh)
+        cache = {}
+        for k in GWP_STANDARD:
+            if k in dn:
+                blatt, zelle = dn[k]
+                if blatt not in cache:
+                    cache[blatt] = lies(blatt) or {}
+                v = cache[blatt].get(zelle)
+                if isinstance(v, (int, float)):
+                    neu[k] = float(v)
+    except (KeyError, ET.ParseError):
+        pass
+    g = d.setdefault("gwplan", {})
+    g["anlagen"], g["wahl"] = anlagen, wahl
+    if neu:
+        g["annahmen"] = {k: v for k, v in neu.items() if v != GWP_STANDARD[k]}
+    speichere(d)
+    r = gwplan_berechnen(d)
+    r["log"] = [f"✔ Aus Excel übernommen: {len(anlagen)} Sparten, {len(wahl)} mit eigener Zuordnung, {len(neu)} Annahmen."] + r["log"]
+    journal(f"Netzplanung aus Excel übernommen: {len(anlagen)} Sparten")
+    return r
+
+
 # =============================================================== Webserver
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
@@ -3041,7 +3612,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.headers.get("X-Token") != TOKEN:
             return self._send(403, {"fehler": "nicht erlaubt"})
         roh = self.rfile.read(int(self.headers.get("Content-Length") or 0))
-        body = None if u.path in ("/api/excel", "/api/logo", "/api/kalk-import") else json.loads(roh or b"{}")
+        body = None if u.path in ("/api/excel", "/api/logo", "/api/kalk-import", "/api/gwplan-import") else json.loads(roh or b"{}")
         self._antwort(u.path, {}, body, roh)
 
     def _antwort(self, pfad, q, b, roh):
@@ -3136,6 +3707,11 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/kalk-annahmen": lambda: akt_kalk_annahmen(d, b),
                 "/api/kalk-sparte": lambda: akt_kalk_sparte(d, b),
                 "/api/kalk-import": lambda: akt_kalk_import(d, roh),
+                "/api/gwplan": lambda: gwplan_berechnen(d),
+                "/api/gwplan-sparte": lambda: akt_gwplan_sparte(d, b),
+                "/api/gwplan-annahmen": lambda: akt_gwplan_annahmen(d, b),
+                "/api/gwplan-zuruecksetzen": lambda: akt_gwplan_zuruecksetzen(d, (b or {}).get("was")),
+                "/api/gwplan-import": lambda: akt_gwplan_import(d, roh),
                 "/api/buchungen": lambda: akt_buchungen(d, q.get("sparte", [""])[0]) if b is None else akt_buchungen_speichern(d, b.get("sparte", ""), b.get("aenderungen")),
                 "/api/fern": lambda: akt_fern(d) if b is None else akt_fern_speichern(d, b),
                 "/api/tailscale": lambda: akt_tailscale(bool(b.get("an"))),
@@ -3246,6 +3822,8 @@ td input{padding:6px 8px;font-size:14px}.mono{font-family:Consolas,monospace}
 #pw_st{font-size:13px;color:var(--muted);flex:1}#pw_st.dirty{color:var(--amber);font-weight:600}
 td input.pwfeld{font-family:Consolas,'DejaVu Sans Mono',monospace;min-width:190px;font-variant-ligatures:none}
 #tz_tab td:nth-child(2),#tz_tab td:nth-child(4),#tq_netz td:nth-child(2),#tq_qos td:nth-child(2){white-space:nowrap}#kk_tab td,#kk_tab th{white-space:nowrap}#kk_tab td:first-child{white-space:normal;min-width:150px}tr.geaendert td{background:#fff6dd}tr.falsch td{background:#fde8e6}tr.gesperrt td{color:var(--muted)}
+#gp_tab td,#gp_tab th,#gp_st td,#gp_st th{white-space:nowrap}#gp_tab td:nth-child(2){white-space:normal;min-width:150px}#gp_st td:nth-child(3){white-space:normal;min-width:220px;font-size:12px}
+.gp_in{width:64px;background:#fff8d6}.gp_in.w{width:84px}.gp_an h4{margin:14px 0 6px;color:var(--muted);font-size:13px}
 .pwst{font-size:12px;white-space:nowrap}.pwst.f{color:var(--red)}.pwst.g{color:var(--amber)}
 button.mini{border:1px solid var(--line);background:#fff;border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer;color:var(--navy);margin-right:3px}button.mini:hover{background:#eef2f5}
 .balken{position:relative;height:16px;min-width:90px;background:#eef1ec;border-radius:8px;overflow:hidden}.balken i{position:absolute;inset:0 auto 0 0;background:var(--green)}
@@ -3460,6 +4038,32 @@ nav{position:sticky;top:0;z-index:20}
 <div class="knoepfe"><label class="k">Kalkulation oder VLAN-Planer wählen …<input type="file" id="kk_datei" accept=".xlsx" onchange="kkImport()" style="display:none"></label></div><div class="log" id="log_ki"></div></div>
 </section>
 
+<section id="netzplanung"><div class="karte"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0;flex:1">Netzplanung &amp; Einnahmen</h2>
+<span id="gp_quelle" class="status"></span><button class="k" onclick="gpCsv()">Als CSV speichern</button><button class="k p" onclick="gpLaden()">Berechnen</button></div>
+<p class="hint">Gateway-Standorte, Glasfaser von Sparte zu Sparte, 55 Parzellen je Gateway und einstellbare Buchungsquote – dieselbe Rechnung wie die Excel „Kleingarten_Gateway_Planung“. <b>Theoretische Einnahme</b> = Parzellen × Buchungsquote × Ø Tarifpreis. Rechnet nur hier im Manager – am Gateway ändert sich nichts.</p>
+<div class="kacheln" id="gp_k"></div><div class="log" id="log_gp"></div></div>
+<div class="karte"><h3>Einnahmen nach Tarif und Buchungsquote</h3>
+<p class="hint">Preise aus dem Reiter „Tarife“. Der Tarifmix legt fest, wie sich die Kunden auf die Tarife verteilen (Anteile in %, werden auf 100 % umgerechnet). „Quote manuell“ in der Tabelle gilt immer vorrangig.</p>
+<div class="reihe"><div><label for="gp_pq">Preis je Kunde</label><select id="gp_pq"><option value="tarife">nach Tarifmix</option><option value="fest">fester Preis (Einstellungen)</option></select></div>
+<div><label for="gp_qm">Buchungsquote</label><select id="gp_qm"><option value="1">aus Alter und Leerstand</option><option value="2">feste Quote für alle</option></select></div>
+<div><label for="gp_qf">Feste Quote (%)</label><input id="gp_qf" inputmode="decimal"></div>
+<div><label for="gp_sz">Alter und Leerstand</label><select id="gp_sz"><option value="1">heute</option><option value="2">in 5 Jahren</option></select></div></div>
+<div class="reihe" id="gp_mix" style="margin-top:10px"></div>
+<div class="knoepfe"><button class="k p" onclick="gpSchnell()">Übernehmen</button></div>
+<div class="tab" id="gp_tt"></div><div class="log" id="log_gps"></div></div>
+<div class="karte"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h3 style="margin:0;flex:1">Je Sparte</h3>
+<input id="gp_such" placeholder="Sparte suchen …" oninput="gpTabelle()" style="max-width:200px"><select id="gp_stf" onchange="gpTabelle()" style="max-width:220px"></select>
+<label style="display:flex;gap:6px;align-items:center;margin:0"><input type="checkbox" id="gp_err" onchange="gpTabelle()" style="width:auto"> nur Fehler</label></div>
+<p class="hint">Gelbe Felder werden sofort gespeichert. <b>Standort</b> = Nr. der Sparte, in der die Gateways stehen (eigene Nr. = selbst Standort). <b>Zuleitung von</b> = Nr. der Sparte, von der die Glasfaser kommt. <b>Reihenfolge</b> = welche Sparte die Gateways zuerst füllt. Kette A → B → C → D: alle Standort A, B Zuleitung A, C Zuleitung B, D Zuleitung C. Leer = Vorschlag bzw. berechneter Wert (grau).</p>
+<div class="tab" id="gp_tab" style="--tab-h:640px"></div></div>
+<div class="karte"><h3>Gateway-Standorte</h3><p class="hint">Alle Gateways eines Standorts teilen sich einen Internet-Anschluss – ein weiterer erst, wenn der Bedarf größer ist als die Kapazität.</p><div class="tab" id="gp_st"></div></div>
+<div class="karte"><h3>Einstellungen</h3><p class="hint">Netz-Regeln, Buchungsquote, Kosten und Preise. Leeres Feld = Standardwert.</p><div id="gp_an"></div>
+<div class="knoepfe"><button class="k p" onclick="gpAnSpeichern()">Einstellungen speichern</button><button class="k" onclick="gpReset('annahmen')">Auf Standard zurücksetzen</button></div><div class="log" id="log_gpa"></div></div>
+<div class="karte"><h3>Aus Excel übernehmen</h3><p class="hint"><b>Kleingarten_Gateway_Planung.xlsx</b>: Sparten (Parzellen, Leerstand, Alter, Lage), Ihre gelben Spalten (Standort, Zuleitung, Reihenfolge, Quote …) und alle Annahmen. Ohne Import rechnet der Manager mit den eingebauten Daten aus dem Kleingartenentwicklungskonzept 2040.</p>
+<div class="knoepfe"><label class="k">Gateway-Planung (Excel) wählen …<input type="file" id="gp_datei" accept=".xlsx" onchange="gpImport()" style="display:none"></label>
+<button class="k" onclick="gpReset('wahl')">Eigene Zuordnungen löschen (Vorschlag)</button><button class="k" onclick="gpReset('daten')">Eingebaute Daten verwenden</button></div><div class="log" id="log_gpi"></div></div>
+</section>
+
 <section id="kartendesign"><div class="karte" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
 <h2 style="margin:0;flex:1;min-width:200px">Zugangskarten gestalten</h2><span id="kd_status"></span>
 <button class="k p" onclick="designSpeichern()">Speichern</button><button class="k" onclick="testdruck()">Testseite drucken</button><button class="k" onclick="designStandard()">Standard wiederherstellen</button></div>
@@ -3507,9 +4111,9 @@ nav{position:sticky;top:0;z-index:20}
 </main>
 <script>
 const T="__TOKEN__";let LETZT=null,PLAN=null,PLANZ=null,PPSK=null,PPSKSP=null,CODES=[],VMIN=0,EINST={};
-const TABS=[["start","Start"],["verbindung","Verbindung"],["lesen","Auslesen"],["planung","Planung"],["abgleich","Abgleich"],["einrichten","Einrichten"],["uebertragen","Übertragen"],["tarife","Tarife"],["kalkulation","Kalkulation"],["kartendesign","Kartendesign"],["voucher","Gast-Voucher"],["system","Systeminfo"],["daten","Alle Daten"],["hilfe","Hilfe"]];
+const TABS=[["start","Start"],["verbindung","Verbindung"],["lesen","Auslesen"],["planung","Planung"],["abgleich","Abgleich"],["einrichten","Einrichten"],["uebertragen","Übertragen"],["tarife","Tarife"],["kalkulation","Kalkulation"],["netzplanung","Netzplanung"],["kartendesign","Kartendesign"],["voucher","Gast-Voucher"],["system","Systeminfo"],["daten","Alle Daten"],["hilfe","Hilfe"]];
 const $=id=>document.getElementById(id);const nav=$("nav");TABS.forEach(([id,t])=>{const b=document.createElement("button");b.textContent=t;b.onclick=()=>zeige(id);b.id="n_"+id;nav.appendChild(b)});
-function zeige(id){if(id=="start"&&!$("st_k").innerHTML&&typeof EINST!="undefined"&&EINST.konsole_id)startLaden().catch(()=>{});if(id=="verbindung")fernLaden().catch(()=>{});if(location.hash!="#"+id)history.replaceState(null,"","#"+id);setTimeout(()=>{const b=document.querySelector("nav button.aktiv");if(b&&b.scrollIntoView)b.scrollIntoView({inline:"center",block:"nearest"})},0);if(id=="kalkulation"&&!KK)kkLaden().catch(()=>{});if(id=="kartendesign"&&!DESIGN)designLaden();if(id=="tarife"&&!TF)tfLaden();if(id=="system"&&!SYS)sysLaden();if(id=="daten"&&!DLISTE)datenListe();document.querySelectorAll("section").forEach(s=>s.classList.toggle("aktiv",s.id==id));document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("aktiv",b.id=="n_"+id))}
+function zeige(id){if(id=="start"&&!$("st_k").innerHTML&&typeof EINST!="undefined"&&EINST.konsole_id)startLaden().catch(()=>{});if(id=="verbindung")fernLaden().catch(()=>{});if(location.hash!="#"+id)history.replaceState(null,"","#"+id);setTimeout(()=>{const b=document.querySelector("nav button.aktiv");if(b&&b.scrollIntoView)b.scrollIntoView({inline:"center",block:"nearest"})},0);if(id=="kalkulation"&&!KK)kkLaden().catch(()=>{});if(id=="netzplanung"&&!GP)gpLaden().catch(()=>{});if(id=="kartendesign"&&!DESIGN)designLaden();if(id=="tarife"&&!TF)tfLaden();if(id=="system"&&!SYS)sysLaden();if(id=="daten"&&!DLISTE)datenListe();document.querySelectorAll("section").forEach(s=>s.classList.toggle("aktiv",s.id==id));document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("aktiv",b.id=="n_"+id))}
 async function api(pfad,body,logid){const el=logid&&$(logid);const kn=[...document.querySelectorAll("button")];kn.forEach(b=>b.disabled=true);if(el)el.textContent="… bitte warten (über die Cloud kann das einige Sekunden dauern)";
  try{const r=await fetch(pfad,{method:body===undefined?"GET":"POST",headers:{"X-Token":T,"Content-Type":"application/json"},body:body===undefined?undefined:(body instanceof Blob?body:JSON.stringify(body))});
  if(r.status==401||r.status==403){location.reload();return new Promise(()=>{})}const d=await r.json();if(!r.ok)throw new Error(d.fehler||r.status);if(el)el.textContent=d.log?d.log.join("\n"):"";return d}
@@ -3863,6 +4467,63 @@ async function kkLaden(){const d=await api("/api/kalkulation?prognose="+($("kk_p
  const alt=$("kb_sp").value;$("kb_sp").innerHTML=d.zeilen.map(z=>`<option value="${esc(z.kz)}">${esc(z.name)} (${esc(z.kz)})</option>`).join("");if(alt&&d.zeilen.some(z=>z.kz==alt))$("kb_sp").value=alt;
  $("kb_tarif").innerHTML='<option value="">– kein Tarif (nicht gebucht) –</option>'+T.map(t=>`<option value="${esc(t.name)}">${esc(t.name)} · ${eur(t.preis)}/Jahr</option>`).join("");
  kaZeigen(d.annahmen,d.texte);if(!KB&&d.zeilen.length)kbLaden(true)}
+let GP=null;
+const gz=(v,n=0)=>v==null||v===""?"–":Number(v).toLocaleString("de-DE",{minimumFractionDigits:n,maximumFractionDigits:n});
+async function gpLaden(){gpZeigen(await api("/api/gwplan",undefined,"log_gp"))}
+function gpZeigen(d){if(!d||!d.gesamt)return;GP=d;const g=d.gesamt,e=g.eigen;
+ $("gp_quelle").textContent=d.quelle_daten;$("gp_quelle").className="status"+(d.quelle_daten.startsWith("Excel")?" ok":"");
+ $("log_gp").textContent=(d.log||[]).join("\n");
+ $("gp_k").innerHTML=kachel("theoretische Einnahmen / Jahr",eur(g.einnahme)+"<small>"+eur(g.einnahme_monat)+" im Monat"+(d.annahmen.KU==1?"":" · netto "+eur(g.einnahme_netto))+"</small>","gut")+
+  kachel("Kunden (Buchungsquote)",gz(g.kunden)+"<small>"+pct(g.quote)+" von "+gz(g.parzellen)+" Parzellen</small>","gut")+
+  kachel("Ø Preis je Kunde",eur(g.preis,2)+"<small>"+(g.preis_quelle=="tarife"?"nach Tarifmix":"fester Preis")+" · "+eur(g.preis/12,2)+" / Monat</small>","")+
+  kachel("Standorte · Gateways · Internet",g.standorte+" · "+g.gateways+" · "+g.anschluesse+"<small>eigenständig: "+e.standorte+" · "+e.gateways+" · "+e.anschluesse+"</small>","")+
+  kachel("Investition",eur(g.investition)+"<small>eigenständig "+eur(e.investition)+"</small>","")+
+  kachel("laufende Kosten / Jahr",eur(g.laufend)+"<small>eigenständig "+eur(e.laufend)+" · zzgl. Zahlung "+eur(g.zahlung)+"</small>","")+
+  kachel("Deckungsbeitrag / Jahr",eur(g.db)+"<small>vor zentralen Firmenkosten</small>",g.db>=0?"gut":"schlecht")+
+  kachel("Amortisation",g.amortisation==null?"nie":gz(g.amortisation,1)+" J."+"<small>"+eur(g.inv_kunde)+" je Kunde</small>",g.amortisation!=null&&g.amortisation<=6?"gut":"warn")+
+  kachel("Glasfaser zwischen Sparten",gz(g.faser)+" m","")+
+  kachel("Prüfung",g.fehler?g.fehler+" Fehler":"OK",g.fehler?"schlecht":"gut")+
+  (g.ist_gebucht?kachel("tatsächlich gebucht (Kalkulation)",gz(g.ist_gebucht)+"<small>"+eur(g.ist_einnahme)+" / Jahr</small>","gut"):"");
+ const a=d.annahmen;if(document.activeElement==null||!document.activeElement.closest||!document.activeElement.closest("#netzplanung .reihe")){
+  $("gp_pq").value=g.preis_quelle;$("gp_qm").value=String(a.Quote_Modus);$("gp_qf").value=String(+(a.Quote_fest*100).toFixed(2)).replace(".",",");$("gp_sz").value=String(a.Szenario);
+  $("gp_mix").innerHTML=d.tarife.map(t=>`<div><label>Anteil ${esc(t.name)} (${eur(t.preis)}/Jahr) in %</label><input class="gp_mix" data-t="${esc(t.name)}" value="${String(t.mix).replace(".",",")}" inputmode="decimal"></div>`).join("")}
+ let tt="<table><tr><th>Tarif</th><th>Preis / Jahr</th><th>Anteil</th><th>Kunden</th><th>Einnahmen / Jahr</th><th>Einnahmen / Monat</th></tr>";
+ if(g.preis_quelle=="tarife"){for(const t of d.tarife){const j=g.je_tarif[t.name]||{kunden:0,einnahme:0};tt+=`<tr><td><b>${esc(t.name)}</b></td><td>${eur(t.preis)}</td><td>${pct(t.anteil)}</td><td>${gz(j.kunden)}</td><td>${eur(j.einnahme)}</td><td>${eur(j.einnahme/12)}</td></tr>`}}
+ else tt+=`<tr><td>fester Preis</td><td>${eur(g.preis)}</td><td>100,0 %</td><td>${gz(g.kunden)}</td><td>${eur(g.einnahme)}</td><td>${eur(g.einnahme_monat)}</td></tr>`;
+ tt+=`<tr class="kopf"><td>Alle Sparten</td><td>Ø ${eur(g.preis,2)}</td><td></td><td>${gz(g.kunden)}</td><td>${eur(g.einnahme)}</td><td>${eur(g.einnahme_monat)}</td></tr></table>`;$("gp_tt").innerHTML=tt;
+ const alt=$("gp_stf").value;$("gp_stf").innerHTML='<option value="">alle Standorte</option>'+d.standorte.map(s=>`<option value="${s.nr}">${esc(s.name)} (${s.sparten} Sparten, ${s.gw} GW)</option>`).join("");if(d.standorte.some(s=>String(s.nr)==alt))$("gp_stf").value=alt;
+ gpTabelle();
+ $("gp_st").innerHTML="<table><tr><th>Nr.</th><th>Standort</th><th>Sparten (Reihenfolge)</th><th>Parzellen</th><th>Gateways</th><th>Belegung</th><th>Glasfaser­strecken</th><th>Aggregation</th><th>Kunden</th><th>Bedarf Mbit/s</th><th>Internet</th><th>Investition</th><th>laufend / Jahr</th><th>Prüfung</th></tr>"+
+  d.standorte.map(s=>`<tr class="${s.pruefung.startsWith("Achtung")?"falsch":""}"><td>${s.nr}</td><td><b>${esc(s.name)}</b></td><td>${s.namen.map(esc).join(" → ")}</td><td>${s.parz}</td><td>${s.gw}</td><td>${balken(s.belegung)}</td><td>${s.straenge}</td><td>${s.agg}</td><td>${gz(s.kunden)}</td><td>${gz(s.bedarf)}</td><td>${s.anschluesse}</td><td>${eur(s.inv)}</td><td>${eur(s.lfd)}</td><td>${esc(s.pruefung)}</td></tr>`).join("")+
+  `<tr class="kopf"><td></td><td>${d.standorte.length} Standorte</td><td></td><td>${gz(g.parzellen)}</td><td>${g.gateways}</td><td></td><td></td><td></td><td>${gz(g.kunden)}</td><td></td><td>${g.anschluesse}</td><td></td><td></td><td></td></tr></table>`;
+ gpAnZeigen(d)}
+function gpTabelle(){const d=GP;if(!d)return;const box=$("gp_tab"),y=box.scrollTop,x=box.scrollLeft;const such=$("gp_such").value.trim().toLowerCase(),stf=$("gp_stf").value,nurF=$("gp_err").checked;
+ const inp=(z,f,wert,ph,w)=>`<input class="gp_in${w?" w":""}" data-nr="${z.nr}" data-f="${f}" value="${wert??""}" placeholder="${ph??""}" inputmode="decimal">`;
+ const L=d.zeilen.filter(z=>(!such||z.name.toLowerCase().includes(such)||String(z.nr)==such)&&(!stf||String(z.standort)==stf)&&(!nurF||z.pruefung.startsWith("Fehler")));
+ const sum=(k)=>L.reduce((s,z)=>s+(+z[k]||0),0);
+ let h="<table><tr><th>Nr.</th><th>Sparte</th><th>Parzellen</th><th>Standort</th><th>Zuleitung von</th><th>Reihen­folge</th><th>Glasfaser m</th><th>versorgt durch</th><th>Quote %</th><th>Kunden</th><th>Einnahme / Jahr</th><th>Einnahme / Monat</th><th>tatsächlich gebucht</th><th>Investition</th><th>Deckungs­beitrag</th><th>Amorti­sation</th><th>Prüfung</th></tr>";
+ for(const z of L){const w=z.w||{};const fe=z.pruefung.startsWith("Fehler");
+  h+=`<tr class="${fe?"falsch":z.rolle=="Gateway-Standort"?"dienst":""}"><td>${z.nr}</td><td><b>${esc(z.name)}</b><br><small style="color:var(--muted)">${esc(z.stufe)} · ${esc(z.rolle)}</small></td>
+  <td>${inp(z,"parz",w.parz,z.parz)}</td><td>${inp(z,"standort",w.standort,z.standort)}</td><td>${inp(z,"zuleitung",w.zuleitung,z.zuleitung??"")}</td><td>${inp(z,"reihenfolge",w.reihenfolge,"")}</td>
+  <td>${inp(z,"entfernung",w.entfernung,z.faser_zul||"",1)}</td><td>${esc(z.versorgt)}</td>
+  <td>${inp(z,"quote",w.quote!=null?String(+(w.quote*100).toFixed(2)).replace(".",","):"",(z.quote*100).toFixed(1).replace(".",","))}<br><small style="color:var(--muted)">${esc(z.herkunft)}</small></td>
+  <td>${gz(z.kunden,1)}</td><td><b>${eur(z.einnahme)}</b></td><td>${eur(z.einnahme_monat)}</td><td>${z.ist_gebucht!=null?z.ist_gebucht+" · "+eur(z.ist_einnahme):"–"}</td>
+  <td>${eur(z.investition)}</td><td style="color:${z.db<0?"var(--red)":"inherit"}">${eur(z.db)}</td><td>${z.amortisation==null?"nie":gz(z.amortisation,1)+" J."}</td><td>${esc(z.pruefung)}</td></tr>`}
+ h+=`<tr class="kopf"><td></td><td>${L.length==d.zeilen.length?"Alle Sparten":L.length+" von "+d.zeilen.length+" Sparten"}</td><td>${gz(sum("parz"))}</td><td></td><td></td><td></td><td>${gz(sum("faser_zul"))}</td><td></td><td>${sum("parz")?pct(sum("kunden")/sum("parz")):"–"}</td><td>${gz(sum("kunden"))}</td><td>${eur(sum("einnahme"))}</td><td>${eur(sum("einnahme_monat"))}</td><td>${gz(sum("ist_gebucht"))}</td><td>${L.length==d.zeilen.length?eur(d.gesamt.investition):"–"}</td><td>${L.length==d.zeilen.length?eur(d.gesamt.db):"–"}</td><td></td><td></td></tr></table>`;
+ box.innerHTML=L.length?h:'<p class="hint" style="padding:12px">Keine Sparte passt zum Filter.</p>';box.scrollTop=y;box.scrollLeft=x;
+ box.querySelectorAll(".gp_in").forEach(e=>e.onchange=async()=>{const r=await api("/api/gwplan-sparte",{nr:+e.dataset.nr,[e.dataset.f]:e.value.trim()},"log_gp");if(r&&r.gesamt)gpZeigen(r)})}
+function gpAnZeigen(d){if($("gp_an").dataset.fertig)return;const a=d.annahmen;
+ $("gp_an").innerHTML=d.felder.map(([gr,fs],i)=>`<details class="gp_an"${i==0?" open":""}><summary style="cursor:pointer;font-weight:600;margin-top:8px">${esc(gr)}</summary><div class="reihe" style="margin-top:8px">`+
+  fs.map(([k,t,ein])=>`<div><label>${esc(t)}${ein=="%"?" (%)":""}</label><input class="gp_ai" data-k="${k}" data-p="${ein=="%"?1:0}" value="${String(+(ein=="%"?a[k]*100:a[k]).toFixed(4)).replace(".",",")}" inputmode="decimal"></div>`).join("")+"</div></details>").join("");
+ $("gp_an").dataset.fertig="1"}
+async function gpAnSpeichern(){const an={};document.querySelectorAll(".gp_ai").forEach(e=>an[e.dataset.k]=e.value.trim());const r=await api("/api/gwplan-annahmen",{annahmen:an},"log_gpa");if(r&&r.gesamt){$("gp_an").dataset.fertig="";gpZeigen(r)}}
+async function gpSchnell(){const mix={};document.querySelectorAll(".gp_mix").forEach(e=>mix[e.dataset.t]=e.value.trim()||"0");
+ const r=await api("/api/gwplan-annahmen",{annahmen:{Quote_Modus:$("gp_qm").value,Quote_fest:$("gp_qf").value.trim(),Szenario:$("gp_sz").value},tarifmix:mix,preis_quelle:$("gp_pq").value},"log_gps");if(r&&r.gesamt){$("gp_an").dataset.fertig="";gpZeigen(r)}}
+async function gpReset(was){if(!confirm(was=="wahl"?"Alle eigenen Zuordnungen (Standort, Zuleitung, Reihenfolge, Quote, Mengen) löschen?":was=="daten"?"Importierte Excel-Daten verwerfen und wieder die eingebauten Daten verwenden?":"Alle Einstellungen auf Standard zurücksetzen?"))return;
+ const r=await api("/api/gwplan-zuruecksetzen",{was},was=="annahmen"?"log_gpa":"log_gpi");if(r&&r.gesamt){$("gp_an").dataset.fertig="";gpZeigen(r)}}
+async function gpImport(){const f=$("gp_datei").files[0];if(!f)return;const r=await api("/api/gwplan-import",f,"log_gpi");$("gp_datei").value="";if(r&&r.gesamt){$("gp_an").dataset.fertig="";gpZeigen(r)}}
+function gpCsv(){if(!GP)return;csvSpeichern({spalten:[["nr","Nr."],["name","Sparte"],["parz","Parzellen"],["leer","Leerstand"],["standort","Standort Nr."],["zuleitung","Zuleitung von Nr."],["versorgt","versorgt durch"],["faser_zul","Glasfaser Zuleitung m"],["quote_t","Buchungsquote"],["herkunft","Quote Herkunft"],["kunden_t","Kunden"],["einnahme_t","Einnahme / Jahr"],["monat_t","Einnahme / Monat"],["inv_t","Investition"],["db_t","Deckungsbeitrag / Jahr"],["pruefung","Prüfung"]],
+ zeilen:GP.zeilen.map(z=>Object.assign({},z,{quote_t:(z.quote*100).toFixed(1).replace(".",",")+" %",kunden_t:String(z.kunden).replace(".",","),einnahme_t:String(z.einnahme).replace(".",","),monat_t:String(z.einnahme_monat).replace(".",","),inv_t:String(z.investition).replace(".",","),db_t:String(z.db).replace(".",",")}))},"SparteNet_Netzplanung")}
 function kkCsv(){if(!KK)return;const T=KK.tarife;csvSpeichern({spalten:[["name","Sparte"],["kz","Kürzel"],["gateway","Gateway"],["n","Parzellen"],["gebucht","gebucht"],["rate_t","Buchungsrate"]].concat(T.map(t=>["t_"+t.name,t.name])).concat([["umsatz_brutto","Umsatz/Jahr"],["investition","Investition"],["kosten","lfd. Kosten/Jahr"],["db","Deckungsbeitrag"],["amortisation","Amortisation (J.)"],["status","Status"]]),
  zeilen:KK.zeilen.map(z=>Object.assign({},z,{rate_t:(z.rate*100).toFixed(1).replace(".",",")+" %"},Object.fromEntries(T.map(t=>["t_"+t.name,z.je[t.name]||0]))))},"SparteNet_Kalkulation")}
 function kaZeigen(a,t){$("ka_form").innerHTML=Object.keys(t).map(k=>{const v=a[k];
