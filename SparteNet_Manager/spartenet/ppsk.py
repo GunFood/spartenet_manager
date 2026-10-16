@@ -165,7 +165,9 @@ def akt_ppsk(d, kz, art):
             pw = next(vorrat); neu += 1
         zeilen.append({"Parzelle": n["parzelle"], "Netz": n["name"], "VLAN": n["vlan"], "WLAN": n["ssid"], "Passwort": pw})
     if art != "anzeigen":
-        schreibe_ppsk(kz, zeilen)
+        hier = {z["Netz"] for z in zeilen}
+        schreibe_ppsk(kz, sorted(zeilen + [z for z in bisher if z.get("Netz") not in hier and z.get("Passwort")],
+                                 key=lambda z: int(z.get("Parzelle") or 0)))  # Parzellen an anderen Gateways bleiben erhalten
         register_eintragen([z["Passwort"] for z in zeilen])
         r = pw_regel(d)
         log.append(f"✔ {neu} neue Passwörter ({r['praefix']} + {r['ziffern']} Ziffern, geprüft auf doppelte), {len(zeilen) - neu} beibehalten – gespeichert in PPSK_{kz}.csv")

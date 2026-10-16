@@ -1,4 +1,4 @@
-SparteNet Manager 4.6 (Cloud)
+SparteNet Manager 4.7 (Cloud)
 ===============================
 
 Funktioniert komplett über die UniFi-Cloud (api.ui.com). Kein lokaler Zugriff, kein VPN.
@@ -63,6 +63,24 @@ KALKULATION & AUSLASTUNG (Reiter "Kalkulation")
   Oben: Gesamtauslastung aller Sparten mit Buchungen, Umsatz, Ergebnis, Kleinunternehmer-Grenze.
   "Prognose": Sparten ohne Buchungen mit der Buchungsquote aus den Annahmen hochrechnen.
   Tarifpreise (€ pro Jahr) stehen im Reiter "Tarife".
+
+VLAN-PLANUNG AUS DER NETZPLANUNG – neu in 4.7
+  Die Netzplanung ist die Vorlage: Standort, Gateways (je 55 Parzellen) und Reihenfolge ergeben den VLAN-Plan.
+  Schema (eindeutig je Standort, weil alle Gateways eines Standorts an derselben Glasfaser hängen):
+    Parzelle     VLAN = 1000 + 200 × (VLAN-Block − 1) + Parzelle  → letzte zwei Ziffern = Parzellennummer
+                 Block 1: 1001–1199 · Block 2: 1201–1399 · … · Block 15: 3801–3999 (höchstens 15 Sparten je Standort)
+    Vorstand     VLAN 100 + Sparten-ID · Gäste 200 + Sparten-ID · Technik 300 + Sparten-ID (Sparten-ID = Nr. 1–88, überall eindeutig)
+    Subnetze     10.<Sparten-ID>.<Parzelle>.0/24 · Vorstand .200 · Gäste .201 · Technik .250 (überall eindeutig)
+    VLAN-Block   Reihenfolge der Sparte am Standort (1 = Standort-Sparte), in der Tabelle fest einstellbar (1–15)
+  Je Gateway: höchstens 55 Parzellen + Vorstand/Gäste/Technik der Sparten, deren erste Parzellen dort liegen.
+  Eine Sparte kann sich über mehrere Gateways erstrecken (z. B. Parzellen 1–55 an GW 1, 56–110 an GW 2).
+  Kürzel je Sparte (2–5 Zeichen A–Z/0–9, eindeutig) sind vorbelegt und in der Tabelle änderbar.
+  Netzplanung → "VLAN-Plan je Gateway": Standort wählen, je Gateway "In Planung übernehmen" (die bisherige
+  Planung wird gesichert) oder "VLAN-Liste als CSV". Danach Konsole des Gateways wählen, Abgleich, Einrichten.
+  Passwörter je Parzelle (PPSK_<Kürzel>.csv) behalten die Parzellen der anderen Gateways einer Sparte.
+  Achtung bei bestehenden Gateways: Das neue Schema ändert VLANs und Subnetze (Sparten-ID = Nr. aus dem Konzept,
+  z. B. Buchenweg 20 statt 1). Der Abgleich zeigt die Unterschiede; Änderungen am Gateway nur mit Vorschau.
+  Kleingarten_Gateway_Planung.xlsx: Blatt "Anlagen" mit Kürzel und VLAN-Block, Blatt "Netz" rechts mit dem VLAN-Plan.
 
 AKTUALISIERUNG (Reiter "Systeminfo" → "Aktualisierung", nur Administratoren) – neu in 4.6
   Wie bei Nextcloud: Der Manager prüft regelmäßig (Standard alle 24 Stunden) auf GitHub, ob es eine neuere

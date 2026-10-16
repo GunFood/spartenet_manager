@@ -284,6 +284,8 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/gwplan-annahmen": lambda: akt_gwplan_annahmen(d, b),
                 "/api/gwplan-zuruecksetzen": lambda: akt_gwplan_zuruecksetzen(d, (b or {}).get("was")),
                 "/api/gwplan-import": lambda: akt_gwplan_import(d, roh),
+                "/api/gwplan-vlan": lambda: akt_gwplan_vlan(d, q.get("standort", [""])[0], q.get("gw", [""])[0]),
+                "/api/gwplan-vlan-uebernehmen": lambda: akt_gwplan_vlan_uebernehmen(d, b),
                 "/api/buchungen": lambda: akt_buchungen(d, q.get("sparte", [""])[0]) if b is None else akt_buchungen_speichern(d, b.get("sparte", ""), b.get("aenderungen")),
                 "/api/fern": lambda: akt_fern(d) if b is None else akt_fern_speichern(d, b),
                 "/api/tailscale": lambda: akt_tailscale(bool(b.get("an"))),
