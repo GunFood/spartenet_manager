@@ -71,6 +71,20 @@ def text_einzeilig(t, laenge=500):
     return re.sub(r"[\x00-\x1f\x7f]+", " ", str(t))[:laenge]
 
 
+# ---- Ereignisse für Automationen (Empfänger trägt das Modul „automation“ ein) ------------------
+SCHREIB_SPERRE = threading.RLock()   # schreibende Anfragen nacheinander (Oberfläche, API, Automationen)
+EREIGNIS_EMPFAENGER = []
+
+
+def ereignis(typ, daten, d=None):
+    """meldet ein Ereignis (z. B. „buchung“) an die Automationen – Fehler dort brechen die eigentliche Aktion nie ab"""
+    for f in list(EREIGNIS_EMPFAENGER):
+        try:
+            f(typ, dict(daten), d)
+        except Exception:
+            LOG.error("Automation bei Ereignis %s fehlgeschlagen:\n%s", typ, traceback.format_exc())
+
+
 # ---- Namensschema -------------------------------------------------------------------------
 NETZ_PARZELLE = "{kz}-Paz.{p:03d}"
 NETZ_VORSTAND = "{kz}-Vorstand"

@@ -4,7 +4,6 @@ from .oberflaeche import *  # noqa: F401,F403 – alle Namen der vorherigen Modu
 
 # =============================================================== Webserver
 PROXY_VERTRAUEN = os.environ.get("SPARTENET_PROXY", "0").strip().lower() in ("1", "ja", "true", "yes")
-SCHREIB_SPERRE = threading.RLock()   # schreibende Anfragen nacheinander (S4)
 CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
        "connect-src 'self'; frame-src 'self' blob: data:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'self'")
 
@@ -116,6 +115,21 @@ class Handler(BaseHTTPRequestHandler):
             self._send(503, {"fehler": WARTUNG["text"] or "Wartungsmodus", "wartung": True}, extra={"Retry-After": "5"})
         return True
 
+    def _api_v1(self, methode, u):
+        """Schnittstelle für andere Programme: Anmeldung mit API-Schlüssel statt Sitzung (kein Cookie, kein X-Token)"""
+        roh = b""
+        if methode == "POST":
+            try:
+                n = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                return self._send(400, {"ok": False, "fehler": "Ungültige Anfrage."})
+            if n < 0 or n > API_MAX_BYTES:
+                return self._send(413, {"ok": False, "fehler": "Anfrage zu groß."})
+            roh = self.rfile.read(n)
+        code, antwort = api_anfrage(methode, u.path.rstrip("/"), urllib.parse.parse_qs(u.query), roh,
+                                    {"Authorization": self.headers.get("Authorization"), "X-API-Key": self.headers.get("X-API-Key")})
+        return self._send(code, antwort, extra={"WWW-Authenticate": "Bearer"} if code == 401 else None)
+
     def do_GET(self):
         u = urllib.parse.urlparse(self.path)
         if u.path in PWA_ICONS or u.path in ("/manifest.webmanifest", "/sw.js", "/offline.html"):
@@ -124,6 +138,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {"produkt": "SparteNet Manager", "version": VERSION, "wartung": WARTUNG["an"]})
         if self._wartung():
             return
+        if u.path.startswith("/api/v1/"):
+            return self._api_v1("GET", u)
         d = self._lade()
         if d is None:
             return
@@ -193,6 +209,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         if u.path == "/login":
             return self._anmelden()
+        if u.path.startswith("/api/v1/"):
+            return self._api_v1("POST", u)
         d = self._lade()
         if d is None:
             return
@@ -338,6 +356,9 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/gwplan-import": lambda: akt_gwplan_import(d, roh),
                 "/api/gwplan-vlan": lambda: akt_gwplan_vlan(d, q.get("standort", [""])[0], q.get("gw", [""])[0]),
                 "/api/gwplan-vlan-uebernehmen": lambda: akt_gwplan_vlan_uebernehmen(d, b),
+                "/api/zuteilung": lambda: akt_zuteilung(d),
+                "/api/zuteilung-einstellen": lambda: akt_zuteilung_einstellen(d, b or {}, ich),
+                "/api/zuteilung-gateway": lambda: akt_zuteilung_gateway(d, b or {}),
                 "/api/buchungen": lambda: akt_buchungen(d, q.get("sparte", [""])[0]) if b is None else akt_buchungen_speichern(d, b.get("sparte", ""), b.get("aenderungen")),
                 "/api/fern": lambda: akt_fern(d) if b is None else akt_fern_speichern(d, b),
                 "/api/tailscale": lambda: akt_tailscale(bool(b.get("an"))),
@@ -364,6 +385,15 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/2fa-aus": lambda: akt_2fa_aus(d, ich, (b or {}).get("code")),
                 "/api/2fa-zuruecksetzen": lambda: akt_2fa_zuruecksetzen(d, (b or {}).get("name"), ich),
                 "/api/sicherheit-einstellungen": lambda: akt_sicherheit_einstellungen(d, b or {}, ich),
+                "/api/automation": lambda: akt_automation(d, mit_smtp=rechte["art"] == "admin"),
+                "/api/automation-speichern": lambda: akt_automation_speichern(d, b or {}, ich),
+                "/api/automation-loeschen": lambda: akt_automation_loeschen(d, b or {}, ich),
+                "/api/automation-probe": lambda: akt_automation_probe(d, b or {}),
+                "/api/smtp-speichern": lambda: akt_smtp_speichern(d, b or {}, ich),
+                "/api/smtp-test": lambda: akt_smtp_test(d, b or {}),
+                "/api/api-schluessel": lambda: akt_api(d),
+                "/api/api-schluessel-neu": lambda: akt_api_schluessel_neu(d, b or {}, ich),
+                "/api/api-schluessel-aendern": lambda: akt_api_schluessel_aendern(d, b or {}, ich),
                 "/api/update": lambda: akt_update(d),
                 "/api/update-pruefen": lambda: akt_update_pruefen(d),
                 "/api/update-installieren": lambda: akt_update_installieren(d, b, ich),

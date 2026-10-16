@@ -15,13 +15,22 @@ def _plan_standort(roh, g, pre):
         except (TypeError, ValueError):
             raise Fehler(f"Sparte „{s.get('name')}“: Sparten-ID, Parzellen, Block und Bereich müssen Zahlen sein.")
         kz = kz_pruefen(s.get("kz"), pre)
+        liste = None
+        if isinstance(s.get("parzellen"), list):   # Gateway-Zuteilung nach Buchung: nur die zugeteilten Parzellen
+            try:
+                liste = sorted({int(x) for x in s["parzellen"]})
+            except (TypeError, ValueError):
+                raise Fehler(f"Sparte „{s.get('name')}“: Parzellenliste ungültig.")
+            if liste and not 1 <= liste[0] <= liste[-1] <= min(199, n):
+                raise Fehler(f"Sparte „{s.get('name')}“: Parzellen 1–{n}.")
+            p_von, p_bis = (liste[0], liste[-1]) if liste else (1, max(1, n))
         if not kz or not 1 <= sid <= 254 or not 1 <= block <= 15 or not 1 <= p_von <= p_bis <= 199 or n < p_bis:
             raise Fehler(f"Sparte „{s.get('name')}“: Kürzel, Sparten-ID (1–254), VLAN-Block (1–15) und Parzellen von–bis (1–199) prüfen.")
         sparten.append({"name": str(s["name"]), "kz": kz, "sid": sid, "n": n, "slot": block, "block": block, "p_von": p_von, "p_bis": p_bis,
-                        "dienst": bool(s.get("dienst", True))})
+                        "parzellen": liste if liste is not None else list(range(p_von, p_bis + 1)), "dienst": bool(s.get("dienst", True))})
     if len({s["sid"] for s in sparten}) != len(sparten) or len({s["kz"] for s in sparten}) != len(sparten) or len({s["block"] for s in sparten}) != len(sparten):
         raise Fehler("Sparten-ID, Kürzel und VLAN-Block müssen je Sparte einmalig sein.")
-    parz = sum(s["p_bis"] - s["p_von"] + 1 for s in sparten)
+    parz = sum(len(s["parzellen"]) for s in sparten)
     if parz > 55:
         raise Fehler(f"{parz} Parzellen an einem Gateway – höchstens 55 (Netzplanung: 55 Parzellen je Gateway).")
     return sparten
@@ -52,6 +61,7 @@ def plan_berechnen(roh):
         raise Fehler("Mehr als 10 Steckplätze belegt.")
     for s in sparten:
         s.setdefault("p_von", 1); s.setdefault("p_bis", s["n"]); s.setdefault("dienst", True)
+        s.setdefault("parzellen", list(range(s["p_von"], s["p_bis"] + 1)))
     if len({s["sid"] for s in sparten}) != len(sparten) or len({s["kz"] for s in sparten}) != len(sparten):
         raise Fehler("Sparten-ID und Kürzel müssen je Sparte einmalig sein.")
     netze = []
@@ -67,7 +77,7 @@ def plan_berechnen(roh):
         else:
             vp = lambda p: vlan_parzelle(s["slot"], p)
             vd = {"vorstand": 2000 + s["slot"] * 10 + 1, "gaeste": 2000 + s["slot"] * 10 + 2, "technik": 2000 + s["slot"] * 10 + 9}
-        for p in range(s["p_von"], s["p_bis"] + 1):
+        for p in s["parzellen"]:
             netze.append(e("parzelle", NETZ_PARZELLE.format(p=p, **f), vp(p), p, WLAN_PAECHTER.format(**f), p, f"Passwort Parzelle {p}"))
         if s["dienst"]:
             netze.append(e("vorstand", NETZ_VORSTAND.format(**f), vd["vorstand"], 200, WLAN_VORSTAND.format(**f), "", "eigenes WLAN"))
@@ -76,6 +86,7 @@ def plan_berechnen(roh):
     if len({n["vlan"] for n in netze}) != len(netze):
         raise Fehler("VLAN-IDs im Plan sind nicht eindeutig.")
     return {"gateway": g, "gatewayname": str(roh.get("gatewayname") or f"Gateway {g}"), "praefix": pre, "sparten": sparten, "netze": netze, "schema": schema,
+            "dynamisch": bool(roh.get("dynamisch")),
             "gateway_netz": {"name": "Gateway", "vlan": 1, "netz": f"10.0.{g}.0/24", "router": f"10.0.{g}.1"}}
 
 

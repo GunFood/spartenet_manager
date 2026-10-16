@@ -36,7 +36,7 @@ self.addEventListener("fetch",e=>{const r=e.request,u=new URL(r.url);if(r.method
 """
 
 OFFLINE_HTML = """<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#1d2f3e"><title>SparteNet – keine Verbindung</title><style>
+<meta name="theme-color" content="#1d2f3e"><title>SparteNet – keine Verbindung</title><style>@media (prefers-color-scheme:dark){body{background:#0f161c!important;color:#e2e8ec!important}.k{background:#18222a!important;border-color:#2e3c46!important}p{color:#9aa9b3!important}}
 body{margin:0;font-family:system-ui,Roboto,Arial,sans-serif;background:#f5f7f4;color:#1d2f3e;display:grid;place-items:center;min-height:100vh;padding:20px;box-sizing:border-box}
 .k{background:#fff;border:1px solid #d9e0d6;border-radius:14px;padding:26px;max-width:420px;text-align:center}img{width:96px}h1{font-size:20px}p{color:#5d6b75;font-size:15px;line-height:1.45;text-align:left}
 button{background:#3a9a1f;color:#fff;border:0;border-radius:8px;padding:13px 22px;font-size:16px;margin-top:8px}</style></head><body><div class="k">
@@ -47,7 +47,7 @@ button{background:#3a9a1f;color:#fff;border:0;border-radius:8px;padding:13px 22p
 LOGIN_HTML = """<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>SparteNet Manager – Anmelden</title><meta name="theme-color" content="#1d2f3e"><link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/favicon.png"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="SparteNet">
-<style>body{margin:0;font-family:system-ui,Roboto,Arial,sans-serif;background:#1d2f3e;color:#1d2f3e;display:grid;place-items:center;min-height:100vh;padding:20px;box-sizing:border-box}
+<script>try{const f=localStorage.getItem("sn_farbe");if(f=="hell"||f=="dunkel")document.documentElement.dataset.farbe=f}catch(e){}</script><style>@media (prefers-color-scheme:dark){:root:not([data-farbe=hell]) body{background:#0b1218}:root:not([data-farbe=hell]) .k{background:#18222a;color:#e2e8ec}:root:not([data-farbe=hell]) input{background:#0f161c;color:#e2e8ec;border-color:#2e3c46}:root:not([data-farbe=hell]) p{color:#9aa9b3}}:root[data-farbe=dunkel] body{background:#0b1218}:root[data-farbe=dunkel] .k{background:#18222a;color:#e2e8ec}:root[data-farbe=dunkel] input{background:#0f161c;color:#e2e8ec;border-color:#2e3c46}:root[data-farbe=dunkel] p{color:#9aa9b3}</style><style>body{margin:0;font-family:system-ui,Roboto,Arial,sans-serif;background:#1d2f3e;color:#1d2f3e;display:grid;place-items:center;min-height:100vh;padding:20px;box-sizing:border-box}
 .k{background:#fff;border-radius:16px;padding:28px 24px;width:100%;max-width:380px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.3)}img{width:110px}h1{font-size:21px;margin:8px 0 4px}h1 span{color:#3a9a1f}
 p{color:#5d6b75;font-size:14px;margin:4px 0 18px}input{width:100%;box-sizing:border-box;font-size:22px;letter-spacing:4px;text-align:center;padding:13px;border:1px solid #d9e0d6;border-radius:10px}
 button{width:100%;background:#3a9a1f;color:#fff;border:0;border-radius:10px;padding:14px;font-size:17px;margin-top:12px;font-weight:600}button:disabled{opacity:.6}

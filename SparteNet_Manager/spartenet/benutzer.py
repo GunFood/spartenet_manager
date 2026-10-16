@@ -1,5 +1,5 @@
 """SparteNet Manager – Benutzerkonten und Zugriffsrechte je Bereich (Arbeitsblatt/Funktion: kein Zugriff, lesen, schreiben)"""
-from .netzplanung import *  # noqa: F401,F403 – alle Namen der vorherigen Module
+from .zuteilung import *  # noqa: F401,F403 – alle Namen der vorherigen Module
 
 # Das Konto „admin“ meldet sich mit dem Manager-Passwort an (SPARTENET_PASSWORD bzw. SPARTENET_PASSWORD_FILE)
 # und kann weitere Konten anlegen. Weitere Konten liegen im Datenspeicher (Datei oder MariaDB) unter „benutzer“,
@@ -29,6 +29,7 @@ BEREICHE = [
     ("karten", "Zugangskarten drucken (lesen; braucht WLAN-Passwörter lesen) und Kartendesign ändern (schreiben)", ("kein", "lesen", "schreiben"), ["einrichten", "kartendesign"]),
     ("voucher", "Gast-Voucher erstellen", ("kein", "lesen", "schreiben"), ["voucher", "start"]),
     ("unterlagen", "Unterlagen: Dateien ansehen (lesen), hochladen und löschen (schreiben)", ("kein", "lesen", "schreiben"), ["unterlagen"]),
+    ("automationen", "Automationen: Regeln ansehen (lesen), anlegen und ändern (schreiben); E-Mail-Versand und API-Schlüssel nur Administratoren", ("kein", "lesen", "schreiben"), ["automationen"]),
     ("verbindung", "Verbindung, Cloud-Key, Handy & Tablet, Protokoll, Diagnose", ("kein", "lesen", "schreiben"), ["verbindung"]),
 ]
 BEREICH_TEXT = {k: t for k, t, _, _ in BEREICHE}
@@ -54,20 +55,22 @@ _LESEN = {
     "/api/start": "start", "/api/parzelle": "start",
     "/api/test": "auslesen", "/api/lesen": "auslesen", "/api/abgleich": "auslesen", "/api/vergleich": "auslesen", "/api/journal": "auslesen",
     "/api/system": "auslesen", "/api/daten-liste": "auslesen", "/api/daten-pruefen": "auslesen",
-    "/api/tarif-vergleich": "tarife", "/api/tarif-erkennen": "buchungen", "/api/kalkulation": "kalkulation", "/api/gwplan": "netzplanung", "/api/gwplan-vlan": "netzplanung",
+    "/api/tarif-vergleich": "tarife", "/api/tarif-erkennen": "buchungen", "/api/kalkulation": "kalkulation", "/api/gwplan": "netzplanung", "/api/gwplan-vlan": "netzplanung", "/api/zuteilung": "netzplanung",
     "/api/karten-vorschau": "karten", "/api/karten": "karten", "/api/log": "verbindung",
     "/api/unterlagen": "unterlagen", "/api/unterlage-datei": "unterlagen",
+    "/api/automation": "automationen",
 }
 _GET_LESEN_SONST_SCHREIBEN = {"/api/tarife": "tarife", "/api/buchungen": "buchungen", "/api/design": "karten", "/api/fern": "verbindung"}
-_VORSCHAU = {"/api/netze": "netze", "/api/uebertragen": "wlan_pw", "/api/ppsk-hochladen": "wlan_pw", "/api/tarif-uebertragen": "tarife", "/api/voucher": "voucher"}
+_VORSCHAU = {"/api/netze": "netze", "/api/uebertragen": "wlan_pw", "/api/ppsk-hochladen": "wlan_pw", "/api/tarif-uebertragen": "tarife", "/api/voucher": "voucher", "/api/zuteilung-gateway": "netze"}
 _SCHREIBEN = {
     "/api/excel": "planung", "/api/schreibtest": "netze",
     "/api/ppsk-speichern": "wlan_pw", "/api/rueckgaengig": "wlan_pw", "/api/passwort": "wlan_pw",
     "/api/tarif-rueckgaengig": "tarife", "/api/tarif-zuordnung": "buchungen",
     "/api/kalk-annahmen": "kalkulation", "/api/kalk-sparte": "kalkulation", "/api/kalk-import": "kalkulation",
-    "/api/gwplan-vlan-uebernehmen": "planung", "/api/gwplan-sparte": "netzplanung", "/api/gwplan-annahmen": "netzplanung", "/api/gwplan-zuruecksetzen": "netzplanung", "/api/gwplan-import": "netzplanung",
+    "/api/gwplan-vlan-uebernehmen": "planung", "/api/gwplan-sparte": "netzplanung", "/api/gwplan-annahmen": "netzplanung", "/api/gwplan-zuruecksetzen": "netzplanung", "/api/gwplan-import": "netzplanung", "/api/zuteilung-einstellen": "netzplanung",
     "/api/logo": "karten", "/api/logo-loeschen": "karten",
     "/api/unterlage-hochladen": "unterlagen", "/api/unterlage-aendern": "unterlagen", "/api/unterlage-loeschen": "unterlagen",
+    "/api/automation-speichern": "automationen", "/api/automation-loeschen": "automationen", "/api/automation-probe": "automationen",
     "/api/konsolen": "verbindung", "/api/log-loeschen": "verbindung", "/api/tailscale": "verbindung", "/api/diagnose": "verbindung",
 }
 
@@ -137,7 +140,9 @@ SPARTE_PFLICHT = {"/api/ppsk", "/api/ppsk-speichern", "/api/netze", "/api/uebert
                   "/api/ppsk-hochladen", "/api/karten", "/api/buchungen", "/api/parzelle", "/api/kalk-sparte"}
 NUR_OHNE_BESCHRAENKUNG = {"/api/excel", "/api/tarif-zuordnung", "/api/tarif-uebertragen", "/api/tarif-rueckgaengig", "/api/kalk-annahmen",
                           "/api/kalk-import", "/api/gwplan-annahmen", "/api/gwplan-zuruecksetzen", "/api/gwplan-import", "/api/gwplan-vlan-uebernehmen",
-                          "/api/logo", "/api/logo-loeschen", "/api/schreibtest", "/api/konsolen", "/api/log-loeschen", "/api/tailscale", "/api/diagnose"}
+                          "/api/logo", "/api/logo-loeschen", "/api/schreibtest", "/api/konsolen", "/api/log-loeschen", "/api/tailscale", "/api/diagnose",
+                          "/api/zuteilung-einstellen", "/api/zuteilung-gateway",
+                          "/api/automation", "/api/automation-speichern", "/api/automation-loeschen", "/api/automation-probe"}
 NUR_OHNE_BESCHRAENKUNG_SCHREIBEND = {"/api/plan", "/api/tarife", "/api/design", "/api/einstellungen", "/api/fern", "/api/pw-regel"}
 
 

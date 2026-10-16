@@ -206,6 +206,7 @@ def akt_buchungen_speichern(d, kz, aenderungen):
         raise Fehler("Sparte unbekannt oder ungültige Angaben.")
     namen = {t["name"] for t in tarife_pruefen(d["tarife"])}
     b = d.setdefault("buchungen", {}).setdefault(kz, {})
+    vorher = dict(b)
     for p, t in aenderungen.items():
         if not str(p).isdigit() or not 1 <= int(p) <= sp["n"]:
             raise Fehler(f"Parzelle {p} gibt es in {kz} nicht (1–{sp['n']}).")
@@ -219,6 +220,10 @@ def akt_buchungen_speichern(d, kz, aenderungen):
         d["buchungen"].pop(kz, None)
     speichere(d)
     journal(f"Buchungen {kz}: {len(aenderungen)} Änderung(en), jetzt {len(b)} gebucht")
+    for p in sorted({str(int(x)) for x in aenderungen}, key=int):
+        if vorher.get(p) != b.get(p):
+            ereignis("buchung" if b.get(p) else "kuendigung", {"sparte": kz, "sparte_name": sp["name"], "parzelle": int(p),
+                                                             "tarif": b.get(p, ""), "tarif_alt": vorher.get(p, "")}, d)
     return {"log": [f"✔ {len(aenderungen)} Änderung(en) gespeichert – {len(b)} von {sp['n']} Parzellen gebucht. "
                     "Ans Gateway (Bandbreite/Netzgröße) geht das über den Reiter „Tarife“."]}
 
