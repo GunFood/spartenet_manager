@@ -207,7 +207,11 @@ nav{position:sticky;top:0;z-index:20}
 <h3 style="margin-top:18px" id="h_hin"></h3><div class="tab" id="tab_hin"></div>
 <h3 style="margin-top:18px" id="h_feh"></h3><div class="tab" id="tab_feh"></div>
 <h3 style="margin-top:18px" id="h_abw"></h3><div class="tab" id="tab_abw"></div>
-<h3 style="margin-top:18px" id="h_cli"></h3><div class="tab" id="tab_cli"></div></div></section>
+<h3 style="margin-top:18px" id="h_cli"></h3><div class="tab" id="tab_cli"></div></div>
+<div class="karte" data-bereich="netze" id="um_karte"><h2>Umzugshilfe: vorhandene Netze auf das neue VLAN-Schema</h2>
+<p class="hint">Für Gateways, die schon mit dem alten Schema laufen (z. B. Buchenweg): Netze mit gleichem Namen bekommen die VLAN-ID, das Subnetz, die Router-IP und den DHCP-Bereich aus der aktiven Planung. Netzmaske (Tarif) und Netz-ID bleiben – Passwörter, Tarife und Port-Profile gelten weiter. Die Reihenfolge wählt der Manager so, dass nie zwei Netze dieselbe VLAN-ID oder dasselbe Subnetz haben. <b>Geräte in umgestellten Netzen brauchen danach eine neue IP</b> (WLAN aus/an) – am besten außerhalb der Gartenzeit und erst mit „nur das erste“ testen.</p>
+<div class="knoepfe"><button class="k" onclick="umVorschau()">Vorschau</button><button class="k p" id="um_los" onclick="umAusfuehren(false)" disabled>Ausgewählte umstellen</button><button class="k" id="um_eins" onclick="umAusfuehren(true)" disabled>Nur das erste umstellen</button><button class="k" onclick="umZurueck()">Umzug rückgängig</button></div>
+<div class="tab" id="um_tab"></div><div class="log" id="log_um"></div></div></section>
 
 <section id="einrichten"><div class="karte"><h2>Sparte einrichten</h2><p class="hint">Immer zuerst „Vorschau“. Vor Änderungen eine Sicherung der Konsole machen.</p>
 <label>Sparte</label><select id="ein_sp" onchange="ssid()"></select></div>
@@ -1030,6 +1034,15 @@ function farbeZeigen(){const f=farbeLesen(),k=$("farbe_k");if(k){k.textContent=F
  const dunkel=f=="dunkel"||(f=="system"&&matchMedia("(prefers-color-scheme: dark)").matches);const m=document.querySelector('meta[name=theme-color]');if(m)m.content=dunkel?"#0b1218":"#1d2f3e"}
 function farbeWechseln(){const r=["system","hell","dunkel"];farbeSetzen(r[(r.indexOf(farbeLesen())+1)%3])}
 try{matchMedia("(prefers-color-scheme: dark)").addEventListener("change",farbeZeigen)}catch(e){}
+
+let UM=null;
+async function umVorschau(){const d=await api("/api/umzug",{},"log_um");UM=d;
+ $("um_tab").innerHTML=d.zeilen.length?'<table><tr><th><input type="checkbox" id="um_alle" checked style="width:auto" onchange="document.querySelectorAll(\'.um_w:not(:disabled)\').forEach(e=>e.checked=this.checked)"></th><th>Netz</th><th>VLAN alt → neu</th><th>Subnetz alt → neu</th><th>Änderung</th></tr>'+d.zeilen.map(z=>`<tr${z.blockiert?' class="falsch"':""}><td><input type="checkbox" class="um_w" value="${esc(z.id)}" style="width:auto"${z.blockiert?"":" checked"}></td><td class="mono">${esc(z.netz)}</td><td class="mono">${esc(z.vlan_alt||"–")} → ${esc(z.vlan_neu)}</td><td class="mono">${esc(z.subnetz_alt)} → ${esc(z.subnetz_neu)}</td><td>${esc(z.text)}${z.blockiert?'<br><small class="fehler" style="color:var(--red)">'+esc(z.blockiert)+"</small>":""}</td></tr>`).join("")+"</table>":'<p class="hint" style="padding:10px">Nichts umzustellen – alle vorhandenen Netze passen zur Planung.</p>';
+ $("um_los").disabled=$("um_eins").disabled=!d.zeilen.length}
+async function umAusfuehren(eins){const w=[...document.querySelectorAll(".um_w:checked")].map(e=>e.value);if(!w.length)return $("log_um").textContent="Nichts ausgewählt.";
+ if(!confirm((eins?"Nur das erste ausgewählte Netz":w.length+" Netz(e)")+" jetzt am Gateway umstellen?\n\nGeräte in diesen Netzen verlieren kurz die Verbindung und bekommen eine neue IP. Vorher eine Sicherung der Konsole machen. Der Manager sichert den alten Stand für „Umzug rückgängig“."))return;
+ await api("/api/umzug",{ausfuehren:true,netze:w,nur_eins:eins},"log_um");$("um_los").disabled=$("um_eins").disabled=true;$("um_tab").innerHTML=""}
+async function umZurueck(){if(!confirm("Letzten Umzug rückgängig machen? Die Netze bekommen VLAN, Subnetz und DHCP-Bereich von vorher zurück."))return;await api("/api/umzug-rueckgaengig",{},"log_um")}
 
 let UL=null;
 async function ulLaden(){const d=await api("/api/unterlagen",undefined,"log_ul");UL=d;

@@ -96,6 +96,19 @@ API-SCHNITTSTELLE FÜR ANDERE PROGRAMME – neu in 4.8
   Höchstens 120 Anfragen je Minute und Schlüssel (SPARTENET_API_PRO_MINUTE). Zahlungsanbieter über n8n/Zapier/Make
   anbinden. Von außen nur über HTTPS (Reverse-Proxy, dann SPARTENET_PROXY=1).
 
+UMZUGSHILFE (Reiter "Abgleich") – neu in 4.8
+  Für Gateways mit dem alten Schema (z. B. Buchenweg): erst das Gateway aus der Netzplanung übernehmen und die
+  Konsole wählen, dann "Vorschau". Netze mit gleichem Namen bekommen VLAN, Subnetz, Router-IP und DHCP-Bereich
+  aus der Planung; Netzmaske (Tarif) und Netz-ID bleiben, Passwörter/Tarife/Port-Profile gelten weiter.
+  Reihenfolge automatisch ohne doppelte VLANs/Subnetze; Blockiertes (z. B. VLAN schon von einem fremden Netz belegt)
+  wird angezeigt. "Nur das erste umstellen" zum Testen, "Umzug rückgängig" stellt den vorherigen Stand her.
+  Geräte in umgestellten Netzen brauchen danach eine neue IP (WLAN aus/an); feste IPs und Firewall-Regeln prüfen.
+
+TESTS – neu in 4.8
+  python -m unittest discover -s tests -t .      (ohne Gateway; startet einen Testserver auf einem freien Port)
+  Mit MariaDB: zusätzlich TEST_SPARTENET_DB_HOST/_PORT/_USER/_PASSWORD/_NAME setzen (eigene, leere Testdatenbank!).
+  GitHub Actions (.github/workflows/tests.yml): Tests mit Dateispeicher und MariaDB, Docker-Image bauen und starten.
+
 UNTERLAGEN, DRUCKEN, DATENSICHERUNG, ZWEI-FAKTOR, FARBSCHEMA – neu in 4.8
   Unterlagen: Dateien (PDF, Bilder, Office, CSV, ZIP) allgemein oder je Sparte; keine Webseiten/SVG/Programme.
   Jeder Kasten hat oben links "Drucken / PDF" (im Druckdialog "Als PDF speichern").

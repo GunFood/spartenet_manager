@@ -1,0 +1,66 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests (${{ matrix.speicher }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        speicher: [dateien, mariadb]
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_DATABASE: spartenet
+          MARIADB_USER: spartenet
+          MARIADB_PASSWORD: nur-fuer-ci-tests
+          MARIADB_RANDOM_ROOT_PASSWORD: "1"
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Pakete
+        run: pip install -r SparteNet_Manager/requirements.txt
+      - name: Syntax
+        run: python -m compileall -q SparteNet_Manager
+      - name: Tests mit Dateispeicher
+        if: matrix.speicher == 'dateien'
+        run: python -m unittest discover -s tests -t . -v
+      - name: Tests mit MariaDB
+        if: matrix.speicher == 'mariadb'
+        env:
+          TEST_SPARTENET_DB_HOST: 127.0.0.1
+          TEST_SPARTENET_DB_PORT: "3306"
+          TEST_SPARTENET_DB_USER: spartenet
+          TEST_SPARTENET_DB_PASSWORD: nur-fuer-ci-tests
+          TEST_SPARTENET_DB_NAME: spartenet
+        run: python -m unittest tests.test_web -v
+
+  docker:
+    name: Docker-Image bauen
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bauen
+        run: docker build -t spartenet-manager:test SparteNet_Manager
+      - name: Starten und Statusseite prüfen
+        run: |
+          echo "Ein-Test-Passwort-fuer-CI" > /tmp/pw.txt && chmod 644 /tmp/pw.txt
+          docker run -d --name sn -p 8765:8765 -e SPARTENET_HOST=0.0.0.0 -e SPARTENET_DATA_DIR=/data -e SPARTENET_KEIN_BROWSER=1 \
+            -e SPARTENET_UPDATE_PRUEFEN=0 -e SPARTENET_PASSWORD_FILE=/run/pw.txt -v /tmp/pw.txt:/run/pw.txt:ro spartenet-manager:test
+          for i in $(seq 1 30); do curl -fs http://127.0.0.1:8765/status && exit 0; sleep 1; done
+          docker logs sn; exit 1

@@ -1,5 +1,5 @@
 """SparteNet Manager – Benutzerkonten und Zugriffsrechte je Bereich (Arbeitsblatt/Funktion: kein Zugriff, lesen, schreiben)"""
-from .zuteilung import *  # noqa: F401,F403 – alle Namen der vorherigen Module
+from .umzug import *  # noqa: F401,F403 – alle Namen der vorherigen Module
 
 # Das Konto „admin“ meldet sich mit dem Manager-Passwort an (SPARTENET_PASSWORD bzw. SPARTENET_PASSWORD_FILE)
 # und kann weitere Konten anlegen. Weitere Konten liegen im Datenspeicher (Datei oder MariaDB) unter „benutzer“,
@@ -61,9 +61,9 @@ _LESEN = {
     "/api/automation": "automationen",
 }
 _GET_LESEN_SONST_SCHREIBEN = {"/api/tarife": "tarife", "/api/buchungen": "buchungen", "/api/design": "karten", "/api/fern": "verbindung"}
-_VORSCHAU = {"/api/netze": "netze", "/api/uebertragen": "wlan_pw", "/api/ppsk-hochladen": "wlan_pw", "/api/tarif-uebertragen": "tarife", "/api/voucher": "voucher", "/api/zuteilung-gateway": "netze"}
+_VORSCHAU = {"/api/netze": "netze", "/api/uebertragen": "wlan_pw", "/api/ppsk-hochladen": "wlan_pw", "/api/tarif-uebertragen": "tarife", "/api/voucher": "voucher", "/api/zuteilung-gateway": "netze", "/api/umzug": "netze"}
 _SCHREIBEN = {
-    "/api/excel": "planung", "/api/schreibtest": "netze",
+    "/api/excel": "planung", "/api/schreibtest": "netze", "/api/umzug-rueckgaengig": "netze",
     "/api/ppsk-speichern": "wlan_pw", "/api/rueckgaengig": "wlan_pw", "/api/passwort": "wlan_pw",
     "/api/tarif-rueckgaengig": "tarife", "/api/tarif-zuordnung": "buchungen",
     "/api/kalk-annahmen": "kalkulation", "/api/kalk-sparte": "kalkulation", "/api/kalk-import": "kalkulation",
@@ -141,7 +141,7 @@ SPARTE_PFLICHT = {"/api/ppsk", "/api/ppsk-speichern", "/api/netze", "/api/uebert
 NUR_OHNE_BESCHRAENKUNG = {"/api/excel", "/api/tarif-zuordnung", "/api/tarif-uebertragen", "/api/tarif-rueckgaengig", "/api/kalk-annahmen",
                           "/api/kalk-import", "/api/gwplan-annahmen", "/api/gwplan-zuruecksetzen", "/api/gwplan-import", "/api/gwplan-vlan-uebernehmen",
                           "/api/logo", "/api/logo-loeschen", "/api/schreibtest", "/api/konsolen", "/api/log-loeschen", "/api/tailscale", "/api/diagnose",
-                          "/api/zuteilung-einstellen", "/api/zuteilung-gateway",
+                          "/api/zuteilung-einstellen", "/api/zuteilung-gateway", "/api/umzug", "/api/umzug-rueckgaengig",
                           "/api/automation", "/api/automation-speichern", "/api/automation-loeschen", "/api/automation-probe"}
 NUR_OHNE_BESCHRAENKUNG_SCHREIBEND = {"/api/plan", "/api/tarife", "/api/design", "/api/einstellungen", "/api/fern", "/api/pw-regel"}
 
