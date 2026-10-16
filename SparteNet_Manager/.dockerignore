@@ -15,3 +15,9 @@ SparteNet_Sicherung_*.json
 SparteNet_Diagnose_*.json
 SparteNet_Kartenlogo.*
 updates/
+datensicherungen/
+Automation_Verlauf.json
+Unterlage_*
+SparteNet_Datensicherung_*
+secrets/
+.env

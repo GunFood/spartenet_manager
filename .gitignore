@@ -18,3 +18,7 @@
 __pycache__/
 *.py[cod]
 /SparteNet_Manager/updates/
+/SparteNet_Manager/datensicherungen/
+/SparteNet_Manager/Automation_Verlauf.json
+/SparteNet_Manager/Unterlage_*
+/SparteNet_Manager/SparteNet_Datensicherung_*

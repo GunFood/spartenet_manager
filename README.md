@@ -1,4 +1,4 @@
-SparteNet Manager 4.7 (Cloud)
+SparteNet Manager 4.8 (Cloud)
 ===============================
 
 Funktioniert komplett über die UniFi-Cloud (api.ui.com). Kein lokaler Zugriff, kein VPN.
@@ -68,6 +68,49 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   Oben: Gesamtauslastung aller Sparten mit Buchungen, Umsatz, Ergebnis, Kleinunternehmer-Grenze.
   "Prognose": Sparten ohne Buchungen mit der Buchungsquote aus den Annahmen hochrechnen.
   Tarifpreise (€ pro Jahr) stehen im Reiter "Tarife".
+
+### GATEWAY-ZUTEILUNG NACH BUCHUNG (Reiter "Netzplanung") – neu in 4.8
+  Eingeschaltet bekommt eine Parzelle ihr VLAN-Netz erst, wenn sie bucht: am ersten Gateway ihres Standorts mit
+  freiem Platz (Netzplanung "Parzellen je Gateway", Standard 55). Erst wenn Gateway 1 voll ist, kommt Gateway 2.
+  Buchung gelöscht → das Netz kann entfernt werden; danach ist der Platz frei und die nächste Buchung füllt ihn zuerst.
+  Die VLAN-ID bleibt fest an der Parzelle (Schema 4.7) – Passwort, Zugangskarte und VLAN ändern sich nie.
+  Zugeteilte Parzellen werden nie automatisch umgezogen. Dienstnetze (Vorstand/Gäste/Technik) liegen am Gateway 1.
+  Beim Einschalten bleiben vorhandene Buchungen dort, wo sie laut Netzplanung schon liegen.
+  Am Gateway: "Als Planung übernehmen" → Konsole wählen → Reiter "Einrichten" → "Netze nach Buchungen":
+  Vorschau, Auswahl, Ausführen. Beim Anlegen geht das Passwort der Parzelle gleich ins Pächter-WLAN; beim
+  Entfernen werden zuerst die Zugänge im WLAN gelöscht (mit Sicherung), dann das Netz.
+  Nur zwischen Gateways desselben Standorts (gleiche Glasfaser).
+
+### AUTOMATIONEN (Reiter "Automationen") – neu in 4.8
+  Regel = Wenn (Buchung, Kündigung, Zahlung über die API, eigenes API-Ereignis, Unterlage) + Nur wenn
+  (Sparte, Tarif, Mindestbetrag) + Dann (E-Mail, Tarif buchen, Buchung entfernen, Webhook, Protokolleintrag).
+  Platzhalter in Betreff/Text: {sparte} {sparte_name} {parzelle} {tarif} {preis} {betrag} {referenz} {email}
+  {name} {datum} {wlan} {passwort} {netz} {vlan} {gateway} … (Liste in der Regel-Bearbeitung).
+  "Probelauf" zeigt, was passieren würde – sendet und bucht nichts. Verlauf der letzten 300 Aktionen.
+  E-Mails und Webhooks laufen im Hintergrund. Am Gateway ändert eine Automation nichts.
+  E-Mail-Versand (SMTP) und API-Schlüssel richten nur Administratoren ein; Passwort optional als Docker-Secret
+  (SPARTENET_SMTP_PASSWORD_FILE). Recht "Automationen" (kein/lesen/schreiben) in der Benutzerverwaltung.
+
+### API-SCHNITTSTELLE FÜR ANDERE PROGRAMME – neu in 4.8
+  Schlüssel unter "Automationen → API-Schnittstelle" anlegen (Rechte ereignis/buchen/lesen, optional nur bestimmte
+  Sparten). Er wird nur einmal angezeigt und nur als Prüfsumme gespeichert. Aufruf mit
+  "Authorization: Bearer sn_…" oder "X-API-Key: sn_…":
+    GET  /api/v1/status · GET /api/v1/tarife · GET /api/v1/buchungen?sparte=BW
+    POST /api/v1/ereignis  {"ereignis":"zahlung","sparte":"BW","parzelle":12,"betrag":"120.00","referenz":"RE-1","email":"…"}
+    POST /api/v1/buchung   {"sparte":"BW","parzelle":12,"tarif":"Basic"}   ("" = Buchung entfernen)
+  Höchstens 120 Anfragen je Minute und Schlüssel (SPARTENET_API_PRO_MINUTE). Zahlungsanbieter über n8n/Zapier/Make
+  anbinden. Von außen nur über HTTPS (Reverse-Proxy, dann SPARTENET_PROXY=1).
+
+### UNTERLAGEN, DRUCKEN, DATENSICHERUNG, ZWEI-FAKTOR, FARBSCHEMA – neu in 4.8
+  Unterlagen: Dateien (PDF, Bilder, Office, CSV, ZIP) allgemein oder je Sparte; keine Webseiten/SVG/Programme.
+  Jeder Kasten hat oben links "Drucken / PDF" (im Druckdialog "Als PDF speichern").
+  Datensicherung (Systeminfo): eine Datei mit allem, optional AES-256-verschlüsselt; täglich automatisch nach
+  datensicherungen/ (SPARTENET_SICHERUNG=0 schaltet ab); Einspielen sichert vorher den jetzigen Stand.
+  Zwei-Faktor-Anmeldung (Benutzer → Mein Konto) mit Authenticator-App und 8 Notfall-Codes; optional Pflicht für Admins.
+  Rechte je Sparte: Konten können auf bestimmte Sparten beschränkt werden.
+  Farbschema: "Ansicht" bzw. Knopf ◐/☀/☾ oben rechts – wie das System, hell oder dunkel (je Browser gespeichert).
+  Sicherheit: Größengrenzen, Anmeldesperre je Konto, Schreibsperre, atomares Speichern, CSV-Formelschutz, CSP.
+  Docker: HEALTHCHECK über /status.
 
 ### VLAN-PLANUNG AUS DER NETZPLANUNG – neu in 4.7
   Die Netzplanung ist die Vorlage: Standort, Gateways (je 55 Parzellen) und Reihenfolge ergeben den VLAN-Plan.
