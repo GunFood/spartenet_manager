@@ -28,6 +28,7 @@ BEREICHE = [
     ("netzplanung", "Netzplanung & Einnahmen", ("kein", "lesen", "schreiben"), ["netzplanung"]),
     ("karten", "Zugangskarten drucken (lesen; braucht WLAN-Passwörter lesen) und Kartendesign ändern (schreiben)", ("kein", "lesen", "schreiben"), ["einrichten", "kartendesign"]),
     ("voucher", "Gast-Voucher erstellen", ("kein", "lesen", "schreiben"), ["voucher", "start"]),
+    ("unterlagen", "Unterlagen: Dateien ansehen (lesen), hochladen und löschen (schreiben)", ("kein", "lesen", "schreiben"), ["unterlagen"]),
     ("verbindung", "Verbindung, Cloud-Key, Handy & Tablet, Protokoll, Diagnose", ("kein", "lesen", "schreiben"), ["verbindung"]),
 ]
 BEREICH_TEXT = {k: t for k, t, _, _ in BEREICHE}
@@ -55,6 +56,7 @@ _LESEN = {
     "/api/system": "auslesen", "/api/daten-liste": "auslesen", "/api/daten-pruefen": "auslesen",
     "/api/tarif-vergleich": "tarife", "/api/tarif-erkennen": "buchungen", "/api/kalkulation": "kalkulation", "/api/gwplan": "netzplanung", "/api/gwplan-vlan": "netzplanung",
     "/api/karten-vorschau": "karten", "/api/karten": "karten", "/api/log": "verbindung",
+    "/api/unterlagen": "unterlagen", "/api/unterlage-datei": "unterlagen",
 }
 _GET_LESEN_SONST_SCHREIBEN = {"/api/tarife": "tarife", "/api/buchungen": "buchungen", "/api/design": "karten", "/api/fern": "verbindung"}
 _VORSCHAU = {"/api/netze": "netze", "/api/uebertragen": "wlan_pw", "/api/ppsk-hochladen": "wlan_pw", "/api/tarif-uebertragen": "tarife", "/api/voucher": "voucher"}
@@ -65,6 +67,7 @@ _SCHREIBEN = {
     "/api/kalk-annahmen": "kalkulation", "/api/kalk-sparte": "kalkulation", "/api/kalk-import": "kalkulation",
     "/api/gwplan-vlan-uebernehmen": "planung", "/api/gwplan-sparte": "netzplanung", "/api/gwplan-annahmen": "netzplanung", "/api/gwplan-zuruecksetzen": "netzplanung", "/api/gwplan-import": "netzplanung",
     "/api/logo": "karten", "/api/logo-loeschen": "karten",
+    "/api/unterlage-hochladen": "unterlagen", "/api/unterlage-aendern": "unterlagen", "/api/unterlage-loeschen": "unterlagen",
     "/api/konsolen": "verbindung", "/api/log-loeschen": "verbindung", "/api/tailscale": "verbindung", "/api/diagnose": "verbindung",
 }
 
@@ -120,11 +123,89 @@ def konto_rechte(d, name):
     if not isinstance(u, dict):
         return None
     r = u.get("recht")
+    sp = [str(x) for x in u.get("sparten") or []] or None
     if r in VORLAGEN:  # Konten aus 4.4: „lesen“ / „schreiben“
-        return {"art": "bereiche", "bereiche": dict(VORLAGEN[r][1])}
+        return {"art": "bereiche", "bereiche": dict(VORLAGEN[r][1]), "sparten": sp}
     if r in ("admin", "gesperrt"):
-        return {"art": r, "bereiche": _alle("schreiben" if r == "admin" else "kein")}
-    return {"art": "bereiche", "bereiche": _bereiche_pruefen(u.get("bereiche"))}
+        return {"art": r, "bereiche": _alle("schreiben" if r == "admin" else "kein"), "sparten": None}
+    return {"art": "bereiche", "bereiche": _bereiche_pruefen(u.get("bereiche")), "sparten": sp}
+
+
+# ---- Rechte je Sparte: Konten mit Sparten-Liste sehen und ändern nur diese Sparten ------------------
+# gateway- oder spartenübergreifende Änderungen bleiben Konten ohne Beschränkung vorbehalten
+SPARTE_PFLICHT = {"/api/ppsk", "/api/ppsk-speichern", "/api/netze", "/api/uebertragen", "/api/rueckgaengig", "/api/vergleich", "/api/abgleich",
+                  "/api/ppsk-hochladen", "/api/karten", "/api/buchungen", "/api/parzelle", "/api/kalk-sparte"}
+NUR_OHNE_BESCHRAENKUNG = {"/api/excel", "/api/tarif-zuordnung", "/api/tarif-uebertragen", "/api/tarif-rueckgaengig", "/api/kalk-annahmen",
+                          "/api/kalk-import", "/api/gwplan-annahmen", "/api/gwplan-zuruecksetzen", "/api/gwplan-import", "/api/gwplan-vlan-uebernehmen",
+                          "/api/logo", "/api/logo-loeschen", "/api/schreibtest", "/api/konsolen", "/api/log-loeschen", "/api/tailscale", "/api/diagnose"}
+NUR_OHNE_BESCHRAENKUNG_SCHREIBEND = {"/api/plan", "/api/tarife", "/api/design", "/api/einstellungen", "/api/fern", "/api/pw-regel"}
+
+
+def sparten_von(rechte):
+    """None = alle Sparten, sonst Menge der erlaubten Kürzel"""
+    if not rechte or rechte.get("art") == "admin" or not rechte.get("sparten"):
+        return None
+    return set(rechte["sparten"])
+
+
+def sparte_pruefen(pfad, q, b, erlaubt, d):
+    """wirft Fehler, wenn die Anfrage eine fremde Sparte betrifft oder spartenübergreifend schreibt"""
+    if erlaubt is None:
+        return
+    if pfad in NUR_OHNE_BESCHRAENKUNG or (pfad in NUR_OHNE_BESCHRAENKUNG_SCHREIBEND and b is not None):
+        raise Fehler("Diese Funktion betrifft alle Sparten bzw. das ganze Gateway – nur für Konten ohne Sparten-Beschränkung.")
+    kz = None
+    if isinstance(b, dict) and b.get("sparte") not in (None, ""):
+        kz = str(b["sparte"])
+    elif q.get("sparte", [""])[0]:
+        kz = q["sparte"][0]
+    elif pfad == "/api/gwplan-sparte":
+        try:
+            nr = int((b or {}).get("nr"))
+        except (TypeError, ValueError):
+            nr = None
+        z = next((x for x in gwp_anlagen(d) if x["nr"] == nr), None)
+        kz = (((d.get("gwplan") or {}).get("wahl") or {}).get(str(nr)) or {}).get("kz") or (z or {}).get("kz") or GWP_KUERZEL.get(nr)
+        if isinstance(b, dict) and "kz" in b:
+            raise Fehler("Kürzel ändern nur für Konten ohne Sparten-Beschränkung.")
+    if pfad in SPARTE_PFLICHT or pfad == "/api/gwplan-sparte":
+        if not kz:
+            raise Fehler("Bitte eine Sparte auswählen – Ihr Konto ist auf bestimmte Sparten beschränkt.")
+        if kz not in erlaubt:
+            raise Fehler(f"Keine Berechtigung für die Sparte {kz} – Ihr Konto ist auf {', '.join(sorted(erlaubt))} beschränkt.")
+
+
+def antwort_filtern(pfad, a, erlaubt):
+    """Listen auf die erlaubten Sparten kürzen"""
+    if erlaubt is None or not isinstance(a, dict):
+        return a
+    if pfad == "/api/plan" and "sparten" in a:
+        a = dict(a)
+        a["sparten"] = [x for x in a["sparten"] if x.get("kz") in erlaubt]
+        a["netze"] = [x for x in a.get("netze", []) if x.get("sparte") in erlaubt]
+        if isinstance(a.get("roh"), dict):
+            a["roh"] = {**a["roh"], "sparten": [x for x in a["roh"].get("sparten", []) if x.get("kz") in erlaubt]}
+    elif pfad == "/api/kalkulation" and "zeilen" in a:
+        a = dict(a)
+        a["zeilen"] = [x for x in a["zeilen"] if x.get("kz") in erlaubt]
+        z = a["zeilen"]
+        a["gesamt"] = {**a["gesamt"], "sparten": len(z), "parzellen_alle": sum(x["n"] for x in z), "gebucht": sum(x["gebucht"] for x in z),
+                       "umsatz_brutto": round(sum(x["umsatz_brutto"] for x in z), 2), "umsatz": round(sum(x["umsatz"] for x in z), 2),
+                       "db": round(sum(x["db"] for x in z), 2), "beschraenkt": True}
+    elif pfad.startswith("/api/gwplan") and "zeilen" in a and "standorte" in a:
+        a = dict(a)
+        a["zeilen"] = [x for x in a["zeilen"] if x.get("kz") in erlaubt]
+        nrs = {x["standort"] for x in a["zeilen"]}
+        a["standorte"] = [x for x in a["standorte"] if x["nr"] in nrs]
+        z = a["zeilen"]
+        g = dict(a["gesamt"])
+        g.update(sparten=len(z), parzellen=sum(x["parz"] for x in z), kunden=round(sum(x["kunden"] for x in z), 1),
+                 einnahme=round(sum(x["einnahme"] for x in z), 2), einnahme_monat=round(sum(x["einnahme_monat"] for x in z), 2),
+                 investition=round(sum(x["investition"] for x in z), 2), db=round(sum(x["db"] for x in z), 2), beschraenkt=True)
+        g["quote"] = g["kunden"] / g["parzellen"] if g["parzellen"] else 0
+        a["gesamt"] = g
+        a["log"] = [x for x in a.get("log", []) if x.startswith("✔")] + [f"{len(z)} Sparte(n) – nur Ihre Sparten ({', '.join(sorted(erlaubt))})"]
+    return a
 
 
 def rechte_text(rechte):
@@ -170,7 +251,7 @@ def ich_daten(name, rechte):
     if rechte["art"] == "admin":
         reiter = {t: "schreiben" for t in reiter}
     return {"name": name, "art": rechte["art"], "admin": rechte["art"] == "admin", "recht_text": rechte_text(rechte),
-            "bereiche": rechte["bereiche"], "reiter": reiter}
+            "bereiche": rechte["bereiche"], "reiter": reiter, "sparten": rechte.get("sparten")}
 
 
 def _bn_hash(pw, salz, runden=_BN_RUNDEN):
@@ -283,6 +364,7 @@ def akt_benutzer(d, ich):
     for n in sorted(u):
         x, r = u[n], konto_rechte(d, n)
         zeilen.append({"name": n, "anzeige": x.get("anzeige", ""), "art": r["art"], "bereiche": r["bereiche"], "recht_text": rechte_text(r), "fest": False,
+                       "sparten": x.get("sparten") or [], "zwei_faktor": bool((x.get("totp") or {}).get("aktiv")),
                        "angelegt": x.get("angelegt", ""), "zuletzt": x.get("zuletzt", ""), "von": x.get("von", ""), "sitzungen": sitz.get(n, 0)})
     return {"zeilen": zeilen, "arten": ARTEN, "stufen": STUFEN, "bereiche": [{"k": k, "text": t, "stufen": list(s)} for k, t, s, _ in BEREICHE],
             "vorlagen": {k: {"text": t, "bereiche": b} for k, (t, b) in VORLAGEN.items()}, "ich": ich,
@@ -329,6 +411,17 @@ def akt_benutzer_speichern(d, b, ich):
         log.append("Rechte: " + rechte_text(neu_r))
     if "anzeige" in b:
         x["anzeige"] = str(b.get("anzeige") or "").strip()[:60]
+    if "sparten" in b:
+        roh = b["sparten"] if isinstance(b["sparten"], list) else re.split(r"[,;\s]+", str(b["sparten"] or ""))
+        liste = sorted({str(k).strip().upper() for k in roh if str(k).strip()})
+        bekannt = {z["kz"] for z in gwp_anlagen(d)} | {str(w.get("kz")) for w in ((d.get("gwplan") or {}).get("wahl") or {}).values() if w.get("kz")} \
+            | {s_.get("kz", "").upper() for s_ in (d.get("plan") or {}).get("sparten", [])}
+        unbekannt = [k for k in liste if k not in bekannt]
+        if unbekannt:
+            raise Fehler("Unbekannte Kürzel: " + ", ".join(unbekannt))
+        if x.get("sparten", []) != liste:
+            log.append("Sparten: " + (", ".join(liste) if liste else "alle"))
+        x["sparten"] = liste
     if b.get("passwort") or neu:
         if b.get("passwort") != b.get("passwort2"):
             raise Fehler("Die beiden Passwörter stimmen nicht überein.")

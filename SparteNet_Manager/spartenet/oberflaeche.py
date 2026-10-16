@@ -1,5 +1,5 @@
 """SparteNet Manager – Oberfläche (HTML, CSS, JavaScript der Web-App)"""
-from .update import *  # noqa: F401,F403 – alle Namen der vorherigen Module
+from .unterlagen import *  # noqa: F401,F403 – alle Namen der vorherigen Module
 
 
 # =============================================================== Oberfläche
@@ -114,7 +114,15 @@ nav{position:sticky;top:0;z-index:20}
 .hinweis{background:#fff6dd;border:1px solid #f0d58a;border-radius:8px;padding:10px 12px;font-size:14px;margin-top:10px}
 .k.ich{background:none;color:#fff;border-color:rgba(255,255,255,.55);font-size:13px;padding:6px 12px}.nurlesen{background:#fff6dd;color:#7a5a00;border-bottom:1px solid #ecd9a0;padding:8px 22px;font-size:14px}
 #bn_ich .kachel b{font-size:19px;overflow-wrap:anywhere}#bn_tab td,#bn_tab th{white-space:nowrap}#bn_tab select{min-width:150px}#bn_tab tr.bn_detail td{background:#f7f9f5;white-space:normal}.bn_matrix{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:8px 18px;padding:6px 2px}.bn_matrix label{display:flex;justify-content:space-between;gap:10px;align-items:center;margin:0;font-size:13px;color:var(--text)}.bn_matrix select{min-width:175px!important;max-width:190px}.bn_matrix select.kein{color:var(--muted)}.bn_matrix select.schreiben{border-color:#3a9a1f;font-weight:600}[data-bereich].nurlesen-karte{position:relative}[data-bereich].nurlesen-karte::after{content:"nur lesen";position:absolute;top:-9px;right:18px;font-size:11px;background:#fff6dd;color:#7a5a00;border:1px solid #ecd9a0;border-radius:10px;padding:1px 8px}.recht-gesperrt td{color:var(--muted)}.recht-gesperrt td:first-child{text-decoration:line-through}
-@media print{header,nav,.nurlesen,.karte:not(.druck),.log{display:none!important}main{padding:0}}
+.karte{position:relative}.druckknopf{position:absolute;top:-11px;left:16px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:1px 9px;font-size:11px;line-height:18px;color:var(--muted);cursor:pointer;z-index:1}
+.druckknopf:hover{color:var(--text);border-color:#9fb19a}.druckkopf{display:none}
+@media print{header,nav,.nurlesen,.karte:not(.druck),.log{display:none!important}main{padding:0}.druckknopf{display:none!important}
+ body.einzeldruck .karte{display:none!important}body.einzeldruck .karte.druck-diese,body.einzeldruck .karte.druck-diese .karte{display:block!important}
+ body.einzeldruck .karte.druck-diese{border:0;padding:0;margin:0;box-shadow:none}body.einzeldruck #ansicht,body.einzeldruck #griff{display:none!important}
+ body.einzeldruck .druck-diese .tab{max-height:none!important;overflow:visible!important;border:0}
+ body.einzeldruck .druck-diese button,body.einzeldruck .druck-diese .knoepfe,body.einzeldruck .druck-diese input[type=file]{display:none!important}
+ body.einzeldruck .druck-diese .log{display:none!important}body.einzeldruck .druckkopf{display:block;border-bottom:1px solid #999;margin-bottom:8px;padding-bottom:4px;font-size:10px;color:#444}
+ body.einzeldruck .druck-diese table{font-size:9.5px}body.einzeldruck .druck-diese th,body.einzeldruck tr.kopf td{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style></head><body>
 <header><b>Sparte<span>Net</span></b><small>Manager __VERSION__ · Cloud</small><span id="verb"></span><div style="flex:1"></div><button class="k ich" id="up_chip" onclick="zeige('system')" hidden title="Neue Version verfügbar"></button><button class="k ich" id="ich_k" onclick="zeige('benutzer')" title="Mein Konto und Benutzerkonten"></button><button class="k" style="background:none;color:#fff;border-color:#fff" onclick="ansichtPanel()" title="Breite, Größe und Tabellenhöhe an den Bildschirm anpassen">Ansicht</button><button class="k pc-nur" id="beenden_k" style="background:none;color:#fff;border-color:#fff" onclick="beenden()">Beenden</button></header>
 <div id="ansicht"><h3>Ansicht anpassen</h3><p class="hint" style="margin:2px 0 6px">Für FHD bis 8K, normal oder curved. Wird gespeichert. Breite auch direkt am rechten Rand ziehen (Doppelklick = volle Breite).</p>
@@ -355,6 +363,17 @@ nav{position:sticky;top:0;z-index:20}
 <div class="knoepfe"><button class="k" onclick="voucher(false)">Vorschau</button><button class="k p" onclick="voucher(true)">Erstellen</button><button class="k" onclick="voucherDruck()">Drucken</button></div>
 <div class="log" id="log_vo"></div><div class="tab" id="tab_vo"></div></div></section>
 
+<section id="unterlagen"><div class="karte"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0;flex:1">Unterlagen</h2><span id="ul_st" class="status"></span><button class="k" onclick="ulLaden()">Aktualisieren</button></div>
+<p class="hint">Verträge, Pläne, Protokolle, Rechnungen … allgemein oder je Sparte hinterlegen. Erlaubt: PDF, Bilder, Office-/OpenOffice-Dateien, CSV, Text, ZIP – keine Webseiten, SVG oder Programme. PDF und Bilder lassen sich direkt ansehen, alles andere wird heruntergeladen.</p>
+<div class="reihe"><div><label for="ul_such">Suchen</label><input id="ul_such" placeholder="Name oder Beschreibung …" oninput="ulZeigen()"></div>
+<div><label for="ul_f_ordner">Ordner</label><select id="ul_f_ordner" onchange="ulZeigen()"></select></div><div><label for="ul_f_sparte">Sparte</label><select id="ul_f_sparte" onchange="ulZeigen()"></select></div></div>
+<div class="tab" id="ul_tab" style="--tab-h:620px"></div><div class="log" id="log_ul"></div></div>
+<div class="karte" data-bereich="unterlagen" id="ul_hoch"><h3>Hochladen</h3>
+<div id="ul_zone" style="border:2px dashed var(--line);border-radius:10px;padding:22px;text-align:center;color:var(--muted);cursor:pointer" onclick="$('ul_datei').click()">Dateien hierher ziehen oder <u>auswählen</u><input type="file" id="ul_datei" multiple style="display:none" onchange="ulHoch(this.files)"></div>
+<div class="reihe" style="margin-top:10px"><div><label for="ul_ordner">Ordner</label><input id="ul_ordner" list="ul_ordnerliste" value="Allgemein"><datalist id="ul_ordnerliste"></datalist></div>
+<div><label for="ul_sparte">Sparte</label><select id="ul_sparte"></select></div><div><label for="ul_beschr">Beschreibung (optional)</label><input id="ul_beschr" maxlength="300"></div></div>
+<div class="log" id="log_ulh"></div></div></section>
+
 <section id="benutzer"><div class="karte"><h2>Mein Konto</h2><div class="kacheln" id="bn_ich"></div>
 <div class="tab" id="bn_ich_liste" style="--tab-h:420px"></div>
 <div id="bn_ich_pw"><h3>Eigenes Passwort ändern</h3><div class="reihe" style="max-width:820px"><div><label for="bn_alt">Bisheriges Passwort</label><input id="bn_alt" type="password" autocomplete="current-password"></div>
@@ -388,9 +407,9 @@ nav{position:sticky;top:0;z-index:20}
 </main>
 <script>
 const T="__TOKEN__";let LETZT=null,PLAN=null,PLANZ=null,PPSK=null,PPSKSP=null,CODES=[],VMIN=0,EINST={};
-const TABS=[["start","Start"],["verbindung","Verbindung"],["lesen","Auslesen"],["planung","Planung"],["abgleich","Abgleich"],["einrichten","Einrichten"],["uebertragen","Übertragen"],["tarife","Tarife"],["kalkulation","Kalkulation"],["netzplanung","Netzplanung"],["kartendesign","Kartendesign"],["voucher","Gast-Voucher"],["system","Systeminfo"],["daten","Alle Daten"],["benutzer","Benutzer"],["hilfe","Hilfe"]];
+const TABS=[["start","Start"],["verbindung","Verbindung"],["lesen","Auslesen"],["planung","Planung"],["abgleich","Abgleich"],["einrichten","Einrichten"],["uebertragen","Übertragen"],["tarife","Tarife"],["kalkulation","Kalkulation"],["netzplanung","Netzplanung"],["kartendesign","Kartendesign"],["voucher","Gast-Voucher"],["system","Systeminfo"],["daten","Alle Daten"],["unterlagen","Unterlagen"],["benutzer","Benutzer"],["hilfe","Hilfe"]];
 const $=id=>document.getElementById(id);const nav=$("nav");TABS.forEach(([id,t])=>{const b=document.createElement("button");b.textContent=t;b.onclick=()=>zeige(id);b.id="n_"+id;nav.appendChild(b)});
-function zeige(id){if(!reiterErlaubt(id))id=startReiter();rechteHinweis(id);if(id=="start"&&!$("st_k").innerHTML&&typeof EINST!="undefined"&&EINST.konsole_id)startLaden().catch(()=>{});if(id=="verbindung")fernLaden().catch(()=>{});if(location.hash!="#"+id)history.replaceState(null,"","#"+id);setTimeout(()=>{const b=document.querySelector("nav button.aktiv");if(b&&b.scrollIntoView)b.scrollIntoView({inline:"center",block:"nearest"})},0);if(id=="kalkulation"&&!KK)kkLaden().catch(()=>{});if(id=="netzplanung"&&!GP)gpLaden().catch(()=>{});if(id=="benutzer")bnStart();if(id=="system"&&ICH.admin)upLaden(true).catch(()=>{});if(id=="kartendesign"&&!DESIGN)designLaden();if(id=="tarife"&&!TF)tfLaden();if(id=="system"&&!SYS)sysLaden();if(id=="daten"&&!DLISTE)datenListe();document.querySelectorAll("section").forEach(s=>s.classList.toggle("aktiv",s.id==id));document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("aktiv",b.id=="n_"+id))}
+function zeige(id){if(!reiterErlaubt(id))id=startReiter();rechteHinweis(id);if(id=="start"&&!$("st_k").innerHTML&&typeof EINST!="undefined"&&EINST.konsole_id)startLaden().catch(()=>{});if(id=="verbindung")fernLaden().catch(()=>{});if(location.hash!="#"+id)history.replaceState(null,"","#"+id);setTimeout(()=>{const b=document.querySelector("nav button.aktiv");if(b&&b.scrollIntoView)b.scrollIntoView({inline:"center",block:"nearest"})},0);if(id=="kalkulation"&&!KK)kkLaden().catch(()=>{});if(id=="netzplanung"&&!GP)gpLaden().catch(()=>{});if(id=="benutzer")bnStart();if(id=="unterlagen")ulLaden().catch(()=>{});if(id=="system"&&ICH.admin)upLaden(true).catch(()=>{});if(id=="kartendesign"&&!DESIGN)designLaden();if(id=="tarife"&&!TF)tfLaden();if(id=="system"&&!SYS)sysLaden();if(id=="daten"&&!DLISTE)datenListe();document.querySelectorAll("section").forEach(s=>s.classList.toggle("aktiv",s.id==id));document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("aktiv",b.id=="n_"+id))}
 async function api(pfad,body,logid){const el=logid&&$(logid);const kn=[...document.querySelectorAll("button")];kn.forEach(b=>b.disabled=true);if(el)el.textContent="… bitte warten (über die Cloud kann das einige Sekunden dauern)";
  try{const r=await fetch(pfad,{method:body===undefined?"GET":"POST",headers:{"X-Token":T,"Content-Type":"application/json"},body:body===undefined?undefined:(body instanceof Blob?body:JSON.stringify(body))});
  if(r.status==401){location.reload();return new Promise(()=>{})}const d=await r.json().catch(()=>({}));if(r.status==403&&!d.recht){location.reload();return new Promise(()=>{})}if(!r.ok)throw new Error(d.fehler||r.status);if(el)el.textContent=d.log?d.log.join("\n"):"";return d}
@@ -749,18 +768,29 @@ async function kkLaden(){const d=await api("/api/kalkulation?prognose="+($("kk_p
  $("kb_tarif").innerHTML='<option value="">– kein Tarif (nicht gebucht) –</option>'+T.map(t=>`<option value="${esc(t.name)}">${esc(t.name)} · ${eur(t.preis)}/Jahr</option>`).join("");
  kaZeigen(d.annahmen,d.texte);if(!KB&&d.zeilen.length)kbLaden(true)}
 window.addEventListener("unhandledrejection",e=>e.preventDefault());  // Fehler zeigt api() bereits im jeweiligen Protokollfeld
+// Drucken / PDF je Kasten: jeder Kasten (.karte) bekommt oben links einen Knopf; gedruckt wird nur dieser Kasten
+function druckKnoepfe(){document.querySelectorAll(".karte").forEach(k=>{if(k.querySelector(":scope>.druckknopf")||k.closest(".druckkopf"))return;
+ const b=document.createElement("button");b.type="button";b.className="druckknopf";b.textContent="🖨 Drucken / PDF";b.title="Nur diesen Kasten drucken – im Druckdialog „Als PDF speichern“ wählen für eine PDF-Datei";
+ b.onclick=e=>{e.stopPropagation();kastenDrucken(k)};k.prepend(b)})}
+function kastenDrucken(k){const t=(k.querySelector("h2,h3")||{}).textContent||"SparteNet";const kopf=document.createElement("div");kopf.className="druckkopf";
+ kopf.textContent="SparteNet Manager · "+t.trim()+" · "+new Date().toLocaleString("de-DE")+" · "+ICH.name;k.prepend(kopf);
+ const breit=[...k.querySelectorAll("table")].some(x=>x.scrollWidth>760);const st=document.createElement("style");st.textContent="@page{size:A4 "+(breit?"landscape":"portrait")+";margin:12mm}";document.head.appendChild(st);
+ document.body.classList.add("einzeldruck");k.classList.add("druck-diese");
+ const fertig=()=>{document.body.classList.remove("einzeldruck");k.classList.remove("druck-diese");kopf.remove();st.remove();window.removeEventListener("afterprint",fertig)};
+ window.addEventListener("afterprint",fertig);setTimeout(()=>{window.print();setTimeout(fertig,500)},50)}
+
 const ICH=__ICH__;
 function reiterErlaubt(id){return ICH.admin||!(id in ICH.reiter)||ICH.reiter[id]!="kein"}
 function startReiter(){const h=location.hash.slice(1);if(TABS.some(t=>t[0]==h)&&reiterErlaubt(h))return h;const t=TABS.find(t=>reiterErlaubt(t[0]));return t?t[0]:"benutzer"}
 function rechteHinweis(id){const e=$("nurlesen");if(!e)return;const st=ICH.admin?"schreiben":ICH.reiter[id];
  if(st=="lesen"){e.textContent="Nur lesen – in diesem Bereich lassen sich mit Ihrem Konto Daten ansehen, aber nichts ändern oder ans Gateway übertragen.";e.hidden=false}else e.hidden=true}
-(function(){const k=$("ich_k");if(k)k.textContent="👤 "+ICH.name+" · "+ICH.recht_text;
+(function(){const k=$("ich_k");if(k)k.textContent="👤 "+ICH.name+" · "+ICH.recht_text+(ICH.sparten&&ICH.sparten.length?" · "+ICH.sparten.join(", "):"");
  TABS.forEach(([id])=>{const b=$("n_"+id);if(b&&!reiterErlaubt(id))b.style.display="none"});
  document.querySelectorAll("[data-bereich]").forEach(e=>{const st=ICH.admin?"schreiben":(ICH.bereiche[e.dataset.bereich]||"kein");if(st=="kein")e.style.display="none";else if(st=="lesen")e.classList.add("nurlesen-karte")});
  document.querySelectorAll(".bn-admin").forEach(e=>e.hidden=!ICH.admin);if(!ICH.admin){const b=$("n_benutzer");if(b)b.textContent="Mein Konto"}})();
 let BN=null;const BNOFFEN=new Set();
 async function bnStart(){const d=await api("/api/benutzer-ich",undefined,"log_bni");$("log_bni").textContent="";
- $("bn_ich").innerHTML=kachel("Benutzername",esc(d.name),"")+kachel("Rechte",esc(d.recht_text),d.admin?"gut":"")+(d.anzeige?kachel("Name",esc(d.anzeige),""):"");
+ $("bn_ich").innerHTML=kachel("Benutzername",esc(d.name),"")+kachel("Rechte",esc(d.recht_text),d.admin?"gut":"")+(d.anzeige?kachel("Name",esc(d.anzeige),""):"")+(d.sparten&&d.sparten.length?kachel("Sparten",esc(d.sparten.join(", ")),"warn"):"");
  $("bn_ich_liste").innerHTML=d.admin?"":"<table><tr><th>Bereich</th><th>Ihr Recht</th></tr>"+d.liste.map(x=>`<tr class="${x.stufe=="kein Zugriff"?"gesperrt":""}"><td>${esc(x.text)}</td><td>${esc(x.stufe)}</td></tr>`).join("")+"</table>";
  $("bn_ich_pw").hidden=!d.eigenes_passwort;$("bn_admin_hint").hidden=d.name!="admin";if(ICH.admin)bnLaden()}
 async function bnEigenesPw(){await api("/api/benutzer-ich",{alt:$("bn_alt").value,passwort:$("bn_neu1").value,passwort2:$("bn_neu2").value},"log_bni");["bn_alt","bn_neu1","bn_neu2"].forEach(i=>$(i).value="")}
@@ -773,15 +803,17 @@ function bnZeigen(d){BN=d;const box=$("bn_tab"),y=box.scrollTop;
   h+=`<tr class="${z.art=="gesperrt"?"recht-gesperrt":""}"><td><b>${n}</b>${z.name==d.ich?" <small>(Sie)</small>":""}</td>
   <td>${z.fest?esc(z.anzeige):`<input class="bn_anz" data-n="${n}" value="${esc(z.anzeige)}" style="min-width:170px">`}</td>
   <td>${z.fest?"Administrator":`<select class="bn_art" data-n="${n}">${Object.entries(d.arten).map(([k,t])=>`<option value="${k}"${k==z.art?" selected":""}>${esc(t)}</option>`).join("")}</select>`}</td>
-  <td>${esc(z.recht_text)}${z.art=="bereiche"?` <button class="k" onclick="bnAuf('${n}')">${offen?"Rechte schließen":"Rechte …"}</button>`:""}</td>
+  <td>${esc(z.recht_text)}${z.sparten&&z.sparten.length?'<br><small>nur '+esc(z.sparten.join(", "))+'</small>':""}${z.art=="bereiche"?` <button class="k" onclick="bnAuf('${n}')">${offen?"Rechte schließen":"Rechte …"}</button>`:""}</td>
   <td>${esc(z.angelegt)}${z.von?" <small>von "+esc(z.von)+"</small>":""}</td><td>${esc(z.zuletzt)||"–"}</td><td>${z.sitzungen||"–"}</td>
   <td>${z.fest?"":`<button class="k" onclick="bnPw('${n}')">Passwort setzen</button> <button class="k" onclick="bnLoeschen('${n}')">Löschen</button>`}</td></tr>`;
   if(offen&&z.art=="bereiche")h+=`<tr class="bn_detail"><td colspan="8"><div class="knoepfe" style="margin:4px 0 6px">Vorlage übernehmen: ${Object.entries(d.vorlagen).map(([k,v])=>`<button class="k" onclick="bnVorlage('${n}','${k}')">${esc(v.text.split(":")[0])}</button>`).join(" ")}</div>
+   <div class="reihe" style="margin:4px 0 10px;max-width:760px"><div><label>Nur diese Sparten (Kürzel, z. B. „BW, FEIER“ – leer = alle Sparten)</label><input class="bn_sp" data-n="${n}" value="${esc((z.sparten||[]).join(", "))}" placeholder="alle Sparten" style="text-transform:uppercase"></div></div>
    <div class="bn_matrix">${d.bereiche.map(b=>{const st=z.bereiche[b.k]||"kein";return `<label>${esc(b.text)}<select class="bn_ber ${st}" data-n="${n}" data-k="${b.k}">${b.stufen.map(x=>`<option value="${x}"${x==st?" selected":""}>${esc(d.stufen[x])}</option>`).join("")}</select></label>`}).join("")}</div></td></tr>`}
  box.innerHTML=h+"</table>";box.scrollTop=y;
  box.querySelectorAll(".bn_art").forEach(e=>e.onchange=()=>{if(e.value=="bereiche")BNOFFEN.add(e.dataset.n);bnSpeichern({name:e.dataset.n,art:e.value})});
  box.querySelectorAll(".bn_anz").forEach(e=>e.onchange=()=>bnSpeichern({name:e.dataset.n,anzeige:e.value}));
- box.querySelectorAll(".bn_ber").forEach(e=>e.onchange=()=>bnSpeichern({name:e.dataset.n,bereiche:{[e.dataset.k]:e.value}}))}
+ box.querySelectorAll(".bn_ber").forEach(e=>e.onchange=()=>bnSpeichern({name:e.dataset.n,bereiche:{[e.dataset.k]:e.value}}));
+ box.querySelectorAll(".bn_sp").forEach(e=>e.onchange=()=>bnSpeichern({name:e.dataset.n,sparten:e.value}))}
 function bnAuf(n){BNOFFEN.has(n)?BNOFFEN.delete(n):BNOFFEN.add(n);bnZeigen(BN)}
 function bnVorlage(n,k){bnSpeichern({name:n,art:"bereiche",vorlage:k})}
 async function bnAnlegen(){const v=$("bn_vorlage").value,n=$("bn_name").value.trim();const b={neu:true,name:n,anzeige:$("bn_anz").value.trim(),passwort:$("bn_pw1").value,passwort2:$("bn_pw2").value};
@@ -830,6 +862,35 @@ function gvCsv(){if(!GP)return;const st=GP.standorte.find(s=>String(s.nr)==$("gv
  for(const g of st.gateways)for(const t of g.teile){for(let p=t.p_von;p<=t.p_bis;p++)z.push({gw:g.gw,kz:t.kz,sparte:t.name,netz:t.kz+"-Paz."+String(p).padStart(3,"0"),vlan:1000+200*(t.block-1)+p,subnetz:"10."+t.nr+"."+p+".0/24",art:"Parzelle "+p});
   if(t.dienst)[["Vorstand","vorstand",200],["Gäste","gaeste",201],["Technik","technik",250]].forEach(([n,k,x])=>z.push({gw:g.gw,kz:t.kz,sparte:t.name,netz:t.kz+"-"+n,vlan:t.vlan_d[k],subnetz:"10."+t.nr+"."+x+".0/24",art:n}))}
  csvSpeichern({spalten:[["gw","Gateway"],["kz","Kürzel"],["sparte","Sparte"],["netz","Netz"],["vlan","VLAN"],["subnetz","Subnetz"],["art","Art"]],zeilen:z},"VLAN_Plan_"+st.name)}
+
+let UL=null;
+async function ulLaden(){const d=await api("/api/unterlagen",undefined,"log_ul");UL=d;
+ const sp=(d.sparten_erlaubt||[...new Set((GP?GP.zeilen.map(z=>z.kz):[]).concat(PLAN?PLAN.sparten.map(s=>s.kz):[]))].sort());
+ $("ul_sparte").innerHTML=(d.sparten_erlaubt?"":'<option value="">Allgemein (alle Sparten)</option>')+sp.map(k=>`<option value="${esc(k)}">${esc(k)}</option>`).join("");
+ $("ul_ordnerliste").innerHTML=d.ordner.map(o=>`<option value="${esc(o)}">`).join("");
+ const fo=$("ul_f_ordner").value,fs=$("ul_f_sparte").value;
+ $("ul_f_ordner").innerHTML='<option value="">alle Ordner</option>'+d.ordner.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join("");$("ul_f_ordner").value=fo;
+ const ds=[...new Set(d.dateien.map(x=>x.sparte||""))].sort();$("ul_f_sparte").innerHTML='<option value="*">alle</option>'+ds.map(k=>`<option value="${esc(k)}">${k?esc(k):"Allgemein"}</option>`).join("");if([...$("ul_f_sparte").options].some(o=>o.value==fs))$("ul_f_sparte").value=fs;
+ $("ul_st").textContent=d.belegt_mb+" / "+d.gesamt_mb+" MB";ulZeigen()}
+const groesse=b=>b>=1e6?(b/1e6).toLocaleString("de-DE",{maximumFractionDigits:1})+" MB":Math.max(1,Math.round(b/1e3))+" KB";
+function ulZeigen(){const d=UL;if(!d)return;const q=$("ul_such").value.trim().toLowerCase(),fo=$("ul_f_ordner").value,fs=$("ul_f_sparte").value;
+ const L=d.dateien.filter(x=>(!q||(x.name+" "+(x.beschreibung||"")).toLowerCase().includes(q))&&(!fo||x.ordner==fo)&&(fs=="*"||!fs&&fs!==""||(x.sparte||"")==fs));
+ const darf=ICH.admin||ICH.bereiche.unterlagen=="schreiben";
+ $("ul_tab").innerHTML=L.length?"<table><tr><th>Name</th><th>Ordner</th><th>Sparte</th><th>Größe</th><th>hochgeladen</th><th>Beschreibung</th><th></th></tr>"+L.map(x=>`<tr><td><b>${esc(x.name)}</b></td>
+  <td>${darf&&x.schreiben?`<input class="ul_in" data-id="${x.id}" data-f="ordner" value="${esc(x.ordner)}" list="ul_ordnerliste" style="min-width:120px">`:esc(x.ordner)}</td><td>${x.sparte?esc(x.sparte):"Allgemein"}</td><td>${groesse(x.groesse)}</td>
+  <td>${esc(x.zeit)}<br><small>${esc(x.von)}</small></td><td>${darf&&x.schreiben?`<input class="ul_in" data-id="${x.id}" data-f="beschreibung" value="${esc(x.beschreibung||"")}" style="min-width:200px">`:esc(x.beschreibung||"")}</td>
+  <td style="white-space:nowrap">${x.ansehen?`<button class="k" onclick="ulDatei('${x.id}',true)">Ansehen</button> `:""}<button class="k" onclick="ulDatei('${x.id}',false)">Herunterladen</button>${darf&&x.schreiben?` <button class="k" onclick="ulLoeschen('${x.id}')">Löschen</button>`:""}</td></tr>`).join("")+"</table>":'<p class="hint" style="padding:12px">Keine Unterlagen'+(q||fo?" für diesen Filter":"")+".</p>";
+ document.querySelectorAll(".ul_in").forEach(e=>e.onchange=async()=>{UL=await api("/api/unterlage-aendern",{id:e.dataset.id,[e.dataset.f]:e.value},"log_ul");ulZeigen()})}
+async function ulHoch(files){const max=UL?UL.max_datei_mb:15;for(const f of files){if(f.size>max*1e6){$("log_ulh").innerHTML='<span class="fehler">✖ '+esc(f.name)+": größer als "+max+" MB</span>";continue}
+  const p=new URLSearchParams({name:f.name,ordner:$("ul_ordner").value||"Allgemein",sparte:$("ul_sparte").value||"",beschreibung:$("ul_beschr").value||""});
+  try{UL=await api("/api/unterlage-hochladen?"+p.toString(),f,"log_ulh")}catch(e){}}
+ $("ul_datei").value="";$("ul_beschr").value="";if(UL)ulLaden()}
+async function ulDatei(id,ansehen){const x=UL.dateien.find(y=>y.id==id);const w=ansehen?window.open("","_blank"):null;
+ try{const r=await fetch("/api/unterlage-datei?id="+encodeURIComponent(id),{headers:{"X-Token":T}});if(!r.ok){let m=r.status;try{m=(await r.json()).fehler}catch(e){}throw new Error(m)}
+  const b=await r.blob();const u=URL.createObjectURL(b);if(ansehen&&w){w.location=u}else{const a=document.createElement("a");a.href=u;a.download=x?x.name:"Datei";document.body.appendChild(a);a.click();a.remove()}setTimeout(()=>URL.revokeObjectURL(u),60000)}
+ catch(e){if(w)w.close();$("log_ul").innerHTML='<span class="fehler">✖ '+esc(e.message)+'</span>'}}
+async function ulLoeschen(id){const x=UL.dateien.find(y=>y.id==id);if(!confirm("„"+(x?x.name:id)+"“ endgültig löschen?"))return;UL=await api("/api/unterlage-loeschen",{id},"log_ul");ulZeigen()}
+(function(){const z=$("ul_zone");if(!z)return;["dragenter","dragover"].forEach(t=>z.addEventListener(t,e=>{e.preventDefault();z.style.borderColor="#3a9a1f"}));["dragleave","drop"].forEach(t=>z.addEventListener(t,e=>{e.preventDefault();z.style.borderColor=""}));z.addEventListener("drop",e=>ulHoch(e.dataTransfer.files))})();
 
 let GP=null;
 const gz=(v,n=0)=>v==null||v===""?"–":Number(v).toLocaleString("de-DE",{minimumFractionDigits:n,maximumFractionDigits:n});
@@ -911,7 +972,7 @@ function kbBereich(txt,max){const s=new Set();for(const teil of txt.split(/[,; ]
 function kbMassen(){if(!KB)return;try{const ps=kbBereich($("kb_bereich").value,KB.n);if(!ps.length)return $("kb_bereich").focus();ps.forEach(p=>kbSetzen(p,$("kb_tarif").value));$("log_kb").textContent=ps.length+" Parzelle(n) auf „"+($("kb_tarif").value||"nicht gebucht")+"“ gesetzt – noch speichern."}catch(e){$("log_kb").innerHTML='<span class="fehler">✖ '+esc(e.message)+"</span>"}}
 async function kbSpeichern(){if(!Object.keys(KBAEND).length)return $("log_kb").textContent="Nichts geändert.";await api("/api/buchungen",{sparte:KB.kz,aenderungen:KBAEND},"log_kb");const l=$("log_kb").textContent;KBAEND={};await kkLaden();await kbLaden(true);$("log_kb").textContent=l}
 async function beenden(){if(confirm("SparteNet Manager beenden?")){await api("/api/beenden",{});document.body.innerHTML="<p style='padding:40px;font-family:Arial'>Beendet. Fenster kann geschlossen werden.</p>"}}
-ansAnwenden();zeige(startReiter());if(ICH.admin)setTimeout(()=>upLaden(true).catch(()=>{}),1500);einst();planLaden(true);regelLaden();["pr_pre","pr_z"].forEach(i=>$(i).addEventListener("input",regelBeispiel));
+ansAnwenden();druckKnoepfe();zeige(startReiter());if(ICH.admin)setTimeout(()=>upLaden(true).catch(()=>{}),1500);einst();planLaden(true);regelLaden();["pr_pre","pr_z"].forEach(i=>$(i).addEventListener("input",regelBeispiel));
 </script></body></html>"""
 
 __all__ = [_n for _n in dict(globals()) if not _n.startswith("__")]  # alle Namen an die folgenden Module weitergeben

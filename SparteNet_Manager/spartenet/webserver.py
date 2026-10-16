@@ -224,6 +224,13 @@ class Handler(BaseHTTPRequestHandler):
         if not erlaubt(rechte, noetig):
             LOG.warning("Keine Berechtigung: %s für %s (%s)", ich, pfad, "/".join(noetig))
             return self._send(403, {"fehler": fehlt_text(ich, rechte, noetig), "recht": "fehlt"})
+        sp_erl = sparten_von(rechte)
+        if sp_erl is not None:
+            try:
+                sparte_pruefen(pfad, q, b, sp_erl, d_geladen or lade())
+            except Fehler as e:
+                LOG.warning("Keine Berechtigung (Sparte): %s für %s", ich, pfad)
+                return self._send(403, {"fehler": str(e), "recht": "fehlt"})
         ANFRAGE.benutzer = None if ich == ADMIN_NAME else ich
         schreibend = noetig[0] == "admin" or (len(noetig) > 1 and noetig[1] == "schreiben")
         if schreibend:
@@ -264,7 +271,7 @@ class Handler(BaseHTTPRequestHandler):
             if pfad == "/api/konsolen":
                 return self._send(200, {"konsolen": konsolen((b or {}).get("cloud_key") or d["cloud_key"])})
             if pfad == "/api/plan" and b is None:
-                return self._send(200, {"roh": d["plan"], **plan_berechnen(d["plan"])})
+                return self._send(200, antwort_filtern(pfad, {"roh": d["plan"], **plan_berechnen(d["plan"])}, sp_erl))
             if pfad == "/api/plan":
                 plan_berechnen(b); d["plan"] = b; speichere(d)
                 return self._send(200, {"log": ["✔ Plan gespeichert."]})
@@ -332,6 +339,11 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/benutzer-speichern": lambda: akt_benutzer_speichern(d, b or {}, ich),
                 "/api/benutzer-loeschen": lambda: akt_benutzer_loeschen(d, b or {}, ich),
                 "/api/benutzer-ich": lambda: akt_benutzer_ich(d, ich, b),
+                "/api/unterlagen": lambda: akt_unterlagen(d, sp_erl),
+                "/api/unterlage-hochladen": lambda: akt_unterlage_hochladen(d, q, roh, ich, sp_erl),
+                "/api/unterlage-datei": lambda: akt_unterlage_datei(d, q, sp_erl),
+                "/api/unterlage-aendern": lambda: akt_unterlage_aendern(d, b or {}, sp_erl),
+                "/api/unterlage-loeschen": lambda: akt_unterlage_loeschen(d, b or {}, sp_erl),
                 "/api/update": lambda: akt_update(d),
                 "/api/update-pruefen": lambda: akt_update_pruefen(d),
                 "/api/update-installieren": lambda: akt_update_installieren(d, b, ich),
@@ -339,7 +351,14 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/update-einstellungen": lambda: akt_update_einstellungen(d, b or {}),
             }
             if pfad in routen:
-                return self._send(200, routen[pfad]())
+                antwort = routen[pfad]()
+                if isinstance(antwort, dict) and "_datei" in antwort:   # Dateiinhalt (Unterlagen, Sicherung): immer als Download, nie als Webseite
+                    name = antwort.get("name") or "Datei"
+                    ascii_name = re.sub(r"[^A-Za-z0-9._-]+", "_", name)[:100] or "Datei"
+                    return self._send(200, antwort["_datei"], antwort.get("typ") or "application/octet-stream", extra={
+                        "Content-Disposition": f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{urllib.parse.quote(name)}",
+                        "Content-Security-Policy": "default-src 'none'; sandbox"})
+                return self._send(200, antwort_filtern(pfad, antwort, sp_erl))
             if pfad == "/api/beenden":
                 self._send(200, {"log": ["Beendet."]})
                 threading.Thread(target=lambda: (time.sleep(0.5), os._exit(0)), daemon=True).start(); return
@@ -357,7 +376,7 @@ class Handler(BaseHTTPRequestHandler):
                 SCHREIB_SPERRE.release()
 
 
-ROH_PFADE = {"/api/excel", "/api/logo", "/api/kalk-import", "/api/gwplan-import"}
+ROH_PFADE = {"/api/excel", "/api/logo", "/api/kalk-import", "/api/gwplan-import", "/api/unterlage-hochladen", "/api/sicherung-einspielen"}
 
 
 def main():
