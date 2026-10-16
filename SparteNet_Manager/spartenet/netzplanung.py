@@ -451,6 +451,7 @@ def akt_gwplan_sparte(d, b):
             if v is not None:
                 if not re.fullmatch(r"[A-Z0-9]{2,5}", v):
                     raise Fehler("Kürzel: 2–5 Zeichen, nur A–Z und 0–9 (keine Umlaute).")
+                kz_pruefen(v, ((d.get("plan") or {}).get("praefix")) or "SparteNet.de")
                 andere = {(((d.get("gwplan") or {}).get("wahl") or {}).get(str(x["nr"])) or {}).get("kz") or x.get("kz") or GWP_KUERZEL.get(x["nr"])
                           for x in nrs.values() if x["nr"] != nr}
                 if v in andere:

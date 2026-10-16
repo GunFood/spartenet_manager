@@ -3,6 +3,12 @@ from .oberflaeche import *  # noqa: F401,F403 – alle Namen der vorherigen Modu
 
 
 # =============================================================== Webserver
+PROXY_VERTRAUEN = os.environ.get("SPARTENET_PROXY", "0").strip().lower() in ("1", "ja", "true", "yes")
+SCHREIB_SPERRE = threading.RLock()   # schreibende Anfragen nacheinander (S4)
+CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
+       "connect-src 'self'; frame-src 'self' blob: data:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'self'")
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -20,10 +26,27 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(503, {"fehler": str(e)})
             return None
 
+    def _quelle(self):
+        """Absenderadresse; hinter einem vertrauenswürdigen Reverse-Proxy (SPARTENET_PROXY=1) die vom Proxy gemeldete (S3)"""
+        ip = self.client_address[0]
+        if PROXY_VERTRAUEN:
+            xff = [x.strip() for x in (self.headers.get("X-Forwarded-For") or "").split(",") if x.strip()]
+            if xff:
+                return xff[-1][:64]
+            if self.headers.get("X-Real-IP"):
+                return self.headers.get("X-Real-IP").strip()[:64]
+        return ip
+
     def _send(self, code, daten, typ="application/json", extra=None):
         roh = daten if isinstance(daten, bytes) else json.dumps(daten, ensure_ascii=False).encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", typ + ("; charset=utf-8" if typ.startswith(("text/", "application/json", "application/javascript", "application/manifest")) else ""))
+        if len(roh) > 1400 and "gzip" in (self.headers.get("Accept-Encoding") or "") and typ.startswith(("text/", "application/json", "application/javascript")):
+            roh = gzip.compress(roh, 6)
+            self.send_header("Content-Encoding", "gzip")
+            self.send_header("Vary", "Accept-Encoding")
+        if typ.startswith("text/html"):
+            self.send_header("Content-Security-Policy", CSP)
         self.send_header("Content-Length", str(len(roh)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff"); self.send_header("Referrer-Policy", "no-referrer"); self.send_header("X-Frame-Options", "SAMEORIGIN")
@@ -116,7 +139,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(401, {"fehler": "anmelden"})
         if self.headers.get("X-Token") != TOKEN:
             return self._send(403, {"fehler": "nicht erlaubt"})
-        self._antwort(u.path, urllib.parse.parse_qs(u.query), None, b"", wer)
+        self._antwort(u.path, urllib.parse.parse_qs(u.query), None, b"", wer, d)
 
     def _anmelden(self):
         try:
@@ -137,7 +160,7 @@ class Handler(BaseHTTPRequestHandler):
         geheim = b.get("passwort", b.get("pin"))
         name = str(b.get("benutzer") or "").strip().lower()
         try:
-            konto = benutzer_anmelden(d, name, geheim, self.client_address[0])
+            konto = benutzer_anmelden(d, name, geheim, self._quelle())
             t = auth_sitzung_neu(b.get("geraet"), konto)
             cookie = f"sn_auth={t}"
             LOG.info("Anmeldung erfolgreich: %s", konto)
@@ -177,11 +200,21 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(401, {"fehler": "anmelden"})
         if self.headers.get("X-Token") != TOKEN:
             return self._send(403, {"fehler": "nicht erlaubt"})
-        roh = self.rfile.read(int(self.headers.get("Content-Length") or 0))
-        body = None if u.path in ("/api/excel", "/api/logo", "/api/kalk-import", "/api/gwplan-import") else json.loads(roh or b"{}")
-        self._antwort(u.path, {}, body, roh, wer)
+        roh_pfad = u.path in ROH_PFADE
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            return self._send(400, {"fehler": "Ungültige Anfrage."})
+        if n < 0 or n > (MAX_UPLOAD_BYTES if roh_pfad else MAX_JSON_BYTES):
+            return self._send(413, {"fehler": f"Anfrage zu groß (höchstens {(MAX_UPLOAD_BYTES if roh_pfad else MAX_JSON_BYTES) // 1_000_000} MB)."})
+        roh = self.rfile.read(n)
+        try:
+            body = None if roh_pfad else json.loads(roh or b"{}")
+        except (ValueError, UnicodeDecodeError):
+            return self._send(400, {"fehler": "Ungültige Anfrage (kein JSON)."})
+        self._antwort(u.path, urllib.parse.parse_qs(u.query), body, roh, wer, d)
 
-    def _antwort(self, pfad, q, b, roh, wer):
+    def _antwort(self, pfad, q, b, roh, wer, d_geladen=None):
         ich, rechte = wer
         if pfad in ("/api/ppsk-speichern", "/api/fern", "/api/benutzer-speichern", "/api/benutzer-ich"):
             LOG.info("Aktion %s von %s (Inhalt nicht protokolliert)", pfad, ich)
@@ -192,8 +225,11 @@ class Handler(BaseHTTPRequestHandler):
             LOG.warning("Keine Berechtigung: %s für %s (%s)", ich, pfad, "/".join(noetig))
             return self._send(403, {"fehler": fehlt_text(ich, rechte, noetig), "recht": "fehlt"})
         ANFRAGE.benutzer = None if ich == ADMIN_NAME else ich
+        schreibend = noetig[0] == "admin" or (len(noetig) > 1 and noetig[1] == "schreiben")
+        if schreibend:
+            SCHREIB_SPERRE.acquire()
         try:
-            d = lade()
+            d = lade() if (schreibend or d_geladen is None) else d_geladen
             if self._fern() and not auth_sitzung_ok(self._auth_sitzung()) and (pfad in ("/api/fern", "/api/tailscale", "/api/beenden", "/api/log-loeschen", "/api/konsolen") or (pfad == "/api/einstellungen" and b is not None)):
                 raise Fehler("Diese Einstellung lässt sich nur direkt am PC ändern.")
             if pfad == "/api/einstellungen":
@@ -312,10 +348,16 @@ class Handler(BaseHTTPRequestHandler):
             LOG.warning("Meldung an Benutzer: %s", e)
             self._send(400, {"fehler": str(e)})
         except Exception as e:
-            LOG.error("Unerwarteter Fehler bei %s:\n%s", pfad, traceback.format_exc())
-            self._send(500, {"fehler": f"Unerwarteter Fehler: {type(e).__name__}: {e}" + (" – Details in der Protokolldatei." if lade()["log_aktiv"] else " – Protokoll einschalten (Verbindung) und erneut versuchen.")})
+            ref = secrets.token_hex(3)
+            LOG.error("Unerwarteter Fehler %s bei %s:\n%s", ref, pfad, traceback.format_exc())
+            self._send(500, {"fehler": f"Unerwarteter Fehler (Nr. {ref}, {type(e).__name__}) – Details im Protokoll unter dieser Nummer."})
         finally:
             ANFRAGE.benutzer = None
+            if schreibend:
+                SCHREIB_SPERRE.release()
+
+
+ROH_PFADE = {"/api/excel", "/api/logo", "/api/kalk-import", "/api/gwplan-import"}
 
 
 def main():

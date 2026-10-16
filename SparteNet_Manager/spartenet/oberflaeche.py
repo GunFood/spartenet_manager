@@ -398,7 +398,8 @@ async function api(pfad,body,logid){const el=logid&&$(logid);const kn=[...docume
 function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 const SK=s=>Array.isArray(s)?s[0]:s,SL=s=>Array.isArray(s)?(s[1]||s[0]):s,SC=s=>Array.isArray(s)&&s[2]?" class='"+s[2]+"'":"";
 function tabelle(id,sp,z,kl){$(id).innerHTML=z.length?"<table><tr>"+sp.map(s=>"<th>"+esc(SL(s))+"</th>").join("")+"</tr>"+z.map(r=>"<tr class='"+(kl?kl(r):"")+"'>"+sp.map(s=>"<td"+SC(s)+">"+esc(r[SK(s)])+"</td>").join("")+"</tr>").join("")+"</table>":""}
-function csvSpeichern(d,name){if(!d||!d.zeilen.length)return alert("Keine Daten.");const sp=d.spalten.map(SK);const t="﻿"+[d.spalten.map(SL).join(";")].concat(d.zeilen.map(z=>sp.map(k=>'"'+String(z[k]??"").replace(/"/g,'""')+'"').join(";"))).join("\r\n");
+function csvWert(v){let s=String(v??"");if(/^[=+\-@\t\r]/.test(s)&&!/^-?\d+([.,]\d+)?( ?%| ?€)?$/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"'}
+function csvSpeichern(d,name){if(!d||!d.zeilen.length)return alert("Keine Daten.");const sp=d.spalten.map(SK);const t="﻿"+[d.spalten.map(SL).join(";")].concat(d.zeilen.map(z=>sp.map(k=>csvWert(z[k])).join(";"))).join("\r\n");
  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([t],{type:"text/csv"}));a.download=name+".csv";a.click()}
 async function logSchalten(){await api("/api/einstellungen",{log_aktiv:$("log_aktiv").checked},"log_datei")}
 async function logZeigen(){await api("/api/log",undefined,"log_datei");const el=$("log_datei");el.scrollTop=el.scrollHeight}

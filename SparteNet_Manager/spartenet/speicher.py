@@ -149,8 +149,37 @@ def speicher_text():
     return f"MariaDB/MySQL {DB_USER}@{DB_HOST}:{DB_PORT}/{DB_NAME}" if DB else f"Dateien im Ordner {HIER}"
 
 
+_ABLAGE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,180}$")
+
+
+def _ablage_name(name):
+    """nur einfache Dateinamen im Datenordner – keine Pfade (S1)"""
+    name = str(name or "")
+    if not _ABLAGE_NAME.match(name) or ".." in name:
+        raise Fehler(f"Ungültiger Dateiname „{name[:60]}“.")
+    return name
+
+
+def datei_atomar(pfad, roh):
+    """erst in eine Zwischendatei schreiben, dann ersetzen – bei Absturz bleibt die alte Datei heil (S5)"""
+    tmp = f"{pfad}.{os.getpid()}.{threading.get_ident()}.neu"
+    with open(tmp, "wb") as f:
+        f.write(roh)
+        f.flush()
+        try:
+            os.fsync(f.fileno())
+        except OSError:
+            pass
+    try:
+        os.chmod(tmp, 0o600)
+    except OSError:
+        pass
+    os.replace(tmp, pfad)
+
+
 def ablage_lesen(name):
     """Datei aus dem Datenspeicher (bytes) oder None"""
+    name = _ablage_name(name)
     if DB:
         r = DB.sql("SELECT inhalt FROM sn_dateien WHERE name = %s", (name,), alle=True)
         return bytes(r[0][0]) if r else None
@@ -162,18 +191,13 @@ def ablage_lesen(name):
 
 
 def ablage_schreiben(name, roh):
+    name = _ablage_name(name)
     if isinstance(roh, str):
         roh = roh.encode("utf-8")
     if DB:
         DB.sql("INSERT INTO sn_dateien (name, inhalt) VALUES (%s, %s) ON DUPLICATE KEY UPDATE inhalt = VALUES(inhalt)", (name, roh))
         return
-    pfad = os.path.join(HIER, name)
-    with open(pfad, "wb") as f:
-        f.write(roh)
-    try:
-        os.chmod(pfad, 0o600)
-    except OSError:
-        pass
+    datei_atomar(os.path.join(HIER, name), roh)
 
 
 def ablage_liste(praefix, endung=""):
@@ -185,6 +209,7 @@ def ablage_liste(praefix, endung=""):
 
 
 def ablage_loeschen(name):
+    name = _ablage_name(name)
     if DB:
         DB.sql("DELETE FROM sn_dateien WHERE name = %s", (name,))
         return
@@ -195,6 +220,7 @@ def ablage_loeschen(name):
 
 
 def ablage_umbenennen(alt, neu):
+    alt, neu = _ablage_name(alt), _ablage_name(neu)
     if DB:
         DB.sql("DELETE FROM sn_dateien WHERE name = %s", (neu,))
         DB.sql("UPDATE sn_dateien SET name = %s WHERE name = %s", (neu, alt))
@@ -276,6 +302,7 @@ def journal(text):
     wer = getattr(ANFRAGE, "benutzer", None)
     if wer and " durch " not in text:
         text = f"{text} · {wer}"
+    text = text_einzeilig(text, 2000)
     try:
         if DB:
             DB.sql("INSERT INTO sn_journal (zeit, text) VALUES (%s, %s)", (time.strftime("%Y-%m-%d %H:%M:%S"), text))

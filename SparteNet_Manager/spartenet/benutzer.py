@@ -219,12 +219,41 @@ def _anmeldesperre(quelle, ok):
         raise Fehler(f"Benutzername oder Passwort falsch ({5 - sperre['fehl']} Versuch(e) bis zur Sperre).")
 
 
+_KONTO_SPERRE = {}
+_KONTO_SPERRE_LOCK = threading.Lock()
+
+
+def _konto_sperre(name, ok):
+    """zusätzlich je Konto: 10 Fehlversuche (egal von wo) → 15 Minuten gesperrt (S3)"""
+    with _KONTO_SPERRE_LOCK:
+        jetzt = time.time()
+        z = _KONTO_SPERRE.setdefault(name, {"fehl": 0, "bis": 0.0})
+        if z["bis"] > jetzt:
+            raise Fehler(f"Dieses Konto ist nach vielen Fehlversuchen für {int(z['bis'] - jetzt) // 60 + 1} Minute(n) gesperrt.")
+        if ok is None:
+            return
+        if ok:
+            z["fehl"] = 0
+            return
+        z["fehl"] += 1
+        if z["fehl"] >= 10:
+            z["bis"], z["fehl"] = jetzt + 900, 0
+            LOG.warning("Konto „%s“ nach 10 Fehlversuchen 15 Minuten gesperrt", text_einzeilig(name, 40))
+
+
 def benutzer_anmelden(d, name, passwort, quelle):
     """prüft Benutzername + Passwort und gibt den Kontonamen zurück; leerer Name oder „admin“ = Manager-Passwort"""
-    name = str(name or "").strip().lower()
+    name = str(name or "").strip().lower()[:40]
     if name in ("", ADMIN_NAME):
-        passwort_pruefen(passwort, quelle)
+        _konto_sperre(ADMIN_NAME, None)
+        try:
+            passwort_pruefen(passwort, quelle)
+        except Fehler:
+            _konto_sperre(ADMIN_NAME, False)
+            raise
+        _konto_sperre(ADMIN_NAME, True)
         return ADMIN_NAME
+    _konto_sperre(name, None)
     _anmeldesperre(quelle, None)
     u = benutzer_liste(d).get(name)
     pw = passwort if isinstance(passwort, str) else ""
@@ -233,7 +262,10 @@ def benutzer_anmelden(d, name, passwort, quelle):
     else:
         _bn_hash(pw, "00" * 16)  # gleiche Rechenzeit, damit nicht erkennbar ist, ob es das Konto gibt
         ok = False
+    if not ok:
+        _konto_sperre(name, False)
     _anmeldesperre(quelle, ok)
+    _konto_sperre(name, True)
     if konto_rechte(d, name)["art"] == "gesperrt":
         LOG.warning("Anmeldung mit gesperrtem Konto „%s“ abgelehnt", name)
         raise Fehler("Dieses Benutzerkonto ist gesperrt. Bitte an den Administrator wenden.")
