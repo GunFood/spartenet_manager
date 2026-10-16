@@ -48,7 +48,7 @@ VORLAGEN = {
 }
 
 # Was eine Anfrage braucht: ("immer",) · ("admin",) · (Bereich, Stufe)
-_IMMER = {"/api/einstellungen", "/api/ansicht", "/api/benutzer-ich", "/api/plan", "/api/pw-regel"}  # nur lesend (GET) bzw. eigene Ansicht
+_IMMER = {"/api/einstellungen", "/api/ansicht", "/api/benutzer-ich", "/api/plan", "/api/pw-regel", "/api/2fa-start", "/api/2fa-bestaetigen", "/api/2fa-aus"}  # nur lesend (GET) bzw. eigene Ansicht
 _NUR_ADMIN = {"/api/benutzer", "/api/benutzer-speichern", "/api/benutzer-loeschen", "/api/beenden"}
 _LESEN = {
     "/api/start": "start", "/api/parzelle": "start",
@@ -360,7 +360,8 @@ def akt_benutzer(d, ich):
     sitz = sitzungen_je_benutzer()
     adm = konto_rechte(d, ADMIN_NAME)
     zeilen = [{"name": ADMIN_NAME, "anzeige": "Administrator (Manager-Passwort)", "art": "admin", "bereiche": adm["bereiche"], "recht_text": "Administrator",
-               "fest": True, "angelegt": "", "zuletzt": "", "von": "", "sitzungen": sitz.get(ADMIN_NAME, 0)}]
+               "fest": True, "angelegt": "", "zuletzt": "", "von": "", "sitzungen": sitz.get(ADMIN_NAME, 0),
+               "zwei_faktor": bool((d.get("admin_totp") or {}).get("aktiv"))}]
     for n in sorted(u):
         x, r = u[n], konto_rechte(d, n)
         zeilen.append({"name": n, "anzeige": x.get("anzeige", ""), "art": r["art"], "bereiche": r["bereiche"], "recht_text": rechte_text(r), "fest": False,
@@ -368,6 +369,7 @@ def akt_benutzer(d, ich):
                        "angelegt": x.get("angelegt", ""), "zuletzt": x.get("zuletzt", ""), "von": x.get("von", ""), "sitzungen": sitz.get(n, 0)})
     return {"zeilen": zeilen, "arten": ARTEN, "stufen": STUFEN, "bereiche": [{"k": k, "text": t, "stufen": list(s)} for k, t, s, _ in BEREICHE],
             "vorlagen": {k: {"text": t, "bereiche": b} for k, (t, b) in VORLAGEN.items()}, "ich": ich,
+            "zwei_faktor_pflicht": bool((d.get("sicherheit") or {}).get("2fa_admin")),
             "log": [f"{len(zeilen)} Benutzerkonten (davon {sum(1 for z in zeilen if z['art'] == 'gesperrt')} gesperrt)."]}
 
 
@@ -461,7 +463,10 @@ def akt_benutzer_ich(d, ich, b):
     rechte = konto_rechte(d, ich)
     if b is None or not b.get("passwort"):
         x = benutzer_liste(d).get(ich) or {}
+        t = (d.get("admin_totp") if ich == ADMIN_NAME else x.get("totp")) or {}
         return {**ich_daten(ich, rechte), "anzeige": x.get("anzeige", ""), "eigenes_passwort": ich in benutzer_liste(d),
+                "zwei_faktor": bool(t.get("aktiv")), "zwei_faktor_seit": t.get("seit", ""), "notfall_rest": len(t.get("notfall") or []),
+                "zwei_faktor_pflicht": bool((d.get("sicherheit") or {}).get("2fa_admin")) and rechte["art"] == "admin",
                 "liste": [{"text": t, "stufe": STUFEN[rechte["bereiche"].get(k, "kein")]} for k, t, _, _ in BEREICHE]}
     if ich not in benutzer_liste(d):
         raise Fehler("Das Passwort des Kontos „admin“ ist das Manager-Passwort – es wird in der Docker-Konfiguration geändert.")

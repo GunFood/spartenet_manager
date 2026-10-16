@@ -1,5 +1,5 @@
 """SparteNet Manager – Oberfläche (HTML, CSS, JavaScript der Web-App)"""
-from .unterlagen import *  # noqa: F401,F403 – alle Namen der vorherigen Module
+from .zweifaktor import *  # noqa: F401,F403 – alle Namen der vorherigen Module
 
 
 # =============================================================== Oberfläche
@@ -325,7 +325,19 @@ nav{position:sticky;top:0;z-index:20}
 <div class="kd" id="kd_box"><div id="kd_form"></div><div class="teiler" data-k="kd" data-box="kd_box" title="Ziehen: Breite der Einstellungen ändern"></div>
 <div class="vorschau"><iframe id="kd_vor" title="Vorschau Zugangskarte"></iframe><div class="log" id="log_kd"></div></div></div></section>
 
-<section id="system"><div class="karte bn-admin" id="up_karte"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0;flex:1">Aktualisierung</h2><span id="up_st" class="status"></span>
+<section id="system"><div class="karte bn-admin" id="si_karte"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0;flex:1">Datensicherung</h2><button class="k" onclick="siLaden()">Aktualisieren</button></div>
+<p class="hint">Eine Datei mit allem: Einstellungen, Planung, Buchungen, Netzplanung, Benutzer (nur Prüfsummen), Passwörter je Parzelle, WLAN-/Tarif-Sicherungen, Kartenlogo, Unterlagen und Änderungsprotokoll. <b>Mit Passwort</b> wird die Datei verschlüsselt (AES-256) – ohne Passwort enthält sie WLAN-Passwörter und den Cloud-Key im Klartext. Das Passwort gut aufheben: ohne es lässt sich die Sicherung nicht einspielen.</p>
+<div class="reihe"><div><label for="si_pw">Passwort für die Sicherung (mind. 10 Zeichen, empfohlen)</label><input id="si_pw" type="password" autocomplete="new-password"></div>
+<div><label for="si_pw2">Passwort wiederholen</label><input id="si_pw2" type="password" autocomplete="new-password"></div></div>
+<div class="knoepfe"><button class="k p" onclick="siHerunterladen()">Sicherung herunterladen</button><button class="k" onclick="siJetzt()">Jetzt auf dem Server sichern</button></div>
+<h3>Automatisch auf dem Server</h3><div class="reihe"><div><label style="display:flex;gap:8px;align-items:center;margin-top:26px"><input type="checkbox" id="si_auto" style="width:auto"> täglich sichern</label></div>
+<div><label for="si_uhr">um … Uhr</label><input id="si_uhr" inputmode="numeric"></div><div><label for="si_anz">Anzahl behalten</label><input id="si_anz" inputmode="numeric"></div></div>
+<div class="knoepfe"><button class="k" onclick="siEinstellungen()">Speichern</button></div><div class="tab" id="si_liste"></div>
+<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600">Sicherung einspielen</summary><p class="hint">Ersetzt <b>alle</b> Daten des Managers durch die Sicherung. Der jetzige Stand wird vorher automatisch auf dem Server gesichert. Am Gateway ändert sich nichts.</p>
+<div class="reihe"><div><label for="si_ein_pw">Passwort der Sicherung (falls verschlüsselt)</label><input id="si_ein_pw" type="password" autocomplete="off"></div>
+<div><label class="k" style="margin-top:22px;display:inline-block">Sicherung wählen und einspielen …<input type="file" id="si_datei" accept=".zip,.sns" onchange="siEinspielen()" style="display:none"></label></div></div></details>
+<div class="log" id="log_si"></div></div>
+<div class="karte bn-admin" id="up_karte"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0;flex:1">Aktualisierung</h2><span id="up_st" class="status"></span>
 <button class="k" onclick="upPruefen()">Nach Updates suchen</button><button class="k p" id="up_los" onclick="upInstallieren()" hidden>Jetzt aktualisieren</button></div>
 <p class="hint">Wie bei Nextcloud: Der Manager fragt GitHub nach einer neueren Version, sichert die Daten, lädt die neue Version, prüft sie, testet sie und startet dann neu – ohne Docker-Neubau. Die neue Version liegt im Datenordner unter <span class="mono">updates/</span>; „Vorherige Version“ schaltet jederzeit zurück (startet eine neue Version nicht, geschieht das automatisch).</p>
 <div class="kacheln" id="up_k"></div><div id="up_notiz"></div><div id="up_schritte"></div>
@@ -379,10 +391,17 @@ nav{position:sticky;top:0;z-index:20}
 <div id="bn_ich_pw"><h3>Eigenes Passwort ändern</h3><div class="reihe" style="max-width:820px"><div><label for="bn_alt">Bisheriges Passwort</label><input id="bn_alt" type="password" autocomplete="current-password"></div>
 <div><label for="bn_neu1">Neues Passwort (mind. 12 Zeichen)</label><input id="bn_neu1" type="password" autocomplete="new-password"></div><div><label for="bn_neu2">Neues Passwort wiederholen</label><input id="bn_neu2" type="password" autocomplete="new-password"></div></div>
 <div class="knoepfe"><button class="k p" onclick="bnEigenesPw()">Passwort ändern</button></div></div>
+<div id="bn_2fa"><h3>Zwei-Faktor-Anmeldung</h3><p class="hint" id="bn_2fa_st"></p>
+<div class="knoepfe"><button class="k p" id="bn_2fa_ein" onclick="zfStart()">Einrichten</button><button class="k" id="bn_2fa_aus" onclick="zfAus()">Ausschalten</button></div>
+<div id="bn_2fa_neu" hidden><div style="display:flex;gap:18px;flex-wrap:wrap;align-items:center"><div id="bn_2fa_qr" style="width:200px;background:#fff;padding:8px;border:1px solid var(--line);border-radius:8px"></div>
+<div><p class="hint">1. QR-Code mit der Authenticator-App scannen (z. B. Google/Microsoft Authenticator, Aegis, 2FAS) – oder den Schlüssel eintippen:<br><b class="mono" id="bn_2fa_geheim"></b></p>
+<label for="bn_2fa_code">2. Angezeigten Code eingeben</label><div style="display:flex;gap:8px"><input id="bn_2fa_code" inputmode="numeric" maxlength="6" style="max-width:140px"><button class="k p" onclick="zfBestaetigen()">Bestätigen</button></div></div></div></div>
+<div id="bn_2fa_notfall" hidden></div></div>
 <p class="hint" id="bn_admin_hint" hidden>Das Konto „admin“ meldet sich mit dem Manager-Passwort an. Geändert wird es in der Docker-Konfiguration (Secret spartenet_password) – danach den Manager neu starten.</p>
 <div class="knoepfe"><button class="k" onclick="abmelden()">Abmelden</button></div><div class="log" id="log_bni"></div></div>
 <div class="karte bn-admin"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h3 style="margin:0;flex:1">Benutzerkonten</h3><button class="k" onclick="bnLaden()">Aktualisieren</button></div>
 <p class="hint"><b>Administrator</b>: alles, auch Benutzerkonten. <b>Gesperrt</b>: keine Anmeldung, offene Sitzungen enden sofort. <b>Rechte je Bereich</b>: für jedes Arbeitsblatt bzw. jede Funktion einzeln <i>kein Zugriff</i> (ausgeblendet), <i>lesen</i> (ansehen, Vorschau) oder <i>lesen und schreiben</i> (ändern, ans Gateway übertragen) – z. B. alles nur lesen, aber WLAN-Passwörter schreiben und Tarife buchen. „Rechte“ öffnet die Liste; jede Änderung wird sofort gespeichert.</p>
+<label style="display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" id="bn_2fa_pflicht" style="width:auto" onchange="zfPflicht(this.checked)"> Zwei-Faktor-Anmeldung für alle Administratoren verpflichtend</label>
 <div class="tab" id="bn_tab" style="--tab-h:900px"></div><div class="log" id="log_bn"></div></div>
 <div class="karte bn-admin"><h3>Neues Benutzerkonto</h3>
 <div class="reihe"><div><label for="bn_name">Benutzername</label><input id="bn_name" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="z. B. vorstand.buchenweg"></div>
@@ -409,10 +428,10 @@ nav{position:sticky;top:0;z-index:20}
 const T="__TOKEN__";let LETZT=null,PLAN=null,PLANZ=null,PPSK=null,PPSKSP=null,CODES=[],VMIN=0,EINST={};
 const TABS=[["start","Start"],["verbindung","Verbindung"],["lesen","Auslesen"],["planung","Planung"],["abgleich","Abgleich"],["einrichten","Einrichten"],["uebertragen","Übertragen"],["tarife","Tarife"],["kalkulation","Kalkulation"],["netzplanung","Netzplanung"],["kartendesign","Kartendesign"],["voucher","Gast-Voucher"],["system","Systeminfo"],["daten","Alle Daten"],["unterlagen","Unterlagen"],["benutzer","Benutzer"],["hilfe","Hilfe"]];
 const $=id=>document.getElementById(id);const nav=$("nav");TABS.forEach(([id,t])=>{const b=document.createElement("button");b.textContent=t;b.onclick=()=>zeige(id);b.id="n_"+id;nav.appendChild(b)});
-function zeige(id){if(!reiterErlaubt(id))id=startReiter();rechteHinweis(id);if(id=="start"&&!$("st_k").innerHTML&&typeof EINST!="undefined"&&EINST.konsole_id)startLaden().catch(()=>{});if(id=="verbindung")fernLaden().catch(()=>{});if(location.hash!="#"+id)history.replaceState(null,"","#"+id);setTimeout(()=>{const b=document.querySelector("nav button.aktiv");if(b&&b.scrollIntoView)b.scrollIntoView({inline:"center",block:"nearest"})},0);if(id=="kalkulation"&&!KK)kkLaden().catch(()=>{});if(id=="netzplanung"&&!GP)gpLaden().catch(()=>{});if(id=="benutzer")bnStart();if(id=="unterlagen")ulLaden().catch(()=>{});if(id=="system"&&ICH.admin)upLaden(true).catch(()=>{});if(id=="kartendesign"&&!DESIGN)designLaden();if(id=="tarife"&&!TF)tfLaden();if(id=="system"&&!SYS)sysLaden();if(id=="daten"&&!DLISTE)datenListe();document.querySelectorAll("section").forEach(s=>s.classList.toggle("aktiv",s.id==id));document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("aktiv",b.id=="n_"+id))}
+function zeige(id){if(!reiterErlaubt(id))id=startReiter();rechteHinweis(id);if(id=="start"&&!$("st_k").innerHTML&&typeof EINST!="undefined"&&EINST.konsole_id)startLaden().catch(()=>{});if(id=="verbindung")fernLaden().catch(()=>{});if(location.hash!="#"+id)history.replaceState(null,"","#"+id);setTimeout(()=>{const b=document.querySelector("nav button.aktiv");if(b&&b.scrollIntoView)b.scrollIntoView({inline:"center",block:"nearest"})},0);if(id=="kalkulation"&&!KK)kkLaden().catch(()=>{});if(id=="netzplanung"&&!GP)gpLaden().catch(()=>{});if(id=="benutzer")bnStart();if(id=="unterlagen")ulLaden().catch(()=>{});if(id=="system"&&ICH.admin){upLaden(true).catch(()=>{});siLaden().catch(()=>{})}if(id=="kartendesign"&&!DESIGN)designLaden();if(id=="tarife"&&!TF)tfLaden();if(id=="system"&&!SYS)sysLaden();if(id=="daten"&&!DLISTE)datenListe();document.querySelectorAll("section").forEach(s=>s.classList.toggle("aktiv",s.id==id));document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("aktiv",b.id=="n_"+id))}
 async function api(pfad,body,logid){const el=logid&&$(logid);const kn=[...document.querySelectorAll("button")];kn.forEach(b=>b.disabled=true);if(el)el.textContent="… bitte warten (über die Cloud kann das einige Sekunden dauern)";
  try{const r=await fetch(pfad,{method:body===undefined?"GET":"POST",headers:{"X-Token":T,"Content-Type":"application/json"},body:body===undefined?undefined:(body instanceof Blob?body:JSON.stringify(body))});
- if(r.status==401){location.reload();return new Promise(()=>{})}const d=await r.json().catch(()=>({}));if(r.status==403&&!d.recht){location.reload();return new Promise(()=>{})}if(!r.ok)throw new Error(d.fehler||r.status);if(el)el.textContent=d.log?d.log.join("\n"):"";return d}
+ if(r.status==401){location.reload();return new Promise(()=>{})}const d=await r.json().catch(()=>({}));if(d.zweiter_faktor_fehlt&&typeof zeige=="function"&&!document.querySelector("#benutzer.aktiv"))zeige("benutzer");if(r.status==403&&!d.recht){location.reload();return new Promise(()=>{})}if(!r.ok)throw new Error(d.fehler||r.status);if(el)el.textContent=d.log?d.log.join("\n"):"";return d}
  catch(e){if(el)el.innerHTML='<span class="fehler">✖ '+esc(e.message)+'</span>';throw e}finally{kn.forEach(b=>b.disabled=false)}}
 function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 const SK=s=>Array.isArray(s)?s[0]:s,SL=s=>Array.isArray(s)?(s[1]||s[0]):s,SC=s=>Array.isArray(s)&&s[2]?" class='"+s[2]+"'":"";
@@ -792,21 +811,21 @@ let BN=null;const BNOFFEN=new Set();
 async function bnStart(){const d=await api("/api/benutzer-ich",undefined,"log_bni");$("log_bni").textContent="";
  $("bn_ich").innerHTML=kachel("Benutzername",esc(d.name),"")+kachel("Rechte",esc(d.recht_text),d.admin?"gut":"")+(d.anzeige?kachel("Name",esc(d.anzeige),""):"")+(d.sparten&&d.sparten.length?kachel("Sparten",esc(d.sparten.join(", ")),"warn"):"");
  $("bn_ich_liste").innerHTML=d.admin?"":"<table><tr><th>Bereich</th><th>Ihr Recht</th></tr>"+d.liste.map(x=>`<tr class="${x.stufe=="kein Zugriff"?"gesperrt":""}"><td>${esc(x.text)}</td><td>${esc(x.stufe)}</td></tr>`).join("")+"</table>";
- $("bn_ich_pw").hidden=!d.eigenes_passwort;$("bn_admin_hint").hidden=d.name!="admin";if(ICH.admin)bnLaden()}
+ zfZeigen(d);$("bn_ich_pw").hidden=!d.eigenes_passwort;$("bn_admin_hint").hidden=d.name!="admin";if(ICH.admin)bnLaden()}
 async function bnEigenesPw(){await api("/api/benutzer-ich",{alt:$("bn_alt").value,passwort:$("bn_neu1").value,passwort2:$("bn_neu2").value},"log_bni");["bn_alt","bn_neu1","bn_neu2"].forEach(i=>$(i).value="")}
 async function bnLaden(){bnZeigen(await api("/api/benutzer",undefined,"log_bn"))}
 async function bnSpeichern(b,logid){bnZeigen(await api("/api/benutzer-speichern",b,logid||"log_bn"))}
-function bnZeigen(d){BN=d;const box=$("bn_tab"),y=box.scrollTop;
+function bnZeigen(d){BN=d;const box=$("bn_tab"),y=box.scrollTop;$("bn_2fa_pflicht").checked=!!d.zwei_faktor_pflicht;
  if(!$("bn_vorlage").options.length)$("bn_vorlage").innerHTML=Object.entries(d.vorlagen).map(([k,v])=>`<option value="${k}">${esc(v.text)}</option>`).join("")+'<option value="#admin">Administrator</option><option value="#gesperrt">Gesperrt (noch nicht freigeschaltet)</option>';
- let h="<table><tr><th>Benutzername</th><th>Name</th><th>Kontoart</th><th>Rechte</th><th>angelegt</th><th>zuletzt angemeldet</th><th>Sitzungen</th><th></th></tr>";
+ let h="<table><tr><th>Benutzername</th><th>Name</th><th>Kontoart</th><th>Rechte</th><th>angelegt</th><th>zuletzt angemeldet</th><th>Sitzungen</th><th>2FA</th><th></th></tr>";
  for(const z of d.zeilen){const n=esc(z.name),offen=BNOFFEN.has(z.name);
   h+=`<tr class="${z.art=="gesperrt"?"recht-gesperrt":""}"><td><b>${n}</b>${z.name==d.ich?" <small>(Sie)</small>":""}</td>
   <td>${z.fest?esc(z.anzeige):`<input class="bn_anz" data-n="${n}" value="${esc(z.anzeige)}" style="min-width:170px">`}</td>
   <td>${z.fest?"Administrator":`<select class="bn_art" data-n="${n}">${Object.entries(d.arten).map(([k,t])=>`<option value="${k}"${k==z.art?" selected":""}>${esc(t)}</option>`).join("")}</select>`}</td>
   <td>${esc(z.recht_text)}${z.sparten&&z.sparten.length?'<br><small>nur '+esc(z.sparten.join(", "))+'</small>':""}${z.art=="bereiche"?` <button class="k" onclick="bnAuf('${n}')">${offen?"Rechte schließen":"Rechte …"}</button>`:""}</td>
-  <td>${esc(z.angelegt)}${z.von?" <small>von "+esc(z.von)+"</small>":""}</td><td>${esc(z.zuletzt)||"–"}</td><td>${z.sitzungen||"–"}</td>
+  <td>${esc(z.angelegt)}${z.von?" <small>von "+esc(z.von)+"</small>":""}</td><td>${esc(z.zuletzt)||"–"}</td><td>${z.sitzungen||"–"}</td><td>${z.zwei_faktor?`✔ <button class="k" onclick="zfReset('${n}')">zurücksetzen</button>`:"–"}</td>
   <td>${z.fest?"":`<button class="k" onclick="bnPw('${n}')">Passwort setzen</button> <button class="k" onclick="bnLoeschen('${n}')">Löschen</button>`}</td></tr>`;
-  if(offen&&z.art=="bereiche")h+=`<tr class="bn_detail"><td colspan="8"><div class="knoepfe" style="margin:4px 0 6px">Vorlage übernehmen: ${Object.entries(d.vorlagen).map(([k,v])=>`<button class="k" onclick="bnVorlage('${n}','${k}')">${esc(v.text.split(":")[0])}</button>`).join(" ")}</div>
+  if(offen&&z.art=="bereiche")h+=`<tr class="bn_detail"><td colspan="9"><div class="knoepfe" style="margin:4px 0 6px">Vorlage übernehmen: ${Object.entries(d.vorlagen).map(([k,v])=>`<button class="k" onclick="bnVorlage('${n}','${k}')">${esc(v.text.split(":")[0])}</button>`).join(" ")}</div>
    <div class="reihe" style="margin:4px 0 10px;max-width:760px"><div><label>Nur diese Sparten (Kürzel, z. B. „BW, FEIER“ – leer = alle Sparten)</label><input class="bn_sp" data-n="${n}" value="${esc((z.sparten||[]).join(", "))}" placeholder="alle Sparten" style="text-transform:uppercase"></div></div>
    <div class="bn_matrix">${d.bereiche.map(b=>{const st=z.bereiche[b.k]||"kein";return `<label>${esc(b.text)}<select class="bn_ber ${st}" data-n="${n}" data-k="${b.k}">${b.stufen.map(x=>`<option value="${x}"${x==st?" selected":""}>${esc(d.stufen[x])}</option>`).join("")}</select></label>`}).join("")}</div></td></tr>`}
  box.innerHTML=h+"</table>";box.scrollTop=y;
@@ -891,6 +910,32 @@ async function ulDatei(id,ansehen){const x=UL.dateien.find(y=>y.id==id);const w=
  catch(e){if(w)w.close();$("log_ul").innerHTML='<span class="fehler">✖ '+esc(e.message)+'</span>'}}
 async function ulLoeschen(id){const x=UL.dateien.find(y=>y.id==id);if(!confirm("„"+(x?x.name:id)+"“ endgültig löschen?"))return;UL=await api("/api/unterlage-loeschen",{id},"log_ul");ulZeigen()}
 (function(){const z=$("ul_zone");if(!z)return;["dragenter","dragover"].forEach(t=>z.addEventListener(t,e=>{e.preventDefault();z.style.borderColor="#3a9a1f"}));["dragleave","drop"].forEach(t=>z.addEventListener(t,e=>{e.preventDefault();z.style.borderColor=""}));z.addEventListener("drop",e=>ulHoch(e.dataTransfer.files))})();
+
+async function siLaden(){const d=await api("/api/sicherung",undefined,"log_si");const e=d.einstellungen;$("si_auto").checked=e.automatisch;$("si_uhr").value=e.uhrzeit;$("si_anz").value=e.anzahl;
+ $("si_liste").innerHTML=d.liste.length?"<table><tr><th>Sicherung auf dem Server</th><th>Zeit</th><th>Größe</th><th></th></tr>"+d.liste.map(x=>`<tr><td class="mono">${esc(x.name)}</td><td>${esc(x.zeit)}</td><td>${groesse(x.groesse)}${x.verschluesselt?" · verschlüsselt":""}</td><td><button class="k" onclick="siServerDatei('${esc(x.name)}')">Herunterladen</button></td></tr>`).join("")+"</table>":'<p class="hint" style="padding:10px">Noch keine Sicherung auf dem Server.</p>';
+ if(!d.krypto)$("log_si").textContent="Hinweis: Verschlüsselung nicht verfügbar (Paket cryptography fehlt) – Sicherungen nur unverschlüsselt."}
+async function siBlob(pfad,body,name){const r=await fetch(pfad,{method:body?"POST":"GET",headers:{"X-Token":T,"Content-Type":"application/json"},body:body?JSON.stringify(body):undefined});
+ if(!r.ok){let m=r.status;try{m=(await r.json()).fehler}catch(e){}throw new Error(m)}const cd=r.headers.get("Content-Disposition")||"";const m=/filename\*=UTF-8''([^;]+)/.exec(cd);
+ const b=await r.blob(),u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=m?decodeURIComponent(m[1]):name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),60000)}
+async function siHerunterladen(){const p=$("si_pw").value;if(p!==$("si_pw2").value)return $("log_si").innerHTML='<span class="fehler">✖ Die Passwörter stimmen nicht überein.</span>';
+ if(!p&&!confirm("Ohne Passwort ist die Sicherung NICHT verschlüsselt (WLAN-Passwörter und Cloud-Key lesbar). Trotzdem herunterladen?"))return;
+ $("log_si").textContent="… Sicherung wird erstellt";try{await siBlob("/api/sicherung-erstellen",{passwort:p},"SparteNet_Datensicherung");$("log_si").textContent="✔ Sicherung heruntergeladen"+(p?" (verschlüsselt).":".");$("si_pw").value=$("si_pw2").value=""}catch(e){$("log_si").innerHTML='<span class="fehler">✖ '+esc(e.message)+'</span>'}}
+async function siServerDatei(n){try{await siBlob("/api/sicherung-datei?name="+encodeURIComponent(n),null,n)}catch(e){$("log_si").innerHTML='<span class="fehler">✖ '+esc(e.message)+'</span>'}}
+async function siJetzt(){await api("/api/sicherung-jetzt",{},"log_si");siLaden()}
+async function siEinstellungen(){await api("/api/sicherung-einstellungen",{automatisch:$("si_auto").checked,uhrzeit:$("si_uhr").value,anzahl:$("si_anz").value},"log_si");siLaden()}
+async function siEinspielen(){const f=$("si_datei").files[0];$("si_datei").value="";if(!f)return;if(!confirm("ALLE Daten des Managers durch „"+f.name+"“ ersetzen? Der jetzige Stand wird vorher auf dem Server gesichert."))return;
+ $("log_si").textContent="… wird eingespielt";try{const r=await fetch("/api/sicherung-einspielen",{method:"POST",headers:{"X-Token":T,"X-Sicherung-Passwort":encodeURIComponent($("si_ein_pw").value)},body:f});const d=await r.json();if(!r.ok)throw new Error(d.fehler||r.status);
+  $("log_si").textContent=d.log.join("\n");$("si_ein_pw").value="";if(d.neu_laden)setTimeout(()=>location.reload(),2500)}catch(e){$("log_si").innerHTML='<span class="fehler">✖ '+esc(e.message)+'</span>'}}
+
+function zfZeigen(d){const an=!!d.zwei_faktor;$("bn_2fa").hidden=d.name=="Handy (PIN)";
+ $("bn_2fa_st").innerHTML=an?"✔ Eingeschaltet seit "+esc(d.zwei_faktor_seit)+" · noch "+d.notfall_rest+" Notfall-Codes":(d.zwei_faktor_pflicht?'<b style="color:var(--red)">Pflicht für Administratoren – bitte jetzt einrichten.</b>':"Aus. Mit Zwei-Faktor braucht die Anmeldung zusätzlich einen 6-stelligen Code aus einer App auf dem Handy.");
+ $("bn_2fa_ein").hidden=an;$("bn_2fa_aus").hidden=!an}
+async function zfStart(){const d=await api("/api/2fa-start",{},"log_bni");$("bn_2fa_qr").innerHTML=d.svg;$("bn_2fa_geheim").textContent=d.geheim;$("bn_2fa_neu").hidden=false;$("bn_2fa_notfall").hidden=true;$("bn_2fa_code").focus()}
+async function zfBestaetigen(){const d=await api("/api/2fa-bestaetigen",{code:$("bn_2fa_code").value.trim()},"log_bni");$("bn_2fa_neu").hidden=true;$("bn_2fa_code").value="";
+ $("bn_2fa_notfall").innerHTML='<p class="hint"><b>Notfall-Codes</b> – jeder funktioniert genau einmal, falls das Handy weg ist. Jetzt ausdrucken oder sicher notieren:</p><pre class="json" style="font-size:16px">'+d.notfall.map(esc).join("\n")+"</pre>";$("bn_2fa_notfall").hidden=false;bnStart()}
+async function zfAus(){const c=prompt("Zum Ausschalten den aktuellen Code aus der App (oder einen Notfall-Code) eingeben:");if(!c)return;await api("/api/2fa-aus",{code:c},"log_bni");bnStart()}
+async function zfReset(n){if(!confirm("Zwei-Faktor-Anmeldung von „"+n+"“ zurücksetzen? Das Konto wird abgemeldet und muss sie neu einrichten."))return;bnZeigen(await api("/api/2fa-zuruecksetzen",{name:n},"log_bn"))}
+async function zfPflicht(an){try{bnZeigen(await api("/api/sicherheit-einstellungen",{"2fa_admin":an},"log_bn"))}catch(e){$("bn_2fa_pflicht").checked=!an}}
 
 let GP=null;
 const gz=(v,n=0)=>v==null||v===""?"–":Number(v).toLocaleString("de-DE",{minimumFractionDigits:n,maximumFractionDigits:n});

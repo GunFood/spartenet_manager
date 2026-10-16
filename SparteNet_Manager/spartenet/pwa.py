@@ -57,13 +57,15 @@ __INHALT__
 </div><script>
 if("serviceWorker" in navigator&&isSecureContext)navigator.serviceWorker.register("/sw.js").catch(()=>{});
 async function an(e){e.preventDefault();const b=document.getElementById("b"),f=document.getElementById("f");b.disabled=true;f.textContent="";
- try{const r=await fetch("/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({benutzer:document.getElementById("benutzer").value.trim(),passwort:document.getElementById("passwort").value,geraet:navigator.userAgent})});
-  const d=await r.json();if(!r.ok)throw new Error(d.fehler||r.status);location.reload()}catch(x){f.textContent=x.message;b.disabled=false;document.getElementById("passwort").select()}}
+ try{const r=await fetch("/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({benutzer:document.getElementById("benutzer").value.trim(),passwort:document.getElementById("passwort").value,code:document.getElementById("code").value.trim(),geraet:navigator.userAgent})});
+  const d=await r.json();if(d.zweiter_faktor){const c=document.getElementById("code");c.style.display="block";c.value="";c.focus();f.textContent=d.fehler;b.disabled=false;return}
+  if(!r.ok)throw new Error(d.fehler||r.status);location.reload()}catch(x){f.textContent=x.message;b.disabled=false;document.getElementById("passwort").select()}}
 </script></body></html>"""
 
 LOGIN_FORM = """<p>Mit Benutzername und Passwort anmelden. Administrator: Benutzername leer lassen oder „admin“ und das Manager-Passwort. Auf entfernten Handys funktioniert ohne Benutzername auch die Handy-PIN.</p>
 <form onsubmit="an(event)"><input id="benutzer" class="name" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Benutzername (leer = admin)">
 <input id="passwort" type="password" autocomplete="current-password" placeholder="Passwort" autofocus required>
+<input id="code" class="name" inputmode="numeric" autocomplete="one-time-code" placeholder="Code aus der Authenticator-App" style="display:none;margin-top:10px">
 <button id="b">Anmelden</button><div class="f" id="f"></div></form>"""
 
 __all__ = [_n for _n in dict(globals()) if not _n.startswith("__")]  # alle Namen an die folgenden Module weitergeben

@@ -161,6 +161,13 @@ class Handler(BaseHTTPRequestHandler):
         name = str(b.get("benutzer") or "").strip().lower()
         try:
             konto = benutzer_anmelden(d, name, geheim, self._quelle())
+            if zweifaktor_aktiv(d, konto):
+                if not str(b.get("code") or "").strip():
+                    return self._send(400, {"fehler": "Bitte den 6-stelligen Code aus der Authenticator-App eingeben (oder einen Notfall-Code).", "zweiter_faktor": True})
+                if not zweifaktor_pruefen(d, konto, b.get("code")):
+                    _konto_sperre(konto, False)
+                    LOG.warning("Falscher Zwei-Faktor-Code für „%s“", konto)
+                    return self._send(400, {"fehler": "Der Code stimmt nicht.", "zweiter_faktor": True})
             t = auth_sitzung_neu(b.get("geraet"), konto)
             cookie = f"sn_auth={t}"
             LOG.info("Anmeldung erfolgreich: %s", konto)
@@ -224,6 +231,8 @@ class Handler(BaseHTTPRequestHandler):
         if not erlaubt(rechte, noetig):
             LOG.warning("Keine Berechtigung: %s für %s (%s)", ich, pfad, "/".join(noetig))
             return self._send(403, {"fehler": fehlt_text(ich, rechte, noetig), "recht": "fehlt"})
+        if pfad not in ZWEIFAKTOR_FREI and zweifaktor_pflicht_offen(d_geladen or lade(), ich, rechte):
+            return self._send(403, {"fehler": "Für Administratoren ist die Zwei-Faktor-Anmeldung Pflicht – bitte zuerst unter „Benutzer → Mein Konto“ einrichten.", "recht": "fehlt", "zweiter_faktor_fehlt": True})
         sp_erl = sparten_von(rechte)
         if sp_erl is not None:
             try:
@@ -344,6 +353,17 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/unterlage-datei": lambda: akt_unterlage_datei(d, q, sp_erl),
                 "/api/unterlage-aendern": lambda: akt_unterlage_aendern(d, b or {}, sp_erl),
                 "/api/unterlage-loeschen": lambda: akt_unterlage_loeschen(d, b or {}, sp_erl),
+                "/api/sicherung": lambda: akt_sicherung(d),
+                "/api/sicherung-erstellen": lambda: akt_sicherung_erstellen(d, b, ich),
+                "/api/sicherung-datei": lambda: akt_sicherung_datei(d, q),
+                "/api/sicherung-jetzt": lambda: akt_sicherung_jetzt(d, ich),
+                "/api/sicherung-einstellungen": lambda: akt_sicherung_einstellungen(d, b or {}),
+                "/api/sicherung-einspielen": lambda: akt_sicherung_einspielen(d, roh, urllib.parse.unquote(self.headers.get("X-Sicherung-Passwort") or ""), ich),
+                "/api/2fa-start": lambda: akt_2fa_start(d, ich),
+                "/api/2fa-bestaetigen": lambda: akt_2fa_bestaetigen(d, ich, (b or {}).get("code")),
+                "/api/2fa-aus": lambda: akt_2fa_aus(d, ich, (b or {}).get("code")),
+                "/api/2fa-zuruecksetzen": lambda: akt_2fa_zuruecksetzen(d, (b or {}).get("name"), ich),
+                "/api/sicherheit-einstellungen": lambda: akt_sicherheit_einstellungen(d, b or {}, ich),
                 "/api/update": lambda: akt_update(d),
                 "/api/update-pruefen": lambda: akt_update_pruefen(d),
                 "/api/update-installieren": lambda: akt_update_installieren(d, b, ich),
@@ -395,6 +415,8 @@ def main():
     n = update_sitzungen_uebernehmen()
     if n:
         print(f"{n} Anmeldung(en) über den Neustart übernommen.")
+    if os.environ.get("SPARTENET_SICHERUNG", "1") != "0":
+        sicherung_hintergrund()
     if os.environ.get("SPARTENET_UPDATE_PRUEFEN", "1") != "0":
         update_hintergrund()
     f = fern_daten(d)
