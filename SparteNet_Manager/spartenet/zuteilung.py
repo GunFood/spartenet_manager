@@ -444,11 +444,11 @@ def akt_zuteilung_gateway(d, b):
     # entfernen: erst die Zugänge (PPSK) im Pächter-WLAN, dann das Netz
     weg = [ok_weg[n] for n in sorted(wahl_weg)]
     if weg:
-        plan = plan_berechnen(d["plan"])
+        plan = plan_aktiv(d)
         wlans = g.legacy("GET", "rest/wlanconf")
         for kz in sorted({x["kz"] for x in weg}):
             ids = {x["id"] for x in weg if x["kz"] == kz}
-            ssid = WLAN_PAECHTER.format(kz=kz, pre=plan["praefix"])
+            ssid = wlan_ssid(d, kz)
             for w in wlans:
                 keys = w.get("private_preshared_keys") or []
                 rest = [k for k in keys if k.get("networkconf_id") not in ids]

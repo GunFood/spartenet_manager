@@ -104,7 +104,10 @@ def passwort_pruefen(passwort, quelle):
         raise Fehler(f"Passwort falsch ({5 - sperre['fehl']} Versuch(e) bis zur Sperre).")
 
 
-def auth_sitzung_neu(geraet, benutzer="admin"):
+SITZUNG_KURZ_STUNDEN = 12      # ohne „Angemeldet bleiben“
+
+
+def auth_sitzung_neu(geraet, benutzer="admin", bleiben=True):
     jetzt = time.time()
     with _AUTH_SESSIONS_LOCK:
         for k, sitzung in list(_AUTH_SESSIONS.items()):
@@ -114,7 +117,8 @@ def auth_sitzung_neu(geraet, benutzer="admin"):
             del _AUTH_SESSIONS[min(_AUTH_SESSIONS, key=lambda k: _AUTH_SESSIONS[k]["bis"])]
         t = secrets.token_urlsafe(32)
         _AUTH_SESSIONS[_sitzung_hash(t)] = {
-            "bis": jetzt + SITZUNG_TAGE * 86400,
+            "bis": jetzt + (SITZUNG_TAGE * 86400 if bleiben else SITZUNG_KURZ_STUNDEN * 3600),
+            "zuletzt": jetzt,
             "geraet": str(geraet or "Browser")[:80],
             "seit": time.strftime("%Y-%m-%d %H:%M"),
             "benutzer": str(benutzer or "admin"),
@@ -134,16 +138,21 @@ def auth_sitzung_ok(t):
         return True
 
 
-def auth_sitzung_info(t):
-    """Sitzung zum Cookie (mit Benutzername) oder None"""
+def auth_sitzung_info(t, leerlauf=0, aktiv=False):
+    """Sitzung zum Cookie (mit Benutzername) oder None.
+    leerlauf: Sekunden ohne Aktivität, nach denen die Sitzung endet (0 = nie); aktiv: Aktivität jetzt vermerken"""
     if not t:
         return None
     h = _sitzung_hash(t)
+    jetzt = time.time()
     with _AUTH_SESSIONS_LOCK:
         sitzung = _AUTH_SESSIONS.get(h)
-        if not sitzung or sitzung["bis"] <= time.time():
+        # 90 s Spielraum: die Oberfläche meldet Aktivität höchstens jede Minute und zeigt vorher einen Countdown
+        if not sitzung or sitzung["bis"] <= jetzt or (leerlauf and jetzt - float(sitzung.get("zuletzt") or jetzt) > leerlauf + 90):
             _AUTH_SESSIONS.pop(h, None)
             return None
+        if aktiv:
+            sitzung["zuletzt"] = jetzt
         return dict(sitzung)
 
 

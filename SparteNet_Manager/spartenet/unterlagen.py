@@ -19,6 +19,20 @@ UNTERLAGEN_TYPEN = {
 }
 _ANSEHEN = {"pdf": (b"%PDF",), "png": (b"\x89PNG",), "jpg": (b"\xff\xd8",), "jpeg": (b"\xff\xd8",), "gif": (b"GIF87a", b"GIF89a"), "webp": (b"RIFF",)}
 _ID_RE = re.compile(r"^[0-9a-f]{16}$")
+ORDNER_STANDARD = ["Allgemein", "Verträge", "Pläne", "Protokolle", "Rechnungen"]
+
+
+def _ordnername(n):
+    n = text_einzeilig(n, 60).strip().replace("/", "-").replace("\\", "-")
+    return n or "Allgemein"
+
+
+def unterlagen_ordner(d, sichtbare=None):
+    """Standard-Ordner, selbst angelegte und alle, in denen Dateien liegen"""
+    u = unterlagen_daten(d)
+    eigene = [o for o in (u.get("ordner") or []) if isinstance(o, str)]
+    benutzt = {x.get("ordner") for x in (sichtbare if sichtbare is not None else u["dateien"].values()) if x.get("ordner")}
+    return sorted(set(ORDNER_STANDARD) | set(eigene) | benutzt, key=lambda o: (o != "Allgemein", o.lower()))
 
 
 def unterlagen_daten(d):
@@ -50,8 +64,9 @@ def akt_unterlagen(d, erlaubt):
              for k, v in u["dateien"].items() if _sichtbar(v, erlaubt)]
     liste.sort(key=lambda x: ((x["ordner"] or "").lower(), (x["name"] or "").lower()))
     belegt = sum(v.get("groesse", 0) for v in u["dateien"].values())
-    ordner = sorted({x["ordner"] for x in liste if x["ordner"]} | {"Allgemein", "Verträge", "Pläne", "Protokolle", "Rechnungen"}, key=str.lower)
-    return {"dateien": liste, "ordner": ordner, "max_datei_mb": UNTERLAGEN_MAX_MB, "gesamt_mb": UNTERLAGEN_GESAMT_MB,
+    ordner = unterlagen_ordner(d, liste)
+    anzahl = {o: sum(1 for x in liste if x["ordner"] == o) for o in ordner}
+    return {"dateien": liste, "ordner": ordner, "anzahl": anzahl, "standard": ORDNER_STANDARD, "max_datei_mb": UNTERLAGEN_MAX_MB, "gesamt_mb": UNTERLAGEN_GESAMT_MB,
             "belegt_mb": round(belegt / 1_000_000, 1), "endungen": sorted(UNTERLAGEN_TYPEN), "sparten_erlaubt": sorted(erlaubt) if erlaubt else None,
             "log": [f"{len(liste)} Datei(en) · {belegt / 1_000_000:.1f} von {UNTERLAGEN_GESAMT_MB} MB belegt"]}
 
@@ -78,7 +93,9 @@ def akt_unterlage_hochladen(d, q, roh, wer, erlaubt):
         raise Fehler("Ungültiges Kürzel.")
     if erlaubt is not None and sparte not in erlaubt:
         raise Fehler("Ihr Konto darf nur in die eigenen Sparten hochladen – bitte eine Sparte wählen.")
-    ordner = text_einzeilig(q.get("ordner", [""])[0], 60).strip() or "Allgemein"
+    ordner = _ordnername(q.get("ordner", [""])[0])
+    if ordner.lower() not in {o.lower() for o in unterlagen_ordner(d)}:      # neuer Ordner beim Hochladen → bleibt auch leer erhalten
+        u["ordner"] = sorted([o for o in (u.get("ordner") or []) if isinstance(o, str)] + [ordner], key=str.lower)
     i = secrets.token_hex(8)
     ablage_schreiben(f"Unterlage_{i}", roh)
     ansehen = endung in _ANSEHEN and roh.startswith(_ANSEHEN[endung]) and (endung != "webp" or roh[8:12] == b"WEBP")
@@ -116,7 +133,7 @@ def akt_unterlage_aendern(d, b, erlaubt):
     if "beschreibung" in b:
         x["beschreibung"] = text_einzeilig(b["beschreibung"], 300)
     if "ordner" in b:
-        x["ordner"] = text_einzeilig(b["ordner"], 60).strip() or "Allgemein"
+        x["ordner"] = _ordnername(b["ordner"])
     if "name" in b:
         neu = _anzeigename(b["name"])
         if neu.rsplit(".", 1)[-1].lower() != x["typ"]:
@@ -130,6 +147,35 @@ def akt_unterlage_aendern(d, b, erlaubt):
     speichere(d)
     r = akt_unterlagen(d, erlaubt)
     r["log"] = [f"✔ „{x['name']}“ gespeichert."]
+    return r
+
+
+def akt_unterlage_ordner(d, b, erlaubt):
+    """Ordner anlegen ({"neu": Name}) oder einen leeren, selbst angelegten Ordner entfernen ({"loeschen": Name})"""
+    u = unterlagen_daten(d)
+    eigene = [o for o in (u.get("ordner") or []) if isinstance(o, str)]
+    if b.get("neu") is not None:
+        n = _ordnername(b["neu"])
+        if n.lower() in {o.lower() for o in unterlagen_ordner(d)}:
+            raise Fehler(f"Den Ordner „{n}“ gibt es schon.")
+        if len(eigene) >= 100:
+            raise Fehler("Höchstens 100 eigene Ordner.")
+        u["ordner"] = sorted(eigene + [n], key=str.lower)
+        text = f"✔ Ordner „{n}“ angelegt."
+    elif b.get("loeschen"):
+        n = str(b["loeschen"])
+        if n in ORDNER_STANDARD:
+            raise Fehler("Standard-Ordner bleiben.")
+        if any(x.get("ordner") == n for x in u["dateien"].values()):
+            raise Fehler(f"Im Ordner „{n}“ liegen noch Dateien – erst verschieben oder löschen.")
+        u["ordner"] = [o for o in eigene if o != n]
+        text = f"✔ Ordner „{n}“ entfernt."
+    else:
+        raise Fehler("Nichts angegeben.")
+    speichere(d)
+    journal("Unterlagen: " + text[2:])
+    r = akt_unterlagen(d, erlaubt)
+    r["log"] = [text]
     return r
 
 

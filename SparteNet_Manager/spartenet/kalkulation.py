@@ -51,7 +51,7 @@ def kalk_sparten(d):
     extra = k.get("sparten") or {}
     aus = {}
     try:
-        plan = plan_berechnen(d["plan"])
+        plan = plan_aktiv(d)
         for s in plan["sparten"]:
             aus[s["kz"]] = {"kz": s["kz"], "name": s["name"], "n": s["n"], "gateway": plan["gateway"], "quelle": "Planung"}
     except Fehler:
@@ -189,15 +189,30 @@ def akt_kalk_sparte(d, b):
     return {"log": [f"✔ {kz} gespeichert."]}
 
 
-def akt_buchungen(d, kz):
+def akt_buchungen(d, kz, erlaubt=None):
+    if not kz:   # ohne Sparte: Liste der Sparten (z. B. für die App)
+        return {"sparten": [{"kz": k, "name": x["name"], "n": x["n"]} for k, x in sorted(kalk_sparten(d).items()) if erlaubt is None or k in erlaubt], "log": []}
     sp = kalk_sparten(d).get(kz)
     if not sp:
         raise Fehler("Sparte unbekannt.")
     b = (d.get("buchungen") or {}).get(kz) or {}
     namen = {t["name"] for t in tarife_pruefen(d["tarife"])}
-    return {"sparte": sp["name"], "kz": kz, "n": sp["n"],
-            "zeilen": [{"p": p, "netz": NETZ_PARZELLE.format(kz=kz, p=p), "tarif": b.get(str(p), ""), "unbekannt": bool(b.get(str(p))) and b.get(str(p)) not in namen}
-                       for p in range(1, sp["n"] + 1)], "log": []}
+    return {"sparte": sp["name"], "kz": kz, "n": sp["n"], "tarife": sorted(namen),
+            "zeilen": [{"p": p, "netz": NETZ_PARZELLE.format(kz=kz, p=p), "tarif": b.get(str(p), ""), "unbekannt": bool(b.get(str(p))) and b.get(str(p)) not in namen,
+                        **_laufzeit_info(d, kz, p)} for p in range(1, sp["n"] + 1)], "log": []}
+
+
+def _laufzeit_info(d, kz, p):
+    """Ende der Laufzeit und Sperre (Modul laufzeit) – für Buchungsliste und App"""
+    e = (d.get("laufzeiten") or {}).get(f"{kz}-{p}")
+    g = (d.get("zugang_gesperrt") or {}).get(f"{kz}-{p}")
+    aus = {}
+    if isinstance(e, dict):
+        aus["ende"] = time.strftime("%d.%m.%Y %H:%M", time.localtime(e.get("ende") or 0))
+        aus["laufzeit_status"] = e.get("status", "")
+    if g:
+        aus["gesperrt"] = True
+    return aus
 
 
 def akt_buchungen_speichern(d, kz, aenderungen):

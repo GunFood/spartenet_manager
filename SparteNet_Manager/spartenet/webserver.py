@@ -8,6 +8,21 @@ CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 
        "connect-src 'self'; frame-src 'self' blob: data:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'self'")
 
 
+
+def login_seite(d):
+    """Anmeldeseite mit Hinweisen zu automatischem Abmelden und gemerktem Zwei-Faktor-Code"""
+    s = sicherheit(d)
+    ab = s["abmelden_minuten"]
+    merken = s["2fa_merken_stunden"]
+    try:
+        portal = '<a href="/portal" style="color:#cfe9c6">Pächter-Seite</a>' if portal_einstellungen(d)["aktiv"] else "Kleingarten-WLAN"
+    except Exception:
+        portal = "Kleingarten-WLAN"
+    return (LOGIN_HTML.replace("__VERSION__", VERSION).replace("__PORTAL__", portal)
+            .replace("__MERKEN__", f"Dieses Gerät fragt danach {dauer_text_kurz(merken)} lang nicht erneut." if merken else "")
+            .replace("__ABMELDEN_TEXT__", (f"Aus Sicherheitsgründen werden Sie nach {ab} Minuten ohne Aktivität automatisch abgemeldet. " if ab else "")
+                     + "Ohne „Angemeldet bleiben“ endet die Anmeldung beim Schließen des Browsers."))
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -68,6 +83,14 @@ class Handler(BaseHTTPRequestHandler):
             return ""
         return c["sn_sitzung"].value if "sn_sitzung" in c else ""
 
+    def _cookie(self, name):
+        c = SimpleCookie()
+        try:
+            c.load(self.headers.get("Cookie") or "")
+        except CookieError:
+            return ""
+        return c[name].value if name in c else ""
+
     def _auth_sitzung(self):
         c = SimpleCookie()
         try:
@@ -78,7 +101,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def _wer(self, d):
         """(Kontoname, Recht) der Anfrage oder None, wenn nicht angemeldet; gesperrte oder gelöschte Konten fliegen sofort raus"""
-        info = auth_sitzung_info(self._auth_sitzung())
+        self._app_zugang = False
+        info = auth_sitzung_info(self._auth_sitzung(), sicherheit(d)["abmelden_minuten"] * 60,
+                                 aktiv=urllib.parse.urlparse(self.path).path in ("/api/aktiv", "/"))
         if info:
             rechte = konto_rechte(d, info.get("benutzer", ADMIN_NAME))
             if rechte and rechte["art"] != "gesperrt":
@@ -87,7 +112,38 @@ class Handler(BaseHTTPRequestHandler):
             return None
         if self._fern() and sitzung_ok(d, self._sitzung()):
             return HANDY_NAME, konto_rechte(d, HANDY_NAME)
+        app = app_token_pruefen(d, self.headers.get("Authorization"))
+        if app:
+            self._app_zugang = True
+            return app
         return None
+
+    def _token_ok(self):
+        """Schutz gegen fremde Seiten (X-Token aus der Oberfläche) – Apps mit eigenem Schlüssel brauchen ihn nicht"""
+        return self.headers.get("X-Token") == TOKEN or getattr(self, "_app_zugang", False)
+
+    def _portal(self, methode, u):
+        if methode == "GET" and u.path in ("/portal", "/portal/"):
+            d = self._lade()
+            if d is None:
+                return
+            if not portal_einstellungen(d)["aktiv"]:
+                return self._send(404, b"<!doctype html><meta charset='utf-8'><title>Nicht gefunden</title><p style='font-family:sans-serif;padding:24px'>Diese Seite ist nicht eingeschaltet.</p>", "text/html")
+            return self._send(200, PORTAL_HTML.encode("utf-8"), "text/html")
+        b = None
+        if methode == "POST":
+            try:
+                n = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                n = -1
+            if n < 0 or n > 12000:
+                return self._send(413, {"fehler": "Anfrage zu groß."})
+            try:
+                b = json.loads(self.rfile.read(n) or b"{}")
+            except (ValueError, UnicodeDecodeError):
+                return self._send(400, {"fehler": "Ungültige Anfrage."})
+        code, antwort = portal_anfrage(u.path.rstrip("/"), b, self._quelle())
+        return self._send(code, antwort)
 
     def _erlaubt(self, d):
         return self._wer(d) is not None
@@ -126,6 +182,28 @@ class Handler(BaseHTTPRequestHandler):
             if n < 0 or n > API_MAX_BYTES:
                 return self._send(413, {"ok": False, "fehler": "Anfrage zu groß."})
             roh = self.rfile.read(n)
+        if u.path.rstrip("/") == "/api/v1/app/anmelden" and methode == "POST":
+            try:
+                b = json.loads(roh or b"{}")
+                d = lade()
+                with SCHREIB_SPERRE:
+                    antwort = app_anmelden(d, b if isinstance(b, dict) else {}, self._quelle())
+                return self._send(200 if antwort.get("ok") else 401, antwort)
+            except (ValueError, UnicodeDecodeError):
+                return self._send(400, {"ok": False, "fehler": "Ungültiges JSON."})
+            except Fehler as e:
+                return self._send(401, {"ok": False, "fehler": str(e)})
+        if u.path.rstrip("/") in ("/api/v1/app/funktionen", "/api/v1/app/info") and methode == "GET":
+            d = lade()
+            wer = app_token_pruefen(d, self.headers.get("Authorization"))
+            if not wer:
+                return self._send(401, {"ok": False, "fehler": "App-Schlüssel fehlt oder ist ungültig (Authorization: Bearer sna_…)."}, extra={"WWW-Authenticate": "Bearer"})
+            if u.path.rstrip("/").endswith("info"):
+                return self._send(200, {"ok": True, "version": VERSION, "ich": ich_daten(*wer), "uebersicht": akt_app_uebersicht(d, *wer),
+                                        "abmelden_minuten": sicherheit(d)["app_abmelden_minuten"]})
+            return self._send(200, {"version": VERSION, "auth": "Authorization: Bearer sna_… (POST /api/v1/app/anmelden)",
+                                    "hinweis": "GET-Funktionen mit Parametern in der Adresse, POST mit JSON. Antwort JSON; Fehler mit HTTP 4xx und {\"fehler\": \"…\"}.",
+                                    "funktionen": app_funktionen()})
         code, antwort = api_anfrage(methode, u.path.rstrip("/"), urllib.parse.parse_qs(u.query), roh,
                                     {"Authorization": self.headers.get("Authorization"), "X-API-Key": self.headers.get("X-API-Key")})
         return self._send(code, antwort, extra={"WWW-Authenticate": "Bearer"} if code == 401 else None)
@@ -140,20 +218,23 @@ class Handler(BaseHTTPRequestHandler):
             return
         if u.path.startswith("/api/v1/"):
             return self._api_v1("GET", u)
+        if u.path == "/portal" or u.path.startswith("/portal/"):
+            return self._portal("GET", u)
         d = self._lade()
         if d is None:
             return
         wer = self._wer(d)
         if u.path == "/":
             if not wer:
-                return self._send(200, LOGIN_HTML.replace("__INHALT__", LOGIN_FORM).encode("utf-8"), "text/html")
+                return self._send(200, login_seite(d).encode("utf-8"), "text/html")
             fern_nur = self._fern() and not auth_sitzung_ok(self._auth_sitzung())
             ich = json.dumps(ich_daten(*wer)).replace("<", "\\u003c")
             return self._send(200, HTML.replace("__TOKEN__", TOKEN).replace("__VERSION__", VERSION).replace("__FERN__", "1" if fern_nur else "0")
-                              .replace("__SITZUNG_TAGE__", str(SITZUNG_TAGE)).replace("__ICH__", ich).encode("utf-8"), "text/html")
+                              .replace("__SITZUNG_TAGE__", str(SITZUNG_TAGE)).replace("__ABMELDEN__", str(0 if fern_nur else sicherheit(d)["abmelden_minuten"]))
+                              .replace("__ICH__", ich).encode("utf-8"), "text/html")
         if not wer:
             return self._send(401, {"fehler": "anmelden"})
-        if self.headers.get("X-Token") != TOKEN:
+        if not self._token_ok():
             return self._send(403, {"fehler": "nicht erlaubt"})
         self._antwort(u.path, urllib.parse.parse_qs(u.query), None, b"", wer, d)
 
@@ -177,14 +258,23 @@ class Handler(BaseHTTPRequestHandler):
         name = str(b.get("benutzer") or "").strip().lower()
         try:
             konto = benutzer_anmelden(d, name, geheim, self._quelle())
-            if zweifaktor_aktiv(d, konto):
+            merken_cookie = None
+            if zweifaktor_aktiv(d, konto) and zweifaktor_gemerkt(d, konto, self._cookie(MERKEN_COOKIE)):
+                LOG.info("Zwei-Faktor-Code für „%s“ auf diesem Gerät noch gemerkt", konto)
+            elif zweifaktor_aktiv(d, konto):
                 if not str(b.get("code") or "").strip():
                     return self._send(400, {"fehler": "Bitte den 6-stelligen Code aus der Authenticator-App eingeben (oder einen Notfall-Code).", "zweiter_faktor": True})
                 if not zweifaktor_pruefen(d, konto, b.get("code")):
                     _konto_sperre(konto, False)
                     LOG.warning("Falscher Zwei-Faktor-Code für „%s“", konto)
                     return self._send(400, {"fehler": "Der Code stimmt nicht.", "zweiter_faktor": True})
-            t = auth_sitzung_neu(b.get("geraet"), konto)
+                if b.get("merken", True):
+                    mt, sek = zweifaktor_merken(d, konto, b.get("geraet"))
+                    if mt:
+                        speichere(d)
+                        merken_cookie = f"{MERKEN_COOKIE}={mt}; Path=/login; Max-Age={sek}; HttpOnly; SameSite=Strict"
+            bleiben = bool(b.get("bleiben", True))
+            t = auth_sitzung_neu(b.get("geraet"), konto, bleiben)
             cookie = f"sn_auth={t}"
             LOG.info("Anmeldung erfolgreich: %s", konto)
             if konto != ADMIN_NAME:
@@ -198,10 +288,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(400, {"fehler": str(pin_fehler)})
             t = sitzung_neu(d, b.get("geraet"))
             cookie = f"sn_sitzung={t}"
+            bleiben, merken_cookie = True, None
             LOG.info("Anmeldung vom Handy/Tablet erfolgreich")
             journal("Handy/Tablet angemeldet: " + str(b.get("geraet") or "?")[:80])
         sicher = "; Secure" if (self.headers.get("X-Forwarded-Proto") == "https" or self.headers.get("Tailscale-User-Login")) else ""
-        return self._send(200, {"ok": True}, extra={"Set-Cookie": f"{cookie}; Path=/; Max-Age={SITZUNG_TAGE * 86400}; HttpOnly; SameSite=Strict{sicher}"})
+        kekse = [f"{cookie}; Path=/;{f' Max-Age={SITZUNG_TAGE * 86400};' if bleiben else ''} HttpOnly; SameSite=Strict{sicher}"]
+        if merken_cookie:
+            kekse.append(merken_cookie + sicher)
+        return self._send(200, {"ok": True}, extra={"Set-Cookie": kekse})
 
     def do_POST(self):
         u = urllib.parse.urlparse(self.path)
@@ -211,6 +305,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._anmelden()
         if u.path.startswith("/api/v1/"):
             return self._api_v1("POST", u)
+        if u.path.startswith("/portal/"):
+            return self._portal("POST", u)
         d = self._lade()
         if d is None:
             return
@@ -223,7 +319,7 @@ class Handler(BaseHTTPRequestHandler):
         wer = self._wer(d)
         if not wer:
             return self._send(401, {"fehler": "anmelden"})
-        if self.headers.get("X-Token") != TOKEN:
+        if not self._token_ok():
             return self._send(403, {"fehler": "nicht erlaubt"})
         roh_pfad = u.path in ROH_PFADE
         try:
@@ -241,7 +337,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def _antwort(self, pfad, q, b, roh, wer, d_geladen=None):
         ich, rechte = wer
-        if pfad in ("/api/ppsk-speichern", "/api/fern", "/api/benutzer-speichern", "/api/benutzer-ich"):
+        if pfad in ("/api/ppsk-speichern", "/api/fern", "/api/benutzer-speichern", "/api/benutzer-ich", "/api/mitglied-speichern", "/api/mitglieder-import",
+                    "/api/ticket-speichern", "/api/ticket-kommentar", "/api/email-test", "/api/email-vorschau", "/api/email-vorlage-speichern",
+                    "/api/rechnung-einstellungen", "/api/zahlungen-uebernehmen", "/api/rundschreiben-senden", "/api/mitglied-dsgvo-loeschen", "/api/portal-einstellungen"):
             LOG.info("Aktion %s von %s (Inhalt nicht protokolliert)", pfad, ich)
         elif pfad not in ("/api/log", "/api/karten-vorschau"):
             LOG.info("Aktion %s von %s %s", pfad, ich, json.dumps(_maskiere(b), ensure_ascii=False)[:500] if isinstance(b, (dict, list)) else (urllib.parse.urlencode(q, doseq=True) if q else ""))
@@ -298,7 +396,7 @@ class Handler(BaseHTTPRequestHandler):
             if pfad == "/api/konsolen":
                 return self._send(200, {"konsolen": konsolen((b or {}).get("cloud_key") or d["cloud_key"])})
             if pfad == "/api/plan" and b is None:
-                return self._send(200, antwort_filtern(pfad, {"roh": d["plan"], **plan_berechnen(d["plan"])}, sp_erl))
+                return self._send(200, antwort_filtern(pfad, {"roh": d["plan"], **plan_aktiv(d)}, sp_erl))
             if pfad == "/api/plan":
                 plan_berechnen(b); d["plan"] = b; speichere(d)
                 return self._send(200, {"log": ["✔ Plan gespeichert."]})
@@ -329,6 +427,8 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/rueckgaengig": lambda: akt_rueckgaengig(d, b["sparte"]),
                 "/api/journal": lambda: akt_journal(),
                 "/api/ppsk-speichern": lambda: akt_ppsk_speichern(d, b["sparte"], b.get("aenderungen")),
+                "/api/wlans": lambda: akt_wlans(d, q.get("sparte", [""])[0]),
+                "/api/wlan-zuordnung": lambda: akt_wlan_zuordnung(d, b or {}),
                 "/api/passwort": lambda: {"passwoerter": passwoerter_erzeugen(min(200, int(q.get("n", ["1"])[0])), d)},
                 "/api/pw-regel": lambda: ({"regel": pw_regel(d)} if b is None else (d.__setitem__("pw_regel", {"praefix": str(b.get("praefix", "SN")), "ziffern": b.get("ziffern", 10)}) or speichere(d) or {"regel": pw_regel(d), "log": [f"✔ Regel gespeichert: {pw_regel(d)['praefix']} + {pw_regel(d)['ziffern']} Ziffern – gilt für alle neu erzeugten Passwörter."]})),
                 "/api/system": lambda: akt_system(d),
@@ -364,7 +464,7 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/zuteilung-gateway": lambda: akt_zuteilung_gateway(d, b or {}),
                 "/api/umzug": lambda: akt_umzug(d, b or {}),
                 "/api/umzug-rueckgaengig": lambda: akt_umzug_rueckgaengig(d),
-                "/api/buchungen": lambda: akt_buchungen(d, q.get("sparte", [""])[0]) if b is None else akt_buchungen_speichern(d, b.get("sparte", ""), b.get("aenderungen")),
+                "/api/buchungen": lambda: akt_buchungen(d, q.get("sparte", [""])[0], sp_erl) if b is None else akt_buchungen_speichern(d, b.get("sparte", ""), b.get("aenderungen")),
                 "/api/fern": lambda: akt_fern(d) if b is None else akt_fern_speichern(d, b),
                 "/api/tailscale": lambda: akt_tailscale(bool(b.get("an"))),
                 "/api/start": lambda: akt_start(d),
@@ -383,6 +483,7 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/unterlage-datei": lambda: akt_unterlage_datei(d, q, sp_erl),
                 "/api/unterlage-aendern": lambda: akt_unterlage_aendern(d, b or {}, sp_erl),
                 "/api/unterlage-loeschen": lambda: akt_unterlage_loeschen(d, b or {}, sp_erl),
+                "/api/unterlage-ordner": lambda: akt_unterlage_ordner(d, b or {}, sp_erl),
                 "/api/sicherung": lambda: akt_sicherung(d),
                 "/api/sicherung-erstellen": lambda: akt_sicherung_erstellen(d, b, ich),
                 "/api/sicherung-datei": lambda: akt_sicherung_datei(d, q),
@@ -394,11 +495,60 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/2fa-aus": lambda: akt_2fa_aus(d, ich, (b or {}).get("code")),
                 "/api/2fa-zuruecksetzen": lambda: akt_2fa_zuruecksetzen(d, (b or {}).get("name"), ich),
                 "/api/sicherheit-einstellungen": lambda: akt_sicherheit_einstellungen(d, b or {}, ich),
-                "/api/automation": lambda: akt_automation(d, mit_smtp=rechte["art"] == "admin"),
+                "/api/automation": lambda: (lambda a: a if rechte["art"] == "admin" or STUFE_RANG.get(rechte["bereiche"].get("mitglieder", "kein"), 0) >= 1
+                                            else {**a, "verlauf": personen_verdecken(a["verlauf"])})(akt_automation(d, mit_smtp=rechte["art"] == "admin")),
                 "/api/automation-speichern": lambda: akt_automation_speichern(d, b or {}, ich),
                 "/api/automation-loeschen": lambda: akt_automation_loeschen(d, b or {}, ich),
                 "/api/automation-probe": lambda: akt_automation_probe(d, b or {}),
                 "/api/smtp-speichern": lambda: akt_smtp_speichern(d, b or {}, ich),
+                "/api/email-layout": lambda: akt_email_layout(d, b),
+                "/api/email-vorschau": lambda: akt_email_vorschau(d, b or {}),
+                "/api/email-vorlage-speichern": lambda: akt_email_vorlage_speichern(d, b or {}, ich),
+                "/api/email-vorlage-loeschen": lambda: akt_email_vorlage_loeschen(d, b or {}, ich),
+                "/api/email-test": lambda: akt_email_test(d, b or {}),
+                "/api/admin-email": lambda: (d.__setitem__("admin_email", str((b or {}).get("email") or "").strip().lower()[:200]) or speichere(d) or {"log": ["✔ E-Mail des Kontos „admin“ gespeichert."]}),
+                "/api/mitglieder": lambda: akt_mitglieder(d, sp_erl),
+                "/api/mitglied-speichern": lambda: akt_mitglied_speichern(d, b or {}, ich, sp_erl),
+                "/api/mitglied-loeschen": lambda: akt_mitglied_loeschen(d, b or {}, ich, sp_erl),
+                "/api/mitglieder-import": lambda: akt_mitglieder_import(d, q, roh, ich, sp_erl),
+                "/api/mitglieder-export": lambda: akt_mitglieder_export(d, sp_erl),
+                "/api/tickets": lambda: akt_tickets(d, q, ich, sp_erl),
+                "/api/rechnungen": lambda: akt_rechnungen(d, q, sp_erl),
+                "/api/rechnung-einstellungen": lambda: akt_rechnung_einstellungen(d, b or {}, ich) if b is not None else {"einstellungen": rechnung_einstellungen(d)},
+                "/api/rechnungslauf": lambda: akt_rechnungslauf(d, b or {}, ich),
+                "/api/rechnung-pdf": lambda: akt_rechnung_pdf(d, q, sp_erl),
+                "/api/rechnung-senden": lambda: akt_rechnung_senden(d, b or {}, ich, sp_erl),
+                "/api/rechnung-status": lambda: akt_rechnung_status(d, b or {}, ich, sp_erl),
+                "/api/zahlungen-import": lambda: akt_zahlungen_import(d, roh, ich, sp_erl),
+                "/api/zahlungen-uebernehmen": lambda: akt_zahlungen_uebernehmen(d, b or {}, ich, sp_erl),
+                "/api/vertraege": lambda: akt_vertraege(d, sp_erl),
+                "/api/vertrag-speichern": lambda: akt_vertrag_speichern(d, b or {}, ich, sp_erl),
+                "/api/vertrag-kuendigen": lambda: akt_vertrag_kuendigen(d, b or {}, ich, sp_erl),
+                "/api/vertrag-einstellungen": lambda: akt_vertrag_einstellungen(d, b or {}, ich),
+                "/api/rundschreiben": lambda: akt_rundschreiben(d),
+                "/api/rundschreiben-empfaenger": lambda: akt_rundschreiben_empfaenger(d, b or {}, sp_erl),
+                "/api/rundschreiben-senden": lambda: akt_rundschreiben_senden(d, b or {}, ich, sp_erl),
+                "/api/mitglied-auskunft": lambda: akt_mitglied_auskunft(d, q, ich, sp_erl),
+                "/api/mitglied-dsgvo-loeschen": lambda: akt_mitglied_dsgvo_loeschen(d, b or {}, ich, sp_erl),
+                "/api/ueberwachung": lambda: akt_ueberwachung(d),
+                "/api/ueberwachung-speichern": lambda: akt_ueberwachung(d, b or {}, ich),
+                "/api/wochenbericht": lambda: akt_wochenbericht(d, b, ich),
+                "/api/portal-einstellungen": lambda: akt_portal_einstellungen(d, b, ich),
+                "/api/app-uebersicht": lambda: akt_app_uebersicht(d, ich, rechte),
+                "/api/laufzeiten": lambda: akt_laufzeiten(d, sp_erl),
+                "/api/laufzeit-verlaengern": lambda: akt_laufzeit_verlaengern(d, b or {}, ich, sp_erl),
+                "/api/laufzeit-starten": lambda: akt_laufzeit_starten(d, b or {}, ich, sp_erl),
+                "/api/zugang": lambda: akt_zugang(d, b or {}, ich, sp_erl),
+                "/api/laufzeit-einstellungen": lambda: akt_laufzeit_einstellungen(d, b or {}, ich),
+                "/api/aktiv": lambda: {"ok": True, "abmelden_minuten": sicherheit(d)["abmelden_minuten"], "log": []},
+                "/api/2fa-vergessen": lambda: akt_2fa_vergessen(d, ich),
+                "/api/app-geraete": lambda: akt_app_geraete(d, ich, rechte["art"] == "admin" and q.get("alle", ["0"])[0] == "1"),
+                "/api/app-geraet-entfernen": lambda: akt_app_geraet_entfernen(d, b or {}, ich, rechte["art"] == "admin"),
+                "/api/ticket": lambda: akt_ticket(d, q, ich, sp_erl),
+                "/api/ticket-speichern": lambda: akt_ticket_speichern(d, b or {}, ich, sp_erl),
+                "/api/ticket-kommentar": lambda: akt_ticket_kommentar(d, b or {}, ich, sp_erl),
+                "/api/ticket-loeschen": lambda: akt_ticket_loeschen(d, b or {}, ich),
+                "/api/ticket-einstellungen": lambda: akt_ticket_einstellungen(d, b or {}, ich),
                 "/api/smtp-test": lambda: akt_smtp_test(d, b or {}),
                 "/api/api-schluessel": lambda: akt_api(d),
                 "/api/api-schluessel-neu": lambda: akt_api_schluessel_neu(d, b or {}, ich),
@@ -435,7 +585,7 @@ class Handler(BaseHTTPRequestHandler):
                 SCHREIB_SPERRE.release()
 
 
-ROH_PFADE = {"/api/excel", "/api/logo", "/api/kalk-import", "/api/gwplan-import", "/api/unterlage-hochladen", "/api/sicherung-einspielen"}
+ROH_PFADE = {"/api/zahlungen-import", "/api/mitglieder-import", "/api/excel", "/api/logo", "/api/kalk-import", "/api/gwplan-import", "/api/unterlage-hochladen", "/api/sicherung-einspielen"}
 
 
 def main():
@@ -456,6 +606,8 @@ def main():
         print(f"{n} Anmeldung(en) über den Neustart übernommen.")
     if os.environ.get("SPARTENET_SICHERUNG", "1") != "0":
         sicherung_hintergrund()
+    if os.environ.get("SPARTENET_ZEITPLAN", "1") != "0":
+        zeitplan_hintergrund()
     if os.environ.get("SPARTENET_UPDATE_PRUEFEN", "1") != "0":
         update_hintergrund()
     f = fern_daten(d)
