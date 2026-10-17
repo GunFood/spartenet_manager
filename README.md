@@ -1,4 +1,4 @@
-SparteNet Manager 4.8 (Cloud)
+SparteNet Manager 4.8.1 (Cloud)
 ===============================
 
 Funktioniert komplett über die UniFi-Cloud (api.ui.com). Kein lokaler Zugriff, kein VPN.
@@ -101,7 +101,7 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   Höchstens 120 Anfragen je Minute und Schlüssel (SPARTENET_API_PRO_MINUTE). Zahlungsanbieter über n8n/Zapier/Make
   anbinden. Von außen nur über HTTPS (Reverse-Proxy, dann SPARTENET_PROXY=1).
 
-### GAST-VOUCHER (Reiter "Gast-Voucher") – erweitert in 4.8
+### GAST-VOUCHER (Reiter "Gast-Voucher") – neu in 4.8.1
   Vorlagen: Gültigkeit, Geräte je Voucher, Datenvolumen, Download/Upload (0 = unbegrenzt) und Text für den Ausdruck.
   "Voucher am Gateway → Auslesen": alle Voucher mit Status (unbenutzt, in Benutzung, voll belegt, abgelaufen) und Vorlage;
   Einstellungen ohne Vorlage werden als Vorschlag angezeigt ("Als Vorlage übernehmen").
