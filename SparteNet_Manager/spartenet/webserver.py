@@ -425,7 +425,7 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/zuteilung-gateway": lambda: akt_zuteilung_gateway(d, b or {}),
                 "/api/umzug": lambda: akt_umzug(d, b or {}),
                 "/api/umzug-rueckgaengig": lambda: akt_umzug_rueckgaengig(d),
-                "/api/buchungen": lambda: akt_buchungen(d, q.get("sparte", [""])[0]) if b is None else akt_buchungen_speichern(d, b.get("sparte", ""), b.get("aenderungen")),
+                "/api/buchungen": lambda: akt_buchungen(d, q.get("sparte", [""])[0], sp_erl) if b is None else akt_buchungen_speichern(d, b.get("sparte", ""), b.get("aenderungen")),
                 "/api/fern": lambda: akt_fern(d) if b is None else akt_fern_speichern(d, b),
                 "/api/tailscale": lambda: akt_tailscale(bool(b.get("an"))),
                 "/api/start": lambda: akt_start(d),

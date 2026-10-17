@@ -352,7 +352,9 @@ class WlanZuordnung(unittest.TestCase):
         sp = next(x for x in S.plan_aktiv(self.d)["sparten"] if x["kz"] == "BW")
         self.assertEqual((sp["wlan"]["paechter"], sp["wlan"]["vorstand"], sp["wlan"]["eigen"]), ("Buchenweg Pächter", "SparteNet.de-BW-Vorstand", True))
         self.assertIn("Buchenweg Pächter", S.akt_karten(self.d, "BW", [1])["html"])
-        self.assertEqual(S.akt_parzelle(self.d, "BW", "1")["wlan"], "Buchenweg Pächter")
+        pz = S.akt_parzelle(self.d, "BW", "1")
+        self.assertEqual(pz["wlan"], "Buchenweg Pächter")
+        self.assertTrue(pz["qr_matrix"] and all(len(z) == len(pz["qr_matrix"]) and set(z) <= {"0", "1"} for z in pz["qr_matrix"]))   # für die Android-App
         S.akt_wlan_zuordnung(self.d, {"sparte": "BW"})                           # zurück zum Schema
         self.assertEqual(S.wlan_ssid(self.d, "BW"), "SparteNet.de-BW-Pächter")
         self.assertEqual({z["WLAN"] for z in S.lese_ppsk("BW")}, {"SparteNet.de-BW-Pächter"})

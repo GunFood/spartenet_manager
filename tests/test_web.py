@@ -435,6 +435,41 @@ class Version50(unittest.TestCase):
         mit_app("/api/app-geraet-entfernen", {"id": gid})
         self.assertEqual(mit_app("/api/app-uebersicht")[0], 401)
 
+    def test_android_app_ablauf(self):
+        """genau die Aufrufe, die die Android-App macht"""
+        code, x = api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "admin", "passwort": PASSWORT, "geraet": "Tablet Test"})
+        self.assertEqual(code, 200, x)
+        tok = x["token"]
+        g = lambda pfad: api(SRV.basis, "GET", pfad, None, tok)
+        p = lambda pfad, body: api(SRV.basis, "POST", pfad, body, tok)
+        code, info = g("/api/v1/app/info")
+        self.assertEqual((code, info["ich"]["admin"]), (200, True))
+        self.assertIn("bereiche", info["ich"])
+        code, sp = g("/api/buchungen")                                   # ohne Sparte: Liste für die Auswahl
+        self.assertEqual(code, 200, sp)
+        self.assertIn("BW", [x["kz"] for x in sp["sparten"]])
+        code, b = g("/api/buchungen?sparte=BW")
+        self.assertIn("Plus", b["tarife"])
+        code, m = g("/api/mitglieder")
+        self.assertIsInstance(m["sparten"], dict)
+        code, t = p("/api/ticket-speichern", {"ticket": {"betreff": "WLAN weg", "text": "seit gestern", "prioritaet": "hoch", "zustaendig": "admin",
+                                                         "sparte": "BW", "parzelle": "41", "name": "Rita R.", "email": "rita@example.org"}})
+        self.assertEqual(code, 200, t)
+        tid = t["ticket"]["id"]
+        self.assertEqual(t["ticket"]["kontakt"]["email"], "rita@example.org")
+        code, t = p("/api/ticket-speichern", {"ticket": {"id": tid, "status": "wartet"}})   # nur ein Feld ändern
+        self.assertEqual((code, t["ticket"]["status"], t["ticket"]["betreff"]), (200, "wartet", "WLAN weg"))
+        code, t = p("/api/ticket-kommentar", {"id": tid, "text": "Router neu gestartet", "an_kontakt": False})
+        self.assertEqual(t["ticket"]["verlauf"][-1]["art"], "kommentar")
+        code, lst = g("/api/tickets?status=offen&zustaendig=ich")
+        self.assertTrue(any(z["id"] == tid for z in lst["zeilen"]))
+        self.assertIn("admin", lst["konten"])
+        code, u = g("/api/app-uebersicht")
+        self.assertGreaterEqual(u["tickets"]["meine"], 1)
+        self.assertEqual(g("/api/ueberwachung")[0], 200)
+        self.assertEqual(g("/api/voucher-vorlagen")[0], 200)
+        self.assertEqual(g("/api/plan")[0], 200)
+
     def test_datenschutz_und_wochenbericht(self):
         a = self.a
         _, m = a.req("/api/mitglied-speichern", {"mitglied": {"vorname": "Dora", "nachname": "Daten", "email": "dora@example.org", "sparte": "BW", "parzelle": "43"}})

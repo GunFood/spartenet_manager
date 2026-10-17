@@ -133,6 +133,12 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   GET /api/app-uebersicht (Zahlen für den Startbildschirm), GET /api/v1/app/info, GET /api/v1/app/funktionen
   (alle Funktionen mit nötigem Recht). Geräte unter "Benutzer → Mein Konto" entfernen; gültig 365 Tage (SPARTENET_APP_TAGE).
 
+### ANDROID-APP FÜR HANDY UND TABLET (Ordner android/)
+  Native App (Kotlin/Compose): Start-Übersicht, Anfragen bearbeiten und beantworten, Mitglieder, Buchungen, WLAN einer Parzelle
+  mit QR-Code, Gast-Voucher, Rechnungen als PDF, Störungen, Geräteverwaltung. Tablet mit Seitenleiste und Liste/Detail.
+  APK über GitHub Actions (Workflow "Android-App", Artefakt "SparteNet-App") oder Android Studio – Details in android/README.md.
+  GET /api/buchungen ohne "sparte" liefert die Sparten-Liste, /api/parzelle zusätzlich "qr_matrix" (für Apps).
+
 ### E-MAIL MIT LAYOUT UND VORLAGEN (Reiter "Automationen") – neu in 4.9
   Layout für alle E-Mails: Kopfzeile mit Logo (aus "Kartendesign"), Farben, Schrift, Breite, Fußzeile (Impressum).
   Vorschau mit Beispieldaten, Test-E-Mail. Vorlagen mit Editor (fett, kursiv, Überschriften, Listen, Link, Platzhalter),
