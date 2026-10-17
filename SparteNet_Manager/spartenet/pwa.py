@@ -45,34 +45,33 @@ button{background:#3a9a1f;color:#fff;border:0;border-radius:8px;padding:13px 22p
 <button onclick="location.reload()">Erneut versuchen</button></div></body></html>"""
 
 LOGIN_HTML = """<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>SparteNet Manager – Anmelden</title><meta name="theme-color" content="#14321f"><link rel="manifest" href="/manifest.webmanifest">
+<title>Anmelden</title><meta name="theme-color" content="#14321f"><link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/favicon.png"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="SparteNet">
 <script>try{const f=localStorage.getItem("sn_farbe");if(f=="hell"||f=="dunkel")document.documentElement.dataset.farbe=f}catch(e){}</script>
 <style>
-:root{--grund:#eef3ec;--karte:#fff;--text:#16261c;--leise:#5b6b62;--rand:#d5ded1;--feld:#fbfcfa;--gruen:#2f8a1c;--gruen2:#256f15;--fehler:#b42318;--fehlerg:#fdecea;--info:#e7f2fb;--infot:#0f4d7a;--schatten:0 18px 50px rgba(20,50,31,.18)}
-@media (prefers-color-scheme:dark){:root:not([data-farbe=hell]){--grund:#0c1410;--karte:#16211b;--text:#e3ebe5;--leise:#9db0a4;--rand:#2b3a31;--feld:#101914;--fehlerg:#3a1714;--fehler:#ff9b8f;--info:#12283a;--infot:#9fd0f5;--schatten:0 18px 50px rgba(0,0,0,.5)}}
-:root[data-farbe=dunkel]{--grund:#0c1410;--karte:#16211b;--text:#e3ebe5;--leise:#9db0a4;--rand:#2b3a31;--feld:#101914;--fehlerg:#3a1714;--fehler:#ff9b8f;--info:#12283a;--infot:#9fd0f5;--schatten:0 18px 50px rgba(0,0,0,.5)}
+:root{--leise:#5b6b62;--rand:#d5ded1;--feld:#fbfcfa;--fehler:#b42318;--fehlerg:#fdecea;--info:#e7f2fb;--infot:#0f4d7a;--schatten:0 18px 50px rgba(20,50,31,.18);__VARS__}
+__DUNKEL__
 *{box-sizing:border-box}html,body{height:100%}
-body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;background:var(--grund);color:var(--text);-webkit-font-smoothing:antialiased}
+body{margin:0;font-family:var(--schrift);background:var(--grund);color:var(--text);-webkit-font-smoothing:antialiased}
 .seite{min-height:100%;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr)}
 .marke{position:relative;overflow:hidden;color:#eaf6e6;padding:48px clamp(28px,5vw,72px);display:flex;flex-direction:column;justify-content:space-between;
- background:radial-gradient(1200px 600px at -10% 110%,#3f9a26 0%,transparent 55%),radial-gradient(800px 500px at 110% -10%,#1f5c3a 0%,transparent 60%),linear-gradient(160deg,#14321f,#0d2416)}
+ background:linear-gradient(rgba(0,0,0,var(--abdunkeln)),rgba(0,0,0,var(--abdunkeln))),__HG__ center/cover no-repeat,radial-gradient(1200px 600px at -10% 110%,var(--glanz) 0%,transparent 55%),linear-gradient(160deg,var(--m1),var(--m2))}
 .marke svg.wellen{position:absolute;right:-80px;bottom:-60px;width:520px;opacity:.13}
-.logo{display:flex;align-items:center;gap:14px}.logo img{width:52px;height:52px;border-radius:14px;background:#fff;padding:4px}
+.logo{display:flex;align-items:center;gap:14px}.logo img,.mlogo img{width:52px;height:52px;border-radius:14px;background:#fff;padding:4px;object-fit:contain}
 .logo b{font-size:22px;letter-spacing:.2px}.logo b span{color:#9be07f}
 .marke h2{font-size:clamp(26px,3vw,36px);line-height:1.15;margin:0 0 14px;font-weight:700;max-width:16em}
-.marke p{color:#c3dcc0;font-size:16px;line-height:1.5;max-width:30em;margin:0}
-.punkte{list-style:none;padding:0;margin:26px 0 0;display:grid;gap:12px}.punkte li{display:flex;gap:12px;align-items:flex-start;color:#dcebd8;font-size:15px}
-.punkte i{flex:none;width:26px;height:26px;border-radius:8px;background:rgba(155,224,127,.16);display:grid;place-items:center;font-style:normal;color:#9be07f;font-size:14px}
-.fuss{font-size:13px;color:#9fbe9b}
+.marke p{color:#d5e6d2;font-size:16px;line-height:1.5;max-width:30em;margin:0}
+.punkte{list-style:none;padding:0;margin:26px 0 0;display:grid;gap:12px}.punkte li{display:flex;gap:12px;align-items:flex-start;color:#e3efe0;font-size:15px}
+.punkte i{flex:none;width:26px;height:26px;border-radius:8px;background:rgba(255,255,255,.14);display:grid;place-items:center;font-style:normal;color:#b7ef9f;font-size:14px}
+.fuss{font-size:13px;color:#bcd4b8}
 .form{display:grid;place-items:center;padding:32px 20px}
-.k{width:100%;max-width:400px;background:var(--karte);border:1px solid var(--rand);border-radius:20px;padding:32px 28px;box-shadow:var(--schatten)}
+.k{width:100%;max-width:400px;background:var(--karte);border:1px solid var(--rand);border-radius:var(--ecken);padding:32px 28px;box-shadow:var(--schatten)}
 .k h1{font-size:24px;margin:0 0 6px}.k .unter{color:var(--leise);font-size:14.5px;margin:0 0 22px;line-height:1.45}
-.mlogo{display:none;align-items:center;gap:10px;margin-bottom:18px}.mlogo img{width:40px;height:40px}.mlogo b{font-size:19px}.mlogo b span{color:var(--gruen)}
+.mlogo{display:none;align-items:center;gap:10px;margin-bottom:18px}.mlogo img{width:40px;height:40px;padding:2px}.mlogo b{font-size:19px}.mlogo b span{color:var(--knopf)}
 label{display:block;font-size:13.5px;font-weight:600;margin:14px 0 6px}
 .feld{position:relative}
-input[type=text],input[type=password],input.t{width:100%;font-size:16px;padding:13px 14px;border:1.5px solid var(--rand);border-radius:12px;background:var(--feld);color:var(--text);outline:none;transition:border-color .15s,box-shadow .15s}
-input.t:focus{border-color:var(--gruen);box-shadow:0 0 0 4px rgba(47,138,28,.15)}
+input.t{width:100%;font-size:16px;padding:13px 14px;border:1.5px solid var(--rand);border-radius:calc(var(--ecken) * .6);background:var(--feld);color:var(--text);outline:none;transition:border-color .15s,box-shadow .15s;font-family:inherit}
+input.t:focus{border-color:var(--knopf);box-shadow:0 0 0 4px rgba(127,127,127,.18)}
 .auge{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:transparent;color:var(--leise);padding:8px;border-radius:8px;cursor:pointer;line-height:0}
 .auge:hover{background:rgba(127,127,127,.12)}.auge svg{width:20px;height:20px}
 #passwort{padding-right:46px}
@@ -81,24 +80,26 @@ input.t:focus{border-color:var(--gruen);box-shadow:0 0 0 4px rgba(47,138,28,.15)
 #codebox label{margin-top:0;color:var(--infot)}#code{font-size:22px;letter-spacing:6px;text-align:center;font-variant-numeric:tabular-nums}
 #codebox small{display:block;margin-top:8px;font-size:12.5px;line-height:1.4}
 .zeile{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:16px 0 4px;font-size:14px}
-.zeile label{display:flex;align-items:center;gap:8px;margin:0;font-weight:500;cursor:pointer}.zeile input{width:18px;height:18px;accent-color:var(--gruen)}
-button.los{width:100%;margin-top:18px;background:var(--gruen);color:#fff;border:0;border-radius:12px;padding:14px;font-size:16.5px;font-weight:650;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;transition:background .15s}
-button.los:hover{background:var(--gruen2)}button.los:disabled{opacity:.7;cursor:default}
+.zeile label{display:flex;align-items:center;gap:8px;margin:0;font-weight:500;cursor:pointer}.zeile input{width:18px;height:18px;accent-color:var(--knopf)}
+button.los{width:100%;margin-top:18px;background:var(--knopf);color:#fff;border:0;border-radius:calc(var(--ecken) * .6);padding:14px;font-size:16.5px;font-weight:650;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;font-family:inherit}
+button.los:hover{filter:brightness(.92)}button.los:disabled{opacity:.7;cursor:default}
 .dreh{width:18px;height:18px;border:2.5px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;animation:d .8s linear infinite;display:none}button.los:disabled .dreh{display:block}@keyframes d{to{transform:rotate(360deg)}}
 .meldung{border-radius:12px;padding:11px 13px;font-size:14px;line-height:1.4;margin:0 0 16px;display:none}
 .meldung.fehler{display:block;background:var(--fehlerg);color:var(--fehler)}.meldung.info{display:block;background:var(--info);color:var(--infot)}
-.klein{color:var(--leise);font-size:12.5px;line-height:1.45;margin:18px 0 0}.klein a{color:var(--gruen)}
+.klein{color:var(--leise);font-size:12.5px;line-height:1.45;margin:18px 0 0}.klein a{color:var(--knopf)}
+body.mittig{background:linear-gradient(rgba(0,0,0,var(--abdunkeln)),rgba(0,0,0,var(--abdunkeln))),__HG__ center/cover fixed no-repeat,var(--grund)}
+body.mittig .seite{grid-template-columns:1fr}body.mittig .marke{display:none}body.mittig .mlogo{display:flex}body.mittig .form{min-height:100%;align-content:center}
 @media (max-width:860px){.seite{grid-template-columns:1fr}.marke{display:none}.mlogo{display:flex}.form{min-height:100%;align-content:center}}
-@media (max-width:440px){.k{padding:26px 20px;border-radius:16px}.form{padding:18px 12px}}
-</style></head><body><div class="seite">
+@media (max-width:440px){.k{padding:26px 20px}.form{padding:18px 12px}}
+</style></head><body class="__LAYOUT__"><div class="seite">
 <aside class="marke"><svg class="wellen" viewBox="0 0 200 200" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round"><path d="M30 90a100 100 0 0 1 140 0"/><path d="M55 118a64 64 0 0 1 90 0"/><path d="M80 146a28 28 0 0 1 40 0"/><circle cx="100" cy="172" r="7" fill="#fff"/></svg>
-<div class="logo"><img src="/icon-192.png" alt=""><b>Sparte<span>Net</span> Manager</b></div>
-<div><h2>WLAN für die Kleingarten-Sparte – übersichtlich verwaltet.</h2><p>Parzellen, Tarife, Pächter und das Gateway an einem Ort.</p>
-<ul class="punkte"><li><i>✓</i>Eigenes WLAN-Passwort je Parzelle, Zugangskarten mit QR-Code</li><li><i>✓</i>Tarife mit Laufzeit – Zugang wird pünktlich gesperrt und freigegeben</li><li><i>✓</i>Mitglieder, Anfragen, Rechnungen und Störungsmeldungen</li></ul></div>
-<div class="fuss">Version __VERSION__ · __PORTAL__</div></aside>
+<div class="logo">__LOGO__<b>__MARKE__</b></div>
+<div><h2>__UEBERSCHRIFT__</h2><p>__UNTERTITEL__</p>
+<ul class="punkte">__PUNKTE__</ul></div>
+<div class="fuss">__FUSSLEISTE__</div></aside>
 <main class="form"><div class="k">
-<div class="mlogo"><img src="/icon-192.png" alt=""><b>Sparte<span>Net</span> Manager</b></div>
-<h1>Anmelden</h1><p class="unter">Mit Benutzername und Passwort. Administrator: Benutzername leer lassen oder „admin“. Auf Handys im Fernzugriff geht ohne Benutzername auch die Handy-PIN.</p>
+<div class="mlogo">__LOGO__<b>__MARKE__</b></div>
+<h1>__TITEL__</h1><p class="unter">__TEXT__</p>
 <div class="meldung" id="m"></div>
 <form id="fo" novalidate>
 <label for="benutzer">Benutzername</label><input class="t" type="text" id="benutzer" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="leer = admin">
@@ -110,10 +111,10 @@ button.los:hover{background:var(--gruen2)}button.los:disabled{opacity:.7;cursor:
 <div class="zeile"><label><input type="checkbox" id="bleiben"> Angemeldet bleiben</label></div>
 <button class="los" id="b"><span class="dreh"></span><span id="bt">Anmelden</span></button>
 </form>
-<p class="klein">__ABMELDEN_TEXT__</p>
+<p class="klein">__KLEIN__</p>
 </div></main></div>
 <script>
-if("serviceWorker" in navigator&&isSecureContext)navigator.serviceWorker.register("/sw.js").catch(()=>{});
+try{if("serviceWorker" in navigator&&isSecureContext)navigator.serviceWorker.register("/sw.js").catch(()=>{})}catch(e){}
 const $=i=>document.getElementById(i),m=$("m");
 function meldung(t,art){m.textContent=t;m.className="meldung "+(t?art:"")}
 const q=new URLSearchParams(location.search);

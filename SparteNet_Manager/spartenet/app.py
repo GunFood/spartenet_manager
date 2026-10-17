@@ -24,7 +24,44 @@ def _app_hash(geheim):
     return hashlib.sha256(("SparteNet-App|" + geheim).encode()).hexdigest()
 
 
-def app_anmelden(d, b, quelle):
+# ---- App-Zugangstoken: schützt die App-Schnittstelle zusätzlich (Header „X-App-Token“) --------------------------------
+def _zt_hash(t):
+    return hashlib.sha256(("SparteNet-App-Zugang|" + str(t or "")).encode()).hexdigest()
+
+
+def app_zugang(d):
+    z = d.get("app_zugang")
+    return z if isinstance(z, dict) and z.get("hash") else None
+
+
+def app_zugangstoken_ok(d, token):
+    z = app_zugang(d)
+    return bool(z and token and hmac.compare_digest(z["hash"], _zt_hash(str(token).strip())))
+
+
+def akt_app_zugangstoken(d, b, ich):
+    """Administrator: Zugangstoken für die App erzeugen (wird nur einmal angezeigt) oder App-Zugang sperren"""
+    if b.get("aus"):
+        d["app_zugang"] = {}
+        speichere(d)
+        journal(f"App-Zugang gesperrt (Zugangstoken entfernt) durch {ich}")
+        return {"zugang": None, "log": ["✔ App-Zugang gesperrt – keine App kann sich anmelden oder Daten abrufen, bis ein neuer Zugangstoken erzeugt ist."]}
+    if b.get("neu"):
+        t = "snz_" + secrets.token_urlsafe(24)
+        d["app_zugang"] = {"hash": _zt_hash(t), "erstellt": time.strftime("%Y-%m-%d %H:%M"), "von": ich, "hinweis": t[:8] + "…"}
+        speichere(d)
+        journal(f"App-Zugangstoken neu erzeugt durch {ich} – ältere Tokens gelten nicht mehr")
+        return {"token": t, "zugang": {k: v for k, v in d["app_zugang"].items() if k != "hash"},
+                "log": ["✔ Neuer Zugangstoken erzeugt. Jetzt notieren oder kopieren – er wird nur einmal angezeigt. Apps mit dem alten Token müssen ihn neu eingeben."]}
+    z = app_zugang(d)
+    return {"zugang": {k: v for k, v in z.items() if k != "hash"} if z else None, "log": []}
+
+
+def app_anmelden(d, b, quelle, zugangstoken=None):
+    if not app_zugang(d):
+        return {"ok": False, "zugangstoken": True, "fehler": "Der App-Zugang ist im Manager noch nicht eingerichtet (Benutzer → Anmeldung und Sicherheit → App-Zugangstoken)."}
+    if not app_zugangstoken_ok(d, zugangstoken):
+        return {"ok": False, "zugangstoken": True, "fehler": "Zugangstoken fehlt oder ist falsch – bitte beim Administrator erfragen."}
     name = str(b.get("benutzer") or "").strip().lower()
     konto = benutzer_anmelden(d, name, b.get("passwort"), quelle)
     merken = None
@@ -52,10 +89,12 @@ def app_anmelden(d, b, quelle):
             "hinweis": "Token sicher speichern (z. B. Android Keystore). Bei jeder Anfrage: Authorization: Bearer <token>."}
 
 
-def app_token_pruefen(d, kopf):
-    """(Kontoname, Rechte) für einen gültigen App-Schlüssel, sonst None"""
+def app_token_pruefen(d, kopf, zugangstoken=None):
+    """(Kontoname, Rechte) für einen gültigen App-Schlüssel und Zugangstoken, sonst None"""
     roh = str(kopf or "")
     if not roh.lower().startswith("bearer sna_"):
+        return None
+    if not app_zugangstoken_ok(d, zugangstoken):
         return None
     m = _APP_RE.match(roh[7:].strip())
     if not m:

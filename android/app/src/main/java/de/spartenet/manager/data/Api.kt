@@ -17,6 +17,7 @@ class ApiFehler(
     val code: Int,
     message: String,
     val zweiterFaktor: Boolean = false,
+    val zugangstoken: Boolean = false,
 ) : Exception(message) {
     val abgemeldet: Boolean get() = code == 401 && !zweiterFaktor
 }
@@ -29,7 +30,7 @@ class Datei(val daten: ByteArray, val typ: String, val name: String)
  * Jede Anfrage trägt „Authorization: Bearer sna_…“ – der Manager prüft damit dieselben Rechte wie in der Oberfläche.
  * Der Schlüssel wird nie protokolliert und nie in Fehlermeldungen ausgegeben.
  */
-class Api(basis: String, @Volatile var token: String?) {
+class Api(basis: String, @Volatile var token: String?, @Volatile var zugangstoken: String? = null) {
 
     val basis: String = normalisieren(basis)
 
@@ -69,7 +70,7 @@ class Api(basis: String, @Volatile var token: String?) {
         if (!merken.isNullOrEmpty()) body.put("merken", merken)
         val a = anfrage("POST", "/api/v1/app/anmelden", body, mitToken = false)
         if (!a.optBoolean("ok") || a.s("token").isEmpty()) {
-            throw ApiFehler(401, a.s("fehler").ifEmpty { "Anmeldung fehlgeschlagen." }, a.optBoolean("zweiter_faktor"))
+            throw ApiFehler(401, a.s("fehler").ifEmpty { "Anmeldung fehlgeschlagen." }, a.optBoolean("zweiter_faktor"), a.optBoolean("zugangstoken"))
         }
         return a
     }
@@ -113,6 +114,7 @@ class Api(basis: String, @Volatile var token: String?) {
         c.setRequestProperty("User-Agent", "SparteNet-Android/1.0")
         val t = token
         if (mitToken && t != null) c.setRequestProperty("Authorization", "Bearer $t")
+        zugangstoken?.takeIf { it.isNotBlank() }?.let { c.setRequestProperty("X-App-Token", it.trim()) }   // App-Zugangstoken des Vereins
         return c
     }
 
@@ -131,7 +133,7 @@ class Api(basis: String, @Volatile var token: String?) {
             in 300..399 -> "Der Server leitet um – bitte die Adresse mit https:// eintragen."
             else -> "Fehler $code vom Server."
         }
-        return ApiFehler(code, meldung, j?.optBoolean("zweiter_faktor") == true)
+        return ApiFehler(code, meldung, j?.optBoolean("zweiter_faktor") == true, j?.optBoolean("zugangstoken") == true)
     }
 
     private fun verbindungsFehler(e: IOException): ApiFehler = ApiFehler(
