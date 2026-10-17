@@ -142,7 +142,7 @@ def akt_parzelle(d, kz, p):
         p = int(p)
     except (TypeError, ValueError):
         raise Fehler("Bitte eine Parzellen-Nummer eingeben.")
-    plan = plan_berechnen(d["plan"])
+    plan = plan_aktiv(d)
     sp = next((s for s in plan["sparten"] if s["kz"] == kz), None)
     if not sp:
         raise Fehler("Sparte nicht im Plan.")
@@ -153,7 +153,7 @@ def akt_parzelle(d, kz, p):
     zeile = next((z for z in lese_ppsk(kz) if str(z.get("Parzelle")) == str(p)), None)
     if not zeile or not zeile.get("Passwort"):
         raise Fehler(f"Für Parzelle {p} ist noch kein WLAN-Passwort vergeben (Einrichten → Schritt 3) oder der Zugang ist gesperrt.")
-    ssid = zeile.get("WLAN") or ""
+    ssid = wlan_ssid(d, kz)
     return {"parzelle": p, "sparte": sp["name"], "netz": zeile.get("Netz") or (netz or {}).get("name", ""), "vlan": zeile.get("VLAN") or (netz or {}).get("vlan", ""),
             "subnetz": (netz or {}).get("netz", ""), "wlan": ssid, "passwort": zeile["Passwort"],
             "qr": qr_svg(wlan_qr_text(ssid, zeile["Passwort"]), rand=2), "log": []}
