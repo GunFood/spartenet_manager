@@ -122,6 +122,43 @@ class Zuteilung(unittest.TestCase):
         S.akt_buchungen_speichern(self.d, "BW", {"5": "Max"})               # wieder gebucht → bleibt, wie es ist
         self.assertEqual(self.zt()["BW-5"]["status"], "aktiv")
 
+    def test_von_hand_vorgabe_und_verdichten(self):
+        S.akt_buchungen_speichern(self.d, "BW", {str(p): "Basic" for p in range(1, 61)})
+        st = self.zt()["BW-1"]["standort"]
+        with self.assertRaises(S.Fehler):                                     # Gateway 1 ist voll
+            S.akt_zuteilung_setzen(self.d, {"aenderungen": {"BW-56": 1}}, "test")
+        S.akt_buchungen_speichern(self.d, "BW", {str(p): "" for p in range(1, 11)})
+        r = S.akt_zuteilung_verdichten(self.d, {"standort": st}, "test")
+        self.assertEqual({e["gw"] for e in self.zt().values()}, {1})          # alles auf Gateway 1
+        self.assertIn("5 Parzelle(n) verschoben", r["log"][0])
+        S.akt_zuteilung_setzen(self.d, {"aenderungen": {"BW-80": 2}}, "test")   # Vorgabe für noch nicht gebuchte Parzelle
+        S.akt_buchungen_speichern(self.d, "BW", {"80": "Plus"})
+        self.assertEqual((self.zt()["BW-80"]["gw"], self.zt()["BW-80"]["fest"]), (2, True))
+        S.akt_zuteilung_verdichten(self.d, {"standort": st}, "test")
+        self.assertEqual(self.zt()["BW-80"]["gw"], 2)                         # feste Zuordnung bleibt
+        self.zt()["BW-12"]["status"] = "aktiv"
+        S.akt_zuteilung_setzen(self.d, {"aenderungen": {"BW-12": 2}}, "test")    # mit Netz am Gateway 1 → Umzug
+        self.assertEqual((self.zt()["BW-12"]["gw"], self.zt()["BW-12"]["status"], self.zt()["BW-12"]["alt_gw"]), (2, "anlegen", 1))
+        S.akt_gwplan_vlan_uebernehmen(self.d, {"standort": st, "gw": 1})
+        FakeGateway.netze = [{"_id": "n12", "name": "BW-Paz.012", "vlan": 1412}]
+        v = S.akt_zuteilung_gateway(self.d, {})
+        self.assertEqual([(x["netz"], x["grund"]) for x in v["entfernen"]], [("BW-Paz.012", "umgezogen zu Gateway 2")])
+        S.akt_zuteilung_setzen(self.d, {"aenderungen": {"BW-12": 1}}, "test")    # zurück, Netz steht noch → aktiv
+        self.assertEqual((self.zt()["BW-12"]["status"], "alt_gw" in self.zt()["BW-12"]), ("aktiv", False))
+
+    def test_gateways_nach_buchungen_bemessen(self):
+        S.akt_buchungen_speichern(self.d, "BW", {str(p): "Basic" for p in range(1, 21)})
+        st = self.zt()["BW-1"]["standort"]
+        voll = next(x for x in S.gwplan_berechnen(self.d)["standorte"] if x["nr"] == st)
+        S.akt_gwplan_annahmen(self.d, {"annahmen": {"GW_Basis": 3}})
+        wenig = next(x for x in S.gwplan_berechnen(self.d)["standorte"] if x["nr"] == st)
+        self.assertGreater(voll["gw"], 1)
+        self.assertEqual((wenig["gw"], wenig["gw_max"]), (1, voll["gw"]))
+        self.assertLess(wenig["inv"], voll["inv"])
+        self.assertEqual(len(wenig["gateways"]), voll["gw"])                  # VLAN-Plan behält Platz für alle Parzellen
+        with self.assertRaises(S.Fehler):
+            S.akt_gwplan_annahmen(self.d, {"annahmen": {"GW_Basis": 4}})
+
     def test_gateway_anlegen_und_entfernen(self):
         st = self.d["zuteilung"]
         S.akt_buchungen_speichern(self.d, "BW", {"3": "Basic", "4": "Basic", "6": "Basic"})

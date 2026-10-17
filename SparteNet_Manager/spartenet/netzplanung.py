@@ -3,7 +3,7 @@ from .netzplanung_daten import *  # noqa: F401,F403 – alle Namen der vorherige
 
 
 GWP_STANDARD = {
-    "PG": 55, "Max_GW": 10, "Vorschlag_nutzen": 1, "Umweg": 1.3, "Uplink_Kap": 1000, "Ueberbuchung": 8, "Bandbreite": 30, "Jahre": 5,
+    "PG": 55, "Max_GW": 10, "GW_Basis": 1, "Vorschlag_nutzen": 1, "Umweg": 1.3, "Uplink_Kap": 1000, "Ueberbuchung": 8, "Bandbreite": 30, "Jahre": 5,
     "P_UCG": 250, "P_Agg": 240, "P_DAC": 20, "P_KVz": 1500, "P_USV": 250, "P_SFP": 21.9, "P_Flex": 179, "P_NT": 70, "P_Halter": 8.5,
     "P_Luefter": 45, "P_Spleiss": 32.9, "P_Saeule": 300, "P_Ueber": 80, "P_Surge": 12, "P_AP": 250, "P_Mast": 392, "P_Fund": 120,
     "P_Faser": 1.5, "P_Kupfer": 1.2, "P_Tiefbau": 0, "P_MontStandort": 500, "P_MontMast": 150, "P_MontZul": 150,
@@ -18,6 +18,7 @@ GWP_STANDARD = {
 # Gruppen, Texte und Einheit für das Formular („%“ = intern Anteil 0–1, im Formular Prozent)
 GWP_FELDER = [
     ("Netz-Regeln", [("PG", "Parzellen je Gateway", ""), ("Max_GW", "Gateways je Standort (Warnung darüber)", ""),
+                     ("GW_Basis", "Gateways bemessen nach (1 = allen Parzellen, 2 = erwarteten Kunden/Buchungsquote, 3 = tatsächlichen Buchungen)", ""),
                      ("Vorschlag_nutzen", "Standort-Vorschlag nutzen, wo nichts gewählt (1 = ja, 0 = eigenständig)", ""),
                      ("Umweg", "Umwegfaktor Glasfaser (Trasse statt Luftlinie)", ""), ("Uplink_Kap", "Kapazität Internet-Anschluss (Mbit/s)", ""),
                      ("Ueberbuchung", "Überbuchungsfaktor (1:x)", ""), ("Bandbreite", "Ø Bandbreite je Kunde (Mbit/s)", ""), ("Jahre", "Betrachtungszeitraum (Jahre)", "")]),
@@ -255,7 +256,7 @@ def gwplan_berechnen(d):
         K = (aps * a["P_AP"] + masten * (a["P_Mast"] + a["P_Fund"] + a["P_MontMast"]) + kabel * 2 * a["P_Surge"]) * EK
         Lt = (faser * a["P_Faser"] + kupfer * a["P_Kupfer"] + leitung * a["P_Tiefbau"]) * EK
         N = J + K + Lt + s["zul_eur"] + s["uv_eur"]
-        P_gw = _ceil(s["parz"] / PG)
+        P_gw = max(1, _ceil((s["parz"] if a["GW_Basis"] == 1 else s["kunden"] if a["GW_Basis"] == 2 else len((d.get("buchungen") or {}).get(s["kz"]) or {})) / PG))
         Q = J + K + Lt + (a["P_KVz"] + a["P_USV"] + a["P_MontStandort"] + P_gw * (a["P_UCG"] + a["P_DAC"]) + a["P_Agg"] * _ceil((P_gw + tech) / a["Ports_Agg"])) * EK
         R = (a["Uplink_Monat"] * 12 * max(1, _ceil(s["kunden"] * a["Bandbreite"] / a["Ueberbuchung"] / a["Uplink_Kap"])) + a["Strom_Standort"]
              + P_gw * a["Strom_GW"] + tech * a["Strom_Mast"]) * EK + Q * a["Wartung"]
@@ -268,17 +269,26 @@ def gwplan_berechnen(d):
             continue
         mit = [t for t in A if t["C"] == s["nr"]]
         parz = sum(t["parz"] for t in mit)
-        gw = _ceil(parz / PG)
+        gw_max = _ceil(parz / PG)                 # Platz für alle Parzellen (VLAN-Plan, höchste Gateway-Nummer)
+        kunden = sum(t["kunden"] for t in mit)
+        gebucht = sum(len((d.get("buchungen") or {}).get(t["kz"]) or {}) for t in mit)
+        if a["GW_Basis"] == 2:
+            gw = max(1, _ceil(kunden / PG))
+        elif a["GW_Basis"] == 3:
+            gw = max([1, _ceil(gebucht / PG)] + [e["gw"] for e in ((d.get("zuteilung") or {}).get("p") or {}).values() if e.get("standort") == s["nr"]]
+                     if (d.get("zuteilung") or {}).get("an") else [1, _ceil(gebucht / PG)])
+        else:
+            gw = gw_max
+        gw = min(gw, max(1, gw_max))
         straenge = s["tech"] + sum(1 for t in A if t["D"] == s["nr"])
         agg = _ceil((gw + straenge) / a["Ports_Agg"])
-        kunden = sum(t["kunden"] for t in mit)
         bedarf = kunden * a["Bandbreite"] / a["Ueberbuchung"]
         ans = max(1, _ceil(bedarf / a["Uplink_Kap"]))
         inv = gw * (a["P_UCG"] + a["P_DAC"]) * EK + (a["P_KVz"] + a["P_USV"] + a["P_MontStandort"] + agg * a["P_Agg"]) * EK
         lfd = (ans * a["Uplink_Monat"] * 12 + a["Strom_Standort"] + gw * a["Strom_GW"]) * EK + inv * a["Wartung"]
         pr = f"Achtung: mehr als {int(a['Max_GW'])} Gateways" if gw > a["Max_GW"] else (f"OK – {ans} Internet-Anschlüsse nötig" if ans > 1 else "OK")
         gateways = []
-        for g_nr in range(1, gw + 1):
+        for g_nr in range(1, gw_max + 1):
             tl = []
             for t in sorted(mit, key=lambda t: t["sort"]):
                 for x in t["teile"]:
@@ -291,7 +301,7 @@ def gwplan_berechnen(d):
             gateways.append({"gw": g_nr, "teile": tl, "parzellen": n_p, "dienstnetze": n_d * DIENST_JE_SPARTE, "vlans": n_p + n_d * DIENST_JE_SPARTE,
                              "grenze": PG + n_d * DIENST_JE_SPARTE, "ok": n_p <= PG})
         standorte.append({"nr": s["nr"], "name": s["name"], "sparten": len(mit), "namen": [t["name"] for t in sorted(mit, key=lambda t: t["sort"])],
-                          "parz": parz, "gw": gw, "belegung": parz / (gw * PG) if gw else 0, "straenge": straenge, "agg": agg, "kunden": round(kunden, 1),
+                          "parz": parz, "gw": gw, "gw_max": gw_max, "gebucht": gebucht, "belegung": (parz if a["GW_Basis"] == 1 else kunden if a["GW_Basis"] == 2 else gebucht) / (gw * PG) if gw else 0, "straenge": straenge, "agg": agg, "kunden": round(kunden, 1),
                           "bedarf": round(bedarf), "anschluesse": ans, "inv": round(inv, 2), "lfd": round(lfd, 2), "pruefung": pr, "gateways": gateways})
     st_idx = {x["nr"]: x for x in standorte}
     # Einnahmen und Ergebnis
@@ -495,6 +505,8 @@ def akt_gwplan_annahmen(d, b):
         raise Fehler("Parzellen je Gateway, Überbuchung, Uplink-Kapazität, Ports und Faustregeln müssen größer als 0 sein.")
     if probe["Quote_Modus"] not in (1, 2) or probe["Szenario"] not in (1, 2) or probe["Vorschlag_nutzen"] not in (0, 1) or probe["KU"] not in (0, 1):
         raise Fehler("Modus und Szenario sind 1 oder 2, Vorschlag und Kleinunternehmer 0 oder 1.")
+    if probe["GW_Basis"] not in (1, 2, 3):
+        raise Fehler("Gateways bemessen nach: 1, 2 oder 3.")
     g["annahmen"] = neu
     if "tarifmix" in b and isinstance(b["tarifmix"], dict):
         namen = {t["name"] for t in tarife_pruefen(d["tarife"])}

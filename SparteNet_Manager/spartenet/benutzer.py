@@ -55,7 +55,7 @@ _LESEN = {
     "/api/start": "start", "/api/parzelle": "start",
     "/api/test": "auslesen", "/api/lesen": "auslesen", "/api/abgleich": "auslesen", "/api/vergleich": "auslesen", "/api/journal": "auslesen",
     "/api/system": "auslesen", "/api/daten-liste": "auslesen", "/api/daten-pruefen": "auslesen",
-    "/api/tarif-vergleich": "tarife", "/api/tarif-erkennen": "buchungen", "/api/kalkulation": "kalkulation", "/api/gwplan": "netzplanung", "/api/gwplan-vlan": "netzplanung", "/api/zuteilung": "netzplanung",
+    "/api/tarif-vergleich": "tarife", "/api/tarif-erkennen": "buchungen", "/api/kalkulation": "kalkulation", "/api/gwplan": "netzplanung", "/api/gwplan-vlan": "netzplanung", "/api/zuteilung": "netzplanung", "/api/zuteilung-parzellen": "netzplanung",
     "/api/karten-vorschau": "karten", "/api/karten": "karten", "/api/log": "verbindung",
     "/api/unterlagen": "unterlagen", "/api/unterlage-datei": "unterlagen", "/api/voucher-liste": "voucher", "/api/voucher-druck": "voucher",
     "/api/automation": "automationen",
@@ -67,7 +67,7 @@ _SCHREIBEN = {
     "/api/ppsk-speichern": "wlan_pw", "/api/rueckgaengig": "wlan_pw", "/api/passwort": "wlan_pw",
     "/api/tarif-rueckgaengig": "tarife", "/api/tarif-zuordnung": "buchungen",
     "/api/kalk-annahmen": "kalkulation", "/api/kalk-sparte": "kalkulation", "/api/kalk-import": "kalkulation",
-    "/api/gwplan-vlan-uebernehmen": "planung", "/api/gwplan-sparte": "netzplanung", "/api/gwplan-annahmen": "netzplanung", "/api/gwplan-zuruecksetzen": "netzplanung", "/api/gwplan-import": "netzplanung", "/api/zuteilung-einstellen": "netzplanung",
+    "/api/gwplan-vlan-uebernehmen": "planung", "/api/gwplan-sparte": "netzplanung", "/api/gwplan-annahmen": "netzplanung", "/api/gwplan-zuruecksetzen": "netzplanung", "/api/gwplan-import": "netzplanung", "/api/zuteilung-einstellen": "netzplanung", "/api/zuteilung-setzen": "netzplanung", "/api/zuteilung-verdichten": "netzplanung",
     "/api/logo": "karten", "/api/logo-loeschen": "karten",
     "/api/unterlage-hochladen": "unterlagen", "/api/unterlage-aendern": "unterlagen", "/api/unterlage-loeschen": "unterlagen",
     "/api/automation-speichern": "automationen", "/api/automation-loeschen": "automationen", "/api/automation-probe": "automationen",
@@ -141,7 +141,7 @@ SPARTE_PFLICHT = {"/api/ppsk", "/api/ppsk-speichern", "/api/netze", "/api/uebert
 NUR_OHNE_BESCHRAENKUNG = {"/api/excel", "/api/tarif-zuordnung", "/api/tarif-uebertragen", "/api/tarif-rueckgaengig", "/api/kalk-annahmen",
                           "/api/kalk-import", "/api/gwplan-annahmen", "/api/gwplan-zuruecksetzen", "/api/gwplan-import", "/api/gwplan-vlan-uebernehmen",
                           "/api/logo", "/api/logo-loeschen", "/api/schreibtest", "/api/konsolen", "/api/log-loeschen", "/api/tailscale", "/api/diagnose",
-                          "/api/zuteilung-einstellen", "/api/zuteilung-gateway", "/api/umzug", "/api/umzug-rueckgaengig",
+                          "/api/zuteilung-einstellen", "/api/zuteilung-gateway", "/api/zuteilung-setzen", "/api/zuteilung-verdichten", "/api/umzug", "/api/umzug-rueckgaengig",
                           "/api/automation", "/api/automation-speichern", "/api/automation-loeschen", "/api/automation-probe"}
 NUR_OHNE_BESCHRAENKUNG_SCHREIBEND = {"/api/plan", "/api/tarife", "/api/design", "/api/einstellungen", "/api/fern", "/api/pw-regel"}
 
