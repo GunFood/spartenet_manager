@@ -385,6 +385,7 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/unterlage-datei": lambda: akt_unterlage_datei(d, q, sp_erl),
                 "/api/unterlage-aendern": lambda: akt_unterlage_aendern(d, b or {}, sp_erl),
                 "/api/unterlage-loeschen": lambda: akt_unterlage_loeschen(d, b or {}, sp_erl),
+                "/api/unterlage-ordner": lambda: akt_unterlage_ordner(d, b or {}, sp_erl),
                 "/api/sicherung": lambda: akt_sicherung(d),
                 "/api/sicherung-erstellen": lambda: akt_sicherung_erstellen(d, b, ich),
                 "/api/sicherung-datei": lambda: akt_sicherung_datei(d, q),
