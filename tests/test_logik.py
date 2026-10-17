@@ -13,6 +13,8 @@ import spartenet.zuteilung as Z   # noqa: E402
 import spartenet.umzug as U       # noqa: E402
 import spartenet.voucher as V     # noqa: E402
 import spartenet.ppsk as P        # noqa: E402
+import spartenet.zeitplan as ZP   # noqa: E402
+import datetime as dt             # noqa: E402
 
 
 class FakeGateway:
@@ -356,6 +358,76 @@ class WlanZuordnung(unittest.TestCase):
         self.assertEqual({z["WLAN"] for z in S.lese_ppsk("BW")}, {"SparteNet.de-BW-Pächter"})
         with self.assertRaises(S.Fehler):
             S.akt_wlan_zuordnung(self.d, {"sparte": "BW", "paechter": "x" * 33})
+
+
+class Vertraege(unittest.TestCase):
+    def test_perioden_und_frist(self):
+        v = {"beginn": "2025-03-15", "laufzeit": 12, "verlaengerung": 12, "frist": 3}
+        ende, kuendbar, st = S.vertrag_lage(v, dt.date(2026, 1, 10))
+        self.assertEqual((ende, kuendbar, st), (dt.date(2026, 3, 14), dt.date(2025, 12, 14), "laufend"))
+        ende, kuendbar, st = S.vertrag_lage(v, dt.date(2026, 6, 1))          # verlängert
+        self.assertEqual(ende, dt.date(2027, 3, 14))
+        self.assertEqual(S.plus_monate(dt.date(2024, 1, 31), 1), dt.date(2024, 2, 29))
+        ende, _, st = S.vertrag_lage({**v, "ende_zum": "2026-03-14"}, dt.date(2026, 4, 1))
+        self.assertEqual(st, "beendet")
+
+    def test_buchung_legt_vertrag_an_und_erinnerung(self):
+        d = frisch()
+        S.akt_buchungen_speichern(d, "BW", {"7": "Basic"})
+        v = d["vertraege"]["BW-7"]
+        self.assertEqual(v["beginn"], dt.date.today().isoformat())
+        v["beginn"] = (dt.date.today() - dt.timedelta(days=300)).isoformat()   # Frist (1 Monat) läuft in ~35 Tagen ab
+        d["vertrag_einstellungen"] = {"erinnerung_tage": 60}
+        gesehen = []
+        S.EREIGNIS_EMPFAENGER.append(lambda t, x, dd: gesehen.append(t))
+        try:
+            S.vertraege_pruefen(d)
+            S.vertraege_pruefen(d)                                           # nur einmal je Periode
+        finally:
+            S.EREIGNIS_EMPFAENGER.pop()
+        self.assertEqual(gesehen.count("vertrag_erinnerung"), 1)
+        S.akt_buchungen_speichern(d, "BW", {"7": ""})
+        self.assertEqual(d["vertraege"]["BW-7"]["ende_zum"], dt.date.today().isoformat())
+
+
+class Ueberwachung(unittest.TestCase):
+    def test_offline_ticket_und_wieder_online(self):
+        d = frisch()
+        d["ueberwachung"] = {"aktiv": True, "verzoegerung": 10, "ticket": True, "auto_erledigen": True}
+        geraete = [{"macAddress": "aa", "name": "AP Mast 3", "model": "U7", "state": "ONLINE"}, {"macAddress": "bb", "name": "Switch", "state": "ONLINE"}]
+        class G:
+            def __init__(self, d): pass
+            def alle(self, pfad): return [dict(x) for x in geraete]
+        ZP.Gateway = G
+        t0 = 1_800_000_000
+        self.assertEqual(S.stoerungen_pruefen(d, t0), [])
+        geraete[0]["state"] = "OFFLINE"
+        self.assertEqual(S.stoerungen_pruefen(d, t0 + 60), [])              # noch innerhalb der Verzögerung
+        log = S.stoerungen_pruefen(d, t0 + 60 + 601)
+        self.assertIn("Störung gemeldet: AP Mast 3", log[0])
+        t = list(d["tickets"]["liste"].values())[-1]
+        self.assertEqual((t["prioritaet"], t["status"]), ("hoch", "neu"))
+        self.assertEqual(S.stoerungen_pruefen(d, t0 + 2000), [])            # nicht doppelt
+        geraete[0]["state"] = "ONLINE"
+        log = S.stoerungen_pruefen(d, t0 + 3000)
+        self.assertIn("wieder online", log[0])
+        self.assertEqual(t["status"], "erledigt")
+
+
+class PdfUndBank(unittest.TestCase):
+    def test_pdf_gueltig(self):
+        p = S.PDF()
+        p.text(50, 50, "Grüße – 12,00 € (Test)", 12, True)
+        p.qr(50, 80, 100, "BCD\n002\n1\nSCT\n\nTest\nDE89370400440532013000\nEUR1.00")
+        roh = p.ausgabe()
+        self.assertTrue(roh.startswith(b"%PDF-1.4") and roh.rstrip().endswith(b"%%EOF"))
+        self.assertIn(b"/WinAnsiEncoding", roh)
+
+    def test_kontoauszug_formate(self):
+        a = S.kontoauszug_lesen("Buchungstag;Valuta;Auftraggeber/Empfänger;Verwendungszweck;Betrag (EUR)\n01.10.26;01.10.26;Max;RE-2026-0001;1.234,50\n02.10.26;02.10.26;Strom;Abschlag;-50,00\n".encode("cp1252"))
+        self.assertEqual([(x["datum"], x["betrag"], x["name"]) for x in a], [("2026-10-01", 1234.5, "Max")])
+        c = S.kontoauszug_lesen("Buchungsdatum;Verwendungszweck;Name;Haben\n03.10.2026;Parzelle 12;Erika;120,00\n".encode())
+        self.assertEqual(c[0]["betrag"], 120.0)
 
 
 if __name__ == "__main__":

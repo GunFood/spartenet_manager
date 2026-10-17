@@ -31,6 +31,7 @@ BEREICHE = [
     ("unterlagen", "Unterlagen: Dateien ansehen (lesen), hochladen und löschen (schreiben)", ("kein", "lesen", "schreiben"), ["unterlagen"]),
     ("automationen", "Automationen: Regeln ansehen (lesen), anlegen und ändern (schreiben); E-Mail-Versand und API-Schlüssel nur Administratoren", ("kein", "lesen", "schreiben"), ["automationen"]),
     ("mitglieder", "Mitglieder: Liste ansehen (lesen), anlegen, ändern, importieren (schreiben)", ("kein", "lesen", "schreiben"), ["mitglieder"]),
+    ("rechnungen", "Rechnungen und Zahlungsabgleich: ansehen (lesen), erstellen, senden, Zahlungen buchen (schreiben)", ("kein", "lesen", "schreiben"), ["rechnungen"]),
     ("tickets", "Anfragen (Tickets): ansehen (lesen), bearbeiten, beantworten, zuweisen (schreiben)", ("kein", "lesen", "schreiben"), ["tickets"]),
     ("verbindung", "Verbindung, Cloud-Key, Handy & Tablet, Protokoll, Diagnose", ("kein", "lesen", "schreiben"), ["verbindung"]),
 ]
@@ -51,7 +52,7 @@ VORLAGEN = {
 }
 
 # Was eine Anfrage braucht: ("immer",) · ("admin",) · (Bereich, Stufe)
-_IMMER = {"/api/einstellungen", "/api/ansicht", "/api/benutzer-ich", "/api/plan", "/api/pw-regel", "/api/2fa-start", "/api/2fa-bestaetigen", "/api/2fa-aus"}  # nur lesend (GET) bzw. eigene Ansicht
+_IMMER = {"/api/app-uebersicht", "/api/app-geraete", "/api/app-geraet-entfernen", "/api/einstellungen", "/api/ansicht", "/api/benutzer-ich", "/api/plan", "/api/pw-regel", "/api/2fa-start", "/api/2fa-bestaetigen", "/api/2fa-aus"}  # nur lesend (GET) bzw. eigene Ansicht
 _NUR_ADMIN = {"/api/benutzer", "/api/benutzer-speichern", "/api/benutzer-loeschen", "/api/beenden"}
 _LESEN = {
     "/api/start": "start", "/api/parzelle": "start",
@@ -63,6 +64,9 @@ _LESEN = {
     "/api/automation": "automationen", "/api/email-layout": "automationen", "/api/email-vorschau": "automationen",
     "/api/mitglieder": "mitglieder", "/api/mitglieder-export": "mitglieder",
     "/api/tickets": "tickets", "/api/ticket": "tickets",
+    "/api/rechnungen": "rechnungen", "/api/rechnung-pdf": "rechnungen",
+    "/api/vertraege": "mitglieder", "/api/rundschreiben": "mitglieder", "/api/rundschreiben-empfaenger": "mitglieder", "/api/mitglied-auskunft": "mitglieder",
+    "/api/ueberwachung": "auslesen",
 }
 _GET_LESEN_SONST_SCHREIBEN = {"/api/voucher-vorlagen": "voucher", "/api/tarife": "tarife", "/api/buchungen": "buchungen", "/api/design": "karten", "/api/fern": "verbindung"}
 _VORSCHAU = {"/api/netze": "netze", "/api/uebertragen": "wlan_pw", "/api/ppsk-hochladen": "wlan_pw", "/api/tarif-uebertragen": "tarife", "/api/voucher": "voucher", "/api/voucher-loeschen": "voucher", "/api/zuteilung-gateway": "netze", "/api/umzug": "netze"}
@@ -77,6 +81,9 @@ _SCHREIBEN = {
     "/api/email-vorlage-speichern": "automationen", "/api/email-vorlage-loeschen": "automationen",
     "/api/mitglied-speichern": "mitglieder", "/api/mitglied-loeschen": "mitglieder", "/api/mitglieder-import": "mitglieder",
     "/api/ticket-speichern": "tickets", "/api/ticket-kommentar": "tickets",
+    "/api/rechnungslauf": "rechnungen", "/api/rechnung-senden": "rechnungen", "/api/rechnung-status": "rechnungen",
+    "/api/zahlungen-import": "rechnungen", "/api/zahlungen-uebernehmen": "rechnungen",
+    "/api/vertrag-speichern": "mitglieder", "/api/vertrag-kuendigen": "mitglieder", "/api/rundschreiben-senden": "mitglieder", "/api/mitglied-dsgvo-loeschen": "mitglieder",
     "/api/automation-speichern": "automationen", "/api/automation-loeschen": "automationen", "/api/automation-probe": "automationen",
     "/api/konsolen": "verbindung", "/api/log-loeschen": "verbindung", "/api/tailscale": "verbindung", "/api/diagnose": "verbindung",
 }
@@ -149,7 +156,7 @@ NUR_OHNE_BESCHRAENKUNG = {"/api/excel", "/api/tarif-zuordnung", "/api/tarif-uebe
                           "/api/kalk-import", "/api/gwplan-annahmen", "/api/gwplan-zuruecksetzen", "/api/gwplan-import", "/api/gwplan-vlan-uebernehmen",
                           "/api/logo", "/api/logo-loeschen", "/api/schreibtest", "/api/konsolen", "/api/log-loeschen", "/api/tailscale", "/api/diagnose",
                           "/api/zuteilung-einstellen", "/api/zuteilung-gateway", "/api/zuteilung-setzen", "/api/zuteilung-verdichten", "/api/umzug", "/api/umzug-rueckgaengig",
-                          "/api/email-vorlage-speichern", "/api/email-vorlage-loeschen",
+                          "/api/email-vorlage-speichern", "/api/email-vorlage-loeschen", "/api/rechnungslauf", "/api/zahlungen-import", "/api/zahlungen-uebernehmen",
                           "/api/automation", "/api/automation-speichern", "/api/automation-loeschen", "/api/automation-probe"}
 NUR_OHNE_BESCHRAENKUNG_SCHREIBEND = {"/api/plan", "/api/tarife", "/api/design", "/api/einstellungen", "/api/fern", "/api/pw-regel"}
 

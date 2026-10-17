@@ -23,6 +23,11 @@ AUSLOESER = {
     "ticket_neu": "Neue Anfrage (Ticket) eingegangen",
     "ticket_zugewiesen": "Ticket einem Benutzer zugewiesen",
     "ticket_erledigt": "Ticket erledigt",
+    "stoerung": "Störung: Gerät offline (Überwachung)",
+    "stoerung_behoben": "Störung behoben: Gerät wieder online",
+    "vertrag_erinnerung": "Vertrag: Kündigungsfrist läuft bald ab",
+    "vertrag_gekuendigt": "Vertrag gekündigt",
+    "vertrag_ende": "Vertrag endet (nach Kündigung)",
 }
 AKTIONEN = {
     "email": "E-Mail senden",
@@ -42,13 +47,18 @@ PLATZHALTER = {
     "{ticket}": "Ticket-Nummer", "{betreff}": "Betreff des Tickets", "{nachricht}": "Text des Tickets", "{status}": "Status des Tickets",
     "{kategorie}": "Kategorie des Tickets", "{prioritaet}": "Priorität des Tickets", "{zustaendig}": "zuständiger Benutzer",
     "{zustaendig_email}": "E-Mail des zuständigen Benutzers",
+    "{geraet}": "Gerät (Störung)", "{seit}": "offline seit (Störung)", "{dauer}": "Dauer der Störung",
+    "{vertrag_beginn}": "Vertragsbeginn", "{vertrag_ende}": "Ende der laufenden Vertragsperiode", "{kuendbar_bis}": "Kündigung möglich bis",
+    "{rechnung}": "Rechnungsnummer", "{faellig}": "Fälligkeit der Rechnung",
 }
 LAYOUT_STANDARD = {"aktiv": True, "logo": True, "farbe_kopf": "#1d2f3e", "farbe_kopf_text": "#ffffff", "farbe_akzent": "#3a9a1f",
                    "farbe_hinter": "#f5f7f4", "farbe_text": "#1d2f3e", "schrift": "Arial, Helvetica, sans-serif", "breite": 600,
                    "kopf": "SparteNet.de", "fuss": "SparteNet.de · WLAN für Kleingärten\nDiese E-Mail wurde automatisch versendet."}
 _HTML_ERLAUBT = {"p": (), "br": (), "b": (), "strong": (), "i": (), "em": (), "u": (), "h2": (), "h3": (), "ul": (), "ol": (), "li": (),
                  "a": ("href",), "hr": (), "blockquote": (), "div": (), "span": ()}
-SMTP_STANDARD = {"host": "", "port": 587, "sicherheit": "starttls", "benutzer": "", "absender": "", "absender_name": "SparteNet"}
+SMTP_STANDARD = {"host": "", "port": 587, "sicherheit": "starttls", "anmeldung": "login", "benutzer": "", "absender": "", "absender_name": "SparteNet"}
+SMTP_ANMELDUNG = {"login": "SMTP-Login (AUTH LOGIN, Benutzername + Passwort)", "plain": "AUTH PLAIN", "auto": "automatisch (was der Server anbietet)",
+                  "keine": "keine Anmeldung (nur eigener Mailserver im Netz)"}
 _SMTP_PW_DATEI = os.environ.get("SPARTENET_SMTP_PASSWORD_FILE", "").strip()
 _WARTESCHLANGE = queue.Queue(maxsize=500)
 _VERLAUF_LOCK = threading.Lock()
@@ -273,7 +283,7 @@ def _passt(regel, typ, daten):
     return True
 
 
-def email_senden(d, an, betreff, text, html=None):
+def email_senden(d, an, betreff, text, html=None, anhaenge=None):
     s = smtp_einstellungen(d)
     if not s["host"] or not s["absender"]:
         raise Fehler("E-Mail-Versand ist nicht eingerichtet (Automationen → E-Mail-Versand).")
@@ -293,26 +303,59 @@ def email_senden(d, an, betreff, text, html=None):
         m.add_alternative(email_html(d, html, betreff, f"cid:{cid[1:-1]}" if logo else None), subtype="html")
         if logo:
             m.get_payload()[1].add_related(logo[0], maintype="image", subtype=logo[1], cid=cid)
+    for name, daten, typ in anhaenge or []:
+        haupt, _, unter = (typ or "application/octet-stream").partition("/")
+        m.add_attachment(daten, maintype=haupt, subtype=unter or "octet-stream", filename=name)
     port = int(s["port"] or (465 if s["sicherheit"] == "ssl" else 587))
     ctx = ssl.create_default_context()
-    if s["sicherheit"] == "ssl":
-        verb = smtplib.SMTP_SSL(s["host"], port, timeout=20, context=ctx)
-    else:
-        verb = smtplib.SMTP(s["host"], port, timeout=20)
+    try:
+        if s["sicherheit"] == "ssl":
+            verb = smtplib.SMTP_SSL(s["host"], port, timeout=20, context=ctx)
+        else:
+            verb = smtplib.SMTP(s["host"], port, timeout=20)
+    except (OSError, smtplib.SMTPException) as e:
+        raise Fehler(f"Mailserver {s['host']}:{port} nicht erreichbar ({type(e).__name__}: {e}) – Server, Port und Verschlüsselung prüfen.")
     try:
         verb.ehlo()
         if s["sicherheit"] == "starttls":
             verb.starttls(context=ctx)
             verb.ehlo()
-        if s["benutzer"]:
-            verb.login(s["benutzer"], _smtp_passwort(d))
+        smtp_anmelden(d, s, verb)
         verb.send_message(m)
+    except smtplib.SMTPAuthenticationError as e:
+        raise Fehler(f"Der Mailserver lehnt die Anmeldung ab ({e.smtp_code}: {(e.smtp_error or b'').decode('utf-8', 'replace')[:150]}) – Benutzername und Passwort prüfen.")
+    except smtplib.SMTPNotSupportedError:
+        raise Fehler("Der Mailserver bietet diese Anmeldung nicht an – meist muss die Verschlüsselung „STARTTLS“ (Port 587) oder „SSL/TLS“ (Port 465) gewählt werden.")
+    except smtplib.SMTPRecipientsRefused as e:
+        raise Fehler("Empfänger abgelehnt: " + ", ".join(e.recipients)[:200])
+    except smtplib.SMTPSenderRefused as e:
+        raise Fehler(f"Absender {s['absender']} abgelehnt ({e.smtp_code}) – beim Provider muss die Absender-Adresse zum Postfach passen.")
     finally:
         try:
             verb.quit()
         except Exception:
             pass
     return ", ".join(empfaenger)
+
+
+def smtp_anmelden(d, s, verb):
+    """SMTP-Login mit Benutzername (sonst Absender-Adresse) und Passwort"""
+    art = s.get("anmeldung") or "login"
+    if art == "keine":
+        return
+    benutzer, pw = s.get("benutzer") or s.get("absender"), _smtp_passwort(d)
+    if not pw:
+        raise Fehler("Für den SMTP-Login fehlt das Passwort (Automationen → E-Mail-Versand).")
+    if art == "auto":
+        verb.login(benutzer, pw)
+        return
+    if not verb.has_extn("auth"):
+        raise smtplib.SMTPNotSupportedError("AUTH")
+    verb.user, verb.password = benutzer, pw
+    if art == "plain":
+        verb.auth("PLAIN", verb.auth_plain)
+    else:
+        verb.auth("LOGIN", verb.auth_login, initial_response_ok=False)
 
 
 def _webhook(url, nutzlast):
@@ -544,6 +587,8 @@ def akt_smtp_speichern(d, b, ich):
             raise Fehler("Port: Zahl 1–65535.")
     if b.get("sicherheit") in ("starttls", "ssl", "keine"):
         s["sicherheit"] = b["sicherheit"]
+    if b.get("anmeldung") in SMTP_ANMELDUNG:
+        s["anmeldung"] = b["anmeldung"]
     if s["absender"] and not _EMAIL_RE.match(s["absender"]):
         raise Fehler("Absender ist keine gültige E-Mail-Adresse.")
     alt = d.get("smtp") if isinstance(d.get("smtp"), dict) else {}
@@ -553,7 +598,7 @@ def akt_smtp_speichern(d, b, ich):
         s["passwort"] = alt["passwort"]
     d["smtp"] = s
     speichere(d)
-    journal(f"E-Mail-Versand eingestellt: {s['host']}:{s['port']} ({s['sicherheit']}) durch {ich}")
+    journal(f"E-Mail-Versand eingestellt: {s['host']}:{s['port']} ({s['sicherheit']}, Anmeldung {s['anmeldung']}) durch {ich}")
     x = akt_automation(d)
     x["log"] = ["✔ E-Mail-Versand gespeichert."]
     return x

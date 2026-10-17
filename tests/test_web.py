@@ -76,7 +76,7 @@ class AutomationenUndApi(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.a = admin()
-        code, x = cls.a.req("/api/smtp-speichern", {"host": "127.0.0.1", "port": SMTP.port, "sicherheit": "keine", "absender": "wlan@verein.example",
+        code, x = cls.a.req("/api/smtp-speichern", {"host": "127.0.0.1", "port": SMTP.port, "sicherheit": "keine", "anmeldung": "keine", "absender": "wlan@verein.example",
                                                     "passwort": "geheim-smtp-pw"})
         assert code == 200, x
         code, x = cls.a.req("/api/automation-speichern", {"regel": {"name": "Mail bei Buchung", "ausloeser": "buchung", "aktionen": [
@@ -91,6 +91,18 @@ class AutomationenUndApi(unittest.TestCase):
         cls.key = x["neu"]
         code, x = cls.a.req("/api/api-schluessel-neu", {"name": "Nur lesen", "rechte": ["lesen"]})
         cls.key_lesen = x["neu"]
+
+    def test_smtp_login(self):
+        a = admin()
+        a.req("/api/smtp-speichern", {"anmeldung": "login", "benutzer": "postfach@verein.example", "passwort": "falsch"})
+        code, x = a.req("/api/smtp-test", {"an": "test@example.org"})
+        self.assertEqual(code, 400)
+        self.assertIn("lehnt die Anmeldung ab", x["fehler"])
+        a.req("/api/smtp-speichern", {"passwort": SMTP.passwort})
+        code, x = a.req("/api/smtp-test", {"an": "test@example.org"})
+        self.assertEqual(code, 200, x)
+        self.assertEqual(SMTP.anmeldungen[-1], ("postfach@verein.example", SMTP.passwort))
+        a.req("/api/smtp-speichern", {"anmeldung": "keine"})
 
     def test_smtp_passwort_nie_sichtbar(self):
         _, x = self.a.req("/api/automation")
@@ -211,7 +223,7 @@ class MitgliederTicketsEmail(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.a = admin()
-        cls.a.req("/api/smtp-speichern", {"host": "127.0.0.1", "port": SMTP.port, "sicherheit": "keine", "absender": "wlan@verein.example"})
+        cls.a.req("/api/smtp-speichern", {"host": "127.0.0.1", "port": SMTP.port, "sicherheit": "keine", "anmeldung": "keine", "absender": "wlan@verein.example"})
         _, x = cls.a.req("/api/api-schluessel-neu", {"name": "Webseite", "rechte": ["mitglieder", "tickets"]})
         cls.key = x["neu"]
 
@@ -294,6 +306,153 @@ class MitgliederTicketsEmail(unittest.TestCase):
         code, x = t.req("/api/ticket-speichern", {"ticket": {"id": tid, "status": "erledigt"}})
         self.assertIn("Status: wartet auf Rückmeldung → erledigt", json.dumps(x["ticket"]["verlauf"], ensure_ascii=False))
         self.assertEqual(api(SRV.basis, "POST", "/api/v1/ticket", {"text": "ohne Betreff"}, self.key)[0], 400)
+
+
+class Version50(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.a = a = admin()
+        a.req("/api/smtp-speichern", {"host": "127.0.0.1", "port": SMTP.port, "sicherheit": "keine", "anmeldung": "keine", "absender": "wlan@verein.example"})
+        a.req("/api/rechnung-einstellungen", {"firma": "KGV Test e.V.", "adresse": "Weg 1\n14770 Brandenburg", "iban": "DE89 3704 0044 0532 0130 00", "bic": "COBADEFFXXX"})
+        a.req("/api/mitglied-speichern", {"mitglied": {"vorname": "Rita", "nachname": "Rechnung", "email": "rita@example.org", "sparte": "BW", "parzelle": "41"}})
+        a.req("/api/mitglied-speichern", {"mitglied": {"vorname": "Paul", "nachname": "Portal", "email": "paul@example.org", "sparte": "BW", "parzelle": "42"}})
+        a.req("/api/buchungen", {"sparte": "BW", "aenderungen": {"41": "Plus", "42": "Basic"}})
+
+    def _mails_seit(self, n, anzahl=1):
+        return SMTP.warten(n + anzahl)[n:]
+
+    def test_rechnungen_pdf_versand_und_zahlungsabgleich(self):
+        a = self.a
+        code, v = a.req("/api/rechnungslauf", {"jahr": 2031})
+        self.assertEqual(code, 200, v)
+        self.assertTrue(any(x["parzelle"] == 41 for x in v["vorschau"]))
+        code, x = a.req("/api/rechnungslauf", {"jahr": 2031, "ausfuehren": True})
+        self.assertEqual(code, 200, x)
+        r41 = next(z for z in x["zeilen"] if z["parzelle"] == 41)
+        r42 = next(z for z in x["zeilen"] if z["parzelle"] == 42)
+        self.assertEqual(a.req("/api/rechnungslauf", {"jahr": 2031, "ausfuehren": True})[0], 400)          # nicht doppelt
+        code, kopf, pdf = a.roh("/api/rechnung-pdf?id=" + r41["id"])
+        self.assertTrue(pdf.startswith(b"%PDF-1.4"))
+        n = len(SMTP.mails)
+        code, x = a.req("/api/rechnung-senden", {"ids": [r41["id"]]})
+        self.assertEqual(code, 200, x)
+        m = self._mails_seit(n)[0]
+        self.assertIn("rita@example.org", m["an"])
+        self.assertIn("application/pdf", m["text"])
+        csvd = f"Buchungstag;Verwendungszweck;Auftraggeber;Betrag\n17.10.2031;{r41['nr']} WLAN;Rita Rechnung;180,00\n18.10.2031;Spende;Jemand;5,00\n".encode()
+        code, _, roh = a.roh("/api/zahlungen-import", csvd)
+        x = json.loads(roh)
+        self.assertEqual(code, 200, x)
+        z = next(z for z in x["zeilen"] if z["betrag"] == 180.0)
+        self.assertEqual((z["rechnung"], z["grund"]), (r41["id"], "Rechnungsnummer"))
+        code, x = a.req("/api/zahlungen-uebernehmen", {"import": x["import"], "zuordnung": {z["hash"]: z["rechnung"]}})
+        self.assertEqual(next(y for y in x["zeilen"] if y["id"] == r41["id"])["status"], "bezahlt")
+        _, _, roh = a.roh("/api/zahlungen-import", csvd)
+        self.assertTrue(next(z for z in json.loads(roh)["zeilen"] if z["betrag"] == 180.0)["schon"])          # nicht doppelt buchen
+        _, k = a.req("/api/api-schluessel-neu", {"name": "Bank", "rechte": ["ereignis"]})
+        code, x = api(SRV.basis, "POST", "/api/v1/ereignis", {"ereignis": "zahlung", "betrag": "120", "referenz": r42["nr"]}, k["neu"])
+        self.assertEqual(x["aktionen"][0]["aktion"], "Zahlung gebucht", x)
+
+    def test_vertrag_und_rundschreiben(self):
+        a = self.a
+        _, v = a.req("/api/vertraege")
+        z = next(z for z in v["zeilen"] if z["id"] == "BW-41")
+        self.assertEqual((z["status"] in ("laufend", "Frist läuft ab"), z["laufzeit"]), (True, 12))
+        code, v = a.req("/api/vertrag-kuendigen", {"id": "BW-41"})
+        self.assertEqual(next(z for z in v["zeilen"] if z["id"] == "BW-41")["status"], "gekündigt")
+        a.req("/api/vertrag-kuendigen", {"id": "BW-41", "zuruecknehmen": True})
+        code, e = a.req("/api/rundschreiben-empfaenger", {"filter": {"sparten": ["BW"], "tarife": ["Plus"]}})
+        self.assertEqual(code, 200, e)
+        self.assertIn("rita@example.org", [x["email"] for x in e["beispiele"]])
+        self.assertNotIn("paul@example.org", [x["email"] for x in e["beispiele"]])
+        n = len(SMTP.mails)
+        code, x = a.req("/api/rundschreiben-senden", {"filter": {"sparten": ["BW"], "tarife": ["Plus"]}, "betreff": "Wartung {vorname}", "html": "<p>Hallo {vorname}</p>"})
+        self.assertEqual(code, 200, x)
+        ende = time.time() + 10
+        while time.time() < ende and not any("rita@example.org" in m["an"] and "Wartung Rita" in m["text"] for m in SMTP.mails[n:]):
+            time.sleep(0.2)
+        self.assertTrue(any("rita@example.org" in m["an"] and "Wartung Rita" in m["text"] for m in SMTP.mails[n:]), SMTP.mails[n:])
+
+    def test_paechter_seite(self):
+        a = self.a
+        s = Sitzung(SRV.basis)
+        self.assertEqual(s.roh("/portal")[0], 404)
+        a.req("/api/portal-einstellungen", {"aktiv": True})
+        code, _, html = s.roh("/portal")
+        self.assertEqual(code, 200)
+        self.assertIn(b"Zugangskarte", html)
+        a.req("/api/ppsk", {"sparte": "BW", "art": "fehlende"})
+        n = len(SMTP.mails)
+        code, x = s.req("/portal/ticket", {"betreff": "Frage", "text": "Hallo", "email": "paul@example.org", "sparte": "BW", "parzelle": "42"})
+        self.assertEqual(code, 200, x)
+        nr = x["ticket"]
+        self.assertEqual(s.req("/portal/status", {"nr": nr, "email": "falsch@example.org"})[0], 400)
+        code, x = s.req("/portal/status", {"nr": nr, "email": "paul@example.org"})
+        self.assertEqual((code, x["status"]), (200, "neu"))
+        code, x = s.req("/portal/zugang", {"sparte": "BW", "parzelle": "42", "email": "falsch@example.org"})
+        self.assertEqual(code, 200)
+        code, x = s.req("/portal/zugang", {"sparte": "BW", "parzelle": "42", "email": "paul@example.org"})
+        self.assertEqual(code, 200)
+        mails = self._mails_seit(n, 2)
+        karte = [m for m in mails if "Zugangskarte" in m["text"]]
+        self.assertEqual(len(karte), 1, mails)
+        self.assertIn("paul@example.org", karte[0]["an"])
+        self.assertIn("application/pdf", karte[0]["text"])
+        self.assertNotIn("SN", json.dumps(x))                       # kein Passwort in der Antwort
+        for _ in range(6):
+            code, x = s.req("/portal/zugang", {"sparte": "BW", "parzelle": "42", "email": "paul@example.org"})
+        self.assertEqual(code, 400)                                  # Grenze
+
+    def test_app_zugang(self):
+        a = self.a
+        a.req("/api/benutzer-speichern", {"neu": True, "name": "appnutzer", "passwort": "App-Passwort-123", "passwort2": "App-Passwort-123", "art": "bereiche",
+                                          "bereiche": {"tickets": "schreiben", "start": "lesen"}})
+        self.assertEqual(api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "appnutzer", "passwort": "falsch-falsch"})[0], 401)
+        code, x = api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "appnutzer", "passwort": "App-Passwort-123", "geraet": "Pixel 9"})
+        self.assertEqual(code, 200, x)
+        tok = x["token"]
+        self.assertTrue(tok.startswith("sna_"))
+        def mit_app(pfad, body=None):
+            r = urllib.request.Request(SRV.basis + pfad, data=json.dumps(body).encode() if body is not None else None, method="POST" if body is not None else "GET")
+            r.add_header("Authorization", "Bearer " + tok)
+            r.add_header("Content-Type", "application/json")
+            try:
+                with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(r) as o:
+                    return o.status, json.loads(o.read())
+            except urllib.error.HTTPError as e:
+                return e.code, json.loads(e.read())
+        code, x = mit_app("/api/app-uebersicht")
+        self.assertEqual(code, 200, x)
+        self.assertIn("tickets", x)
+        self.assertNotIn("rechnungen", x)                          # kein Recht
+        self.assertEqual(mit_app("/api/tickets")[0], 200)
+        self.assertEqual(mit_app("/api/benutzer")[0], 403)
+        self.assertEqual(mit_app("/api/ticket-speichern", {"ticket": {"betreff": "aus der App"}})[0], 200)
+        code, x = mit_app("/api/v1/app/funktionen")
+        self.assertTrue(any(f["pfad"] == "/api/tickets" for f in x["funktionen"]))
+        code, x = mit_app("/api/app-geraete")
+        gid = x["geraete"][0]["id"]
+        mit_app("/api/app-geraet-entfernen", {"id": gid})
+        self.assertEqual(mit_app("/api/app-uebersicht")[0], 401)
+
+    def test_datenschutz_und_wochenbericht(self):
+        a = self.a
+        _, m = a.req("/api/mitglied-speichern", {"mitglied": {"vorname": "Dora", "nachname": "Daten", "email": "dora@example.org", "sparte": "BW", "parzelle": "43"}})
+        mid = m["id"]
+        _, t = a.req("/api/ticket-speichern", {"ticket": {"betreff": "Geheim", "text": "meine Daten", "email": "dora@example.org"}})
+        code, kopf, roh = a.roh("/api/mitglied-auskunft?id=" + mid)
+        aus = json.loads(roh)
+        self.assertEqual(aus["mitglied"]["email"], "dora@example.org")
+        self.assertEqual(len(aus["tickets"]), 1)
+        code, x = a.req("/api/mitglied-dsgvo-loeschen", {"id": mid})
+        self.assertEqual(code, 200, x)
+        self.assertFalse(any(z["id"] == mid for z in x["zeilen"]))
+        _, t2 = a.req("/api/ticket?id=" + t["ticket"]["id"])
+        self.assertNotIn("dora", json.dumps(t2).lower())
+        n = len(SMTP.mails)
+        code, x = a.req("/api/wochenbericht", {"jetzt": True, "an_test": "chef@verein.example"})
+        self.assertEqual(code, 200, x)
+        self.assertIn("Wochenbericht", self._mails_seit(n)[0]["text"])
 
 
 class Datensicherung(unittest.TestCase):
