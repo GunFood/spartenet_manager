@@ -241,7 +241,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _antwort(self, pfad, q, b, roh, wer, d_geladen=None):
         ich, rechte = wer
-        if pfad in ("/api/ppsk-speichern", "/api/fern", "/api/benutzer-speichern", "/api/benutzer-ich"):
+        if pfad in ("/api/ppsk-speichern", "/api/fern", "/api/benutzer-speichern", "/api/benutzer-ich", "/api/mitglied-speichern", "/api/mitglieder-import",
+                    "/api/ticket-speichern", "/api/ticket-kommentar", "/api/email-test", "/api/email-vorschau", "/api/email-vorlage-speichern"):
             LOG.info("Aktion %s von %s (Inhalt nicht protokolliert)", pfad, ich)
         elif pfad not in ("/api/log", "/api/karten-vorschau"):
             LOG.info("Aktion %s von %s %s", pfad, ich, json.dumps(_maskiere(b), ensure_ascii=False)[:500] if isinstance(b, (dict, list)) else (urllib.parse.urlencode(q, doseq=True) if q else ""))
@@ -402,6 +403,23 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/automation-loeschen": lambda: akt_automation_loeschen(d, b or {}, ich),
                 "/api/automation-probe": lambda: akt_automation_probe(d, b or {}),
                 "/api/smtp-speichern": lambda: akt_smtp_speichern(d, b or {}, ich),
+                "/api/email-layout": lambda: akt_email_layout(d, b),
+                "/api/email-vorschau": lambda: akt_email_vorschau(d, b or {}),
+                "/api/email-vorlage-speichern": lambda: akt_email_vorlage_speichern(d, b or {}, ich),
+                "/api/email-vorlage-loeschen": lambda: akt_email_vorlage_loeschen(d, b or {}, ich),
+                "/api/email-test": lambda: akt_email_test(d, b or {}),
+                "/api/admin-email": lambda: (d.__setitem__("admin_email", str((b or {}).get("email") or "").strip().lower()[:200]) or speichere(d) or {"log": ["✔ E-Mail des Kontos „admin“ gespeichert."]}),
+                "/api/mitglieder": lambda: akt_mitglieder(d, sp_erl),
+                "/api/mitglied-speichern": lambda: akt_mitglied_speichern(d, b or {}, ich, sp_erl),
+                "/api/mitglied-loeschen": lambda: akt_mitglied_loeschen(d, b or {}, ich, sp_erl),
+                "/api/mitglieder-import": lambda: akt_mitglieder_import(d, q, roh, ich, sp_erl),
+                "/api/mitglieder-export": lambda: akt_mitglieder_export(d, sp_erl),
+                "/api/tickets": lambda: akt_tickets(d, q, ich, sp_erl),
+                "/api/ticket": lambda: akt_ticket(d, q, ich, sp_erl),
+                "/api/ticket-speichern": lambda: akt_ticket_speichern(d, b or {}, ich, sp_erl),
+                "/api/ticket-kommentar": lambda: akt_ticket_kommentar(d, b or {}, ich, sp_erl),
+                "/api/ticket-loeschen": lambda: akt_ticket_loeschen(d, b or {}, ich),
+                "/api/ticket-einstellungen": lambda: akt_ticket_einstellungen(d, b or {}, ich),
                 "/api/smtp-test": lambda: akt_smtp_test(d, b or {}),
                 "/api/api-schluessel": lambda: akt_api(d),
                 "/api/api-schluessel-neu": lambda: akt_api_schluessel_neu(d, b or {}, ich),
@@ -438,7 +456,7 @@ class Handler(BaseHTTPRequestHandler):
                 SCHREIB_SPERRE.release()
 
 
-ROH_PFADE = {"/api/excel", "/api/logo", "/api/kalk-import", "/api/gwplan-import", "/api/unterlage-hochladen", "/api/sicherung-einspielen"}
+ROH_PFADE = {"/api/mitglieder-import", "/api/excel", "/api/logo", "/api/kalk-import", "/api/gwplan-import", "/api/unterlage-hochladen", "/api/sicherung-einspielen"}
 
 
 def main():

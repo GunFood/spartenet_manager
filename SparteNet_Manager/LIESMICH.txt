@@ -1,4 +1,4 @@
-SparteNet Manager 4.8.4 (Cloud)
+SparteNet Manager 4.9 (Cloud)
 ===============================
 
 Funktioniert komplett über die UniFi-Cloud (api.ui.com). Kein lokaler Zugriff, kein VPN.
@@ -95,6 +95,25 @@ API-SCHNITTSTELLE FÜR ANDERE PROGRAMME – neu in 4.8
     POST /api/v1/buchung   {"sparte":"BW","parzelle":12,"tarif":"Basic"}   ("" = Buchung entfernen)
   Höchstens 120 Anfragen je Minute und Schlüssel (SPARTENET_API_PRO_MINUTE). Zahlungsanbieter über n8n/Zapier/Make
   anbinden. Von außen nur über HTTPS (Reverse-Proxy, dann SPARTENET_PROXY=1).
+
+E-MAIL MIT LAYOUT UND VORLAGEN (Reiter "Automationen") – neu in 4.9
+  Layout für alle E-Mails: Kopfzeile mit Logo (aus "Kartendesign"), Farben, Schrift, Breite, Fußzeile (Impressum).
+  Vorschau mit Beispieldaten, Test-E-Mail. Vorlagen mit Editor (fett, kursiv, Überschriften, Listen, Link, Platzhalter),
+  in Regeln und Ticket-Antworten auswählbar. Versand als HTML mit Text-Alternative; unsichere Inhalte werden entfernt.
+
+MITGLIEDER (Reiter "Mitglieder") – neu in 4.9
+  Vorname, Nachname, E-Mail, Telefon, Sparte, Parzelle, Notiz – mit gebuchtem Tarif der Parzelle. Anlegen von Hand,
+  per Excel/CSV (Vorschau, dann Übernehmen; gleiche E-Mail bzw. Parzelle + Nachname wird aktualisiert) oder über die
+  API (POST /api/v1/mitglied, GET /api/v1/mitglieder – Recht "mitglieder"). Export als CSV. Hinweis auf gebuchte
+  Parzellen ohne Mitglied. In E-Mails: {vorname} {nachname} {telefon}; "an den Kunden" nutzt die E-Mail des Mitglieds.
+  Auslöser für Automationen: "Mitglied angelegt". Recht "Mitglieder" (kein/lesen/schreiben).
+
+ANFRAGEN / TICKETS (Reiter "Tickets") – neu in 4.9
+  Tickets mit Nummer (T-0001), Kategorie, Priorität, Status (neu, in Bearbeitung, wartet, erledigt), zuständigem
+  Benutzer und Verlauf. Antwort per E-Mail an den Kontakt (mit Layout, optional Vorlage) oder interne Notiz.
+  Kontakt wird automatisch dem Mitglied zugeordnet (E-Mail oder Parzelle). Über die API: POST /api/v1/ticket,
+  GET /api/v1/ticket?nr= (Recht "tickets"). Automationen: "Neue Anfrage", "Ticket zugewiesen" (z. B. E-Mail an
+  {zustaendig_email} – E-Mail je Benutzerkonto unter "Benutzer"), "Ticket erledigt". Recht "Tickets".
 
 UNTERLAGEN: ORDNER WÄHLEN UND ANLEGEN – neu in 4.8.4
   Beim Hochladen "In Ordner hochladen" als Auswahl (mit Anzahl Dateien); "+ Neuer Ordner …" legt beim Hochladen

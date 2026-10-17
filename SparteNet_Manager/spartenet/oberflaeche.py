@@ -44,7 +44,7 @@ th{position:sticky;top:0;background:var(--navy);color:#fff;text-align:left;paddi
 td{padding:6px 10px;border-top:1px solid var(--line2)}tr.kopf td{background:#548235;color:#fff;font-weight:600}tr.dienst td{background:var(--lgreen)}
 td input{padding:6px 8px;font-size:14px}.mono{font-family:Consolas,monospace}
 .schritt{display:grid;grid-template-columns:44px 1fr;gap:14px;align-items:start}.schritt>div{min-width:0}.nr{width:40px;height:40px;border-radius:50%;background:var(--green);color:#fff;display:grid;place-items:center;font-weight:700}
-.status{display:inline-block;padding:2px 8px;border-radius:12px;font-size:12px;background:#eee;color:#555;margin-left:6px}.status.ok{background:#dcf2d2;color:#24661a}.status:empty{display:none}
+.status{display:inline-block;padding:2px 8px;border-radius:12px;font-size:12px;background:#eee;color:#555;margin-left:6px}.status.ok{background:#dcf2d2;color:#24661a}.status:empty{display:none}input[type=color]{height:40px;padding:3px 4px;cursor:pointer}.re-leiste{display:flex;gap:4px;flex-wrap:wrap;padding:6px;border:1px solid var(--line);border-bottom:0;border-radius:7px 7px 0 0;background:var(--bg2)}.re-leiste button{border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:5px;padding:4px 9px;font-size:13px;cursor:pointer;min-width:30px}.re-leiste button:hover{background:var(--hover)}.re-leiste select{width:auto;padding:4px 6px;font-size:13px}.re-feld{min-height:160px;max-height:460px;overflow:auto;border:1px solid var(--line);border-radius:0 0 7px 7px;padding:10px 12px;background:var(--card);color:var(--text);outline:none;line-height:1.5}.re-feld:focus{border-color:var(--green)}.re-feld h2{font-size:19px;margin:10px 0 6px}.re-feld h3{font-size:16px;margin:8px 0 4px}.re-feld p{margin:0 0 8px}.tk-prio-dringend{color:var(--red);font-weight:700}.tk-prio-hoch{color:var(--amber);font-weight:600}.tk-verlauf{border-left:3px solid var(--line);padding:4px 0 4px 12px;margin:8px 0;white-space:pre-wrap}.tk-verlauf.antwort{border-color:var(--green)}.tk-verlauf.kommentar{border-color:#6c8ebf}.tk-verlauf small{color:var(--muted)}
 .kacheln{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:12px}
 .kachel{border:1px solid var(--line);border-radius:8px;padding:10px 12px}.kachel b{font-size:24px;display:block}.kachel.gut b{color:var(--green)}.kachel.warn b{color:var(--amber)}.kachel.schlecht b{color:var(--red)}
 .kd{display:grid;grid-template-columns:var(--kd-links,430px) 8px minmax(0,1fr);gap:8px;align-items:start}
@@ -98,6 +98,7 @@ nav{position:sticky;top:0;z-index:20}
  .kacheln{grid-template-columns:repeat(auto-fit,minmax(130px,1fr))}.kachel b{font-size:21px}
 }
 @media (max-width:360px){nav button{padding:12px 9px;font-size:13px}.kacheln{grid-template-columns:repeat(2,minmax(0,1fr))}.kachel{padding:8px;overflow-wrap:anywhere}.kachel b,#sys_k .kachel b{font-size:17px;white-space:normal}}
+@media (pointer:coarse) and (min-width:861px){.kd{grid-template-columns:minmax(280px,min(var(--kd-links,430px),45%)) minmax(0,1fr)}.dgrid{grid-template-columns:minmax(200px,var(--d-links,270px)) minmax(0,1fr)}}
 @media (pointer:coarse){#griff,.teiler{display:none}}
 #logpfad{overflow-wrap:anywhere}
 @media (pointer:coarse){button.k,label.k{min-height:44px}nav button{min-height:46px}input,select{font-size:16px;min-height:44px}td input,td select{min-height:38px}button.mini{padding:8px 10px;font-size:13px}}
@@ -428,6 +429,34 @@ nav{position:sticky;top:0;z-index:20}
 <div class="knoepfe"><input id="ul_neuer_ordner" placeholder="Neuer Ordner, z. B. Wartung" maxlength="60" style="max-width:300px"><button class="k" onclick="ulOrdnerNeu()">Ordner anlegen</button></div>
 <div class="tab" id="ul_ordner_tab"></div><div class="log" id="log_ulo"></div></details></div></section>
 
+<section id="mitglieder"><div class="karte"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0;flex:1">Mitglieder</h2><span id="mg_st" class="status"></span><button class="k" onclick="mgLaden()">Aktualisieren</button><button class="k" onclick="mgExport()">Als CSV</button><button class="k p mg-schreib" onclick="mgNeu()">Neues Mitglied</button></div>
+<p class="hint">Pächter mit Vorname, Nachname, E-Mail und Telefon je Parzelle. Der gebuchte Tarif kommt aus „Tarife“/„Kalkulation“. In E-Mails: {vorname}, {nachname}, {telefon}; „an den Kunden“ geht an die E-Mail des Mitglieds der Parzelle. Neu anlegen auch über die API (POST /api/v1/mitglied) oder per Excel/CSV.</p>
+<div class="reihe"><div><label for="mg_such">Suchen</label><input id="mg_such" placeholder="Name, E-Mail, Telefon …" oninput="mgZeigen()"></div><div><label for="mg_f">Sparte</label><select id="mg_f" onchange="mgZeigen()"></select></div><div><label style="display:flex;gap:8px;align-items:center;margin-top:26px"><input type="checkbox" id="mg_nur" style="width:auto" onchange="mgZeigen()"> nur mit gebuchtem Tarif</label></div></div>
+<div class="tab" id="mg_tab" style="--tab-h:560px"></div><div id="mg_ohne"></div><div class="log" id="log_mg"></div></div>
+<div class="karte mg-schreib" id="mg_form" hidden><h3 id="mg_form_t">Mitglied</h3><input type="hidden" id="mg_id">
+<div class="reihe"><div><label for="mg_vorname">Vorname</label><input id="mg_vorname" maxlength="120" autocomplete="off"></div><div><label for="mg_nachname">Nachname</label><input id="mg_nachname" maxlength="120" autocomplete="off"></div><div><label for="mg_email">E-Mail</label><input id="mg_email" type="email" maxlength="200" autocomplete="off"></div><div><label for="mg_telefon">Telefon</label><input id="mg_telefon" type="tel" maxlength="30" autocomplete="off"></div></div>
+<div class="reihe"><div><label for="mg_sp">Sparte</label><select id="mg_sp"></select></div><div><label for="mg_parzelle">Parzelle</label><input id="mg_parzelle" inputmode="numeric" maxlength="3"></div><div><label for="mg_notiz">Notiz</label><input id="mg_notiz" maxlength="300"></div></div>
+<div class="knoepfe"><button class="k p" onclick="mgSpeichern()">Speichern</button><button class="k" onclick="$('mg_form').hidden=true">Abbrechen</button><button class="k r" id="mg_loeschen" onclick="mgLoeschen()">Löschen</button></div><div class="log" id="log_mgf"></div></div>
+<div class="karte mg-schreib"><h3>Import aus Excel oder CSV</h3><p class="hint">Erste Zeile = Spaltenköpfe. Erkannt werden: <b>Vorname, Nachname</b> (oder Name), <b>E-Mail, Telefon</b> (Tel, Handy), <b>Sparte</b> (Kürzel), <b>Parzelle</b> (Nr), Notiz. Erst „Vorschau“, dann „Übernehmen“. Vorhandene Mitglieder (gleiche E-Mail, oder gleiche Parzelle und gleicher Nachname) werden aktualisiert, nicht doppelt angelegt.</p>
+<div class="reihe"><div><label for="mg_datei">Datei (.xlsx oder .csv)</label><input type="file" id="mg_datei" accept=".xlsx,.csv,.txt"></div><div><label for="mg_imp_sp">Sparte, wenn in der Datei keine steht</label><select id="mg_imp_sp"></select></div></div>
+<div class="knoepfe"><button class="k" onclick="mgImport(false)">Vorschau</button><button class="k p" id="mg_imp_ok" onclick="mgImport(true)" disabled>Übernehmen</button></div><div class="log" id="log_mgi"></div><div class="tab" id="mg_imp_tab"></div></div></section>
+
+<section id="tickets"><div class="karte"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0;flex:1">Anfragen (Tickets)</h2><span id="tk_st" class="status"></span><button class="k" onclick="tkLaden()">Aktualisieren</button></div>
+<p class="hint">Anfragen von Pächtern – von Hand, über die API (z. B. Kontaktformular: POST /api/v1/ticket) – mit Zuständigkeit, Status und Verlauf. Antworten gehen per E-Mail mit Layout an den Kontakt. Automationen: „Neue Anfrage“, „Ticket zugewiesen“ (z. B. E-Mail an {zustaendig_email}), „Ticket erledigt“.</p>
+<div class="reihe"><div><label for="tk_fs">Status</label><select id="tk_fs" onchange="tkLaden()"><option value="offen">offen (nicht erledigt)</option><option value="neu">neu</option><option value="bearbeitung">in Bearbeitung</option><option value="wartet">wartet auf Rückmeldung</option><option value="erledigt">erledigt</option><option value="alle">alle</option></select></div>
+<div><label for="tk_fz">Zuständig</label><select id="tk_fz" onchange="tkLaden()"><option value="">alle</option><option value="ich">mir zugewiesen</option><option value="niemand">noch niemandem</option></select></div><div><label for="tk_such">Suchen</label><input id="tk_such" placeholder="Nr., Betreff, Name …" onchange="tkLaden()"></div></div>
+<div class="tab" id="tk_tab" style="--tab-h:440px"></div><div class="log" id="log_tk"></div>
+<details id="tkn_box" class="tk-schreib" style="margin-top:12px"><summary style="cursor:pointer;font-weight:600">Neue Anfrage erfassen</summary>
+<div class="reihe"><div><label for="tkn_betreff">Betreff</label><input id="tkn_betreff" maxlength="160"></div><div><label for="tkn_kat">Kategorie</label><select id="tkn_kat"></select></div><div><label for="tkn_prio">Priorität</label><select id="tkn_prio"><option value="normal">normal</option><option value="niedrig">niedrig</option><option value="hoch">hoch</option><option value="dringend">dringend</option></select></div><div><label for="tkn_zu">Zuständig</label><select id="tkn_zu"></select></div></div>
+<div class="reihe"><div><label for="tkn_name">Name</label><input id="tkn_name" maxlength="120"></div><div><label for="tkn_email">E-Mail</label><input id="tkn_email" type="email"></div><div><label for="tkn_tel">Telefon</label><input id="tkn_tel" type="tel"></div><div><label for="tkn_sp">Sparte</label><select id="tkn_sp"></select></div><div><label for="tkn_p">Parzelle</label><input id="tkn_p" inputmode="numeric"></div></div>
+<label for="tkn_text">Anliegen</label><textarea id="tkn_text" rows="4" style="width:100%;font:inherit"></textarea>
+<div class="knoepfe"><button class="k p" onclick="tkNeu()">Ticket anlegen</button></div><div class="log" id="log_tkn"></div></details></div>
+<div class="karte" id="tk_detail" hidden><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h3 style="margin:0;flex:1" id="tk_detail_t"></h3><button class="k bn-admin" onclick="tkLoeschen()">Löschen</button><button class="k" onclick="$('tk_detail').hidden=true;TKA=null;tkLaden()">Schließen</button></div>
+<div id="tk_felder"></div>
+<div id="tk_antwort" style="margin-top:12px"><h3>Antwort oder Notiz</h3><div class="knoepfe" style="margin-top:0"><select id="tk_vorlage" style="max-width:260px" onchange="tkVorlageEinsetzen()"></select></div><div id="tk_re"></div>
+<div class="knoepfe"><label id="tk_an_kontakt_l" style="display:flex;gap:6px;align-items:center;margin:0"><input type="checkbox" id="tk_an_kontakt" style="width:auto"> per E-Mail an den Kontakt senden</label><label style="display:flex;gap:6px;align-items:center;margin:0"><input type="checkbox" id="tk_wartet" style="width:auto"> danach „wartet auf Rückmeldung“</label><button class="k p" onclick="tkAntworten()">Speichern / Senden</button></div></div>
+<div class="log" id="log_tkd"></div></div></section>
+
 <section id="automationen"><div class="karte" data-bereich="automationen"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0;flex:1">Automationen</h2><span id="au_st" class="status"></span><button class="k" onclick="auLaden()">Aktualisieren</button><button class="k p au-schreib" onclick="auNeu()">Neue Regel</button></div>
 <p class="hint">Wenn etwas passiert (eine Parzelle bucht, kündigt, eine Zahlung kommt über die API herein …), führt der Manager die hinterlegten Aktionen aus: E-Mail senden, Tarif buchen, Webhook aufrufen, Protokolleintrag. <b>Am Gateway ändert eine Automation nichts</b> – Übertragen bleibt ein Schritt mit Vorschau und Bestätigung (Reiter „Tarife“ bzw. „Übertragen“).</p>
 <div class="tab" id="au_tab"></div><div class="log" id="log_au"></div></div>
@@ -443,6 +472,19 @@ nav{position:sticky;top:0;z-index:20}
 <details style="margin-top:8px"><summary style="cursor:pointer">Platzhalter für Betreff und Text</summary><div class="tab" id="au_ph"></div></details>
 <div class="knoepfe"><button class="k p" onclick="auSpeichern()">Regel speichern</button><button class="k" onclick="auProbe()">Probelauf (sendet und bucht nichts)</button><button class="k" onclick="$('au_edit').hidden=true">Abbrechen</button></div><div class="log" id="log_aue"></div></div>
 <div class="karte" data-bereich="automationen"><h3>Verlauf</h3><p class="hint">Die letzten ausgeführten Aktionen (höchstens 300 werden aufbewahrt).</p><div class="tab" id="au_verlauf" style="--tab-h:360px"></div></div>
+<div class="karte" data-bereich="automationen" id="el_karte"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h3 style="margin:0;flex:1">E-Mail-Layout und Vorlagen</h3><button class="k" onclick="elLaden()">Aktualisieren</button></div>
+<p class="hint">Alle E-Mails (Automationen, Antworten auf Tickets) bekommen dieses Layout: Kopf mit Logo (aus „Kartendesign“), Farben und Fußzeile. Vorlagen sind fertige Texte mit Platzhaltern – in Regeln und Ticket-Antworten auswählbar.</p>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;align-items:start"><div>
+<h3>Layout</h3><div class="reihe"><div><label for="el_kopf">Kopfzeile</label><input id="el_kopf" maxlength="120"></div><div><label for="el_schrift">Schrift</label><select id="el_schrift"><option>Arial, Helvetica, sans-serif</option><option>Verdana, sans-serif</option><option>Tahoma, sans-serif</option><option>'Segoe UI', Roboto, sans-serif</option><option>Georgia, serif</option></select></div></div>
+<div class="reihe"><div><label for="el_fk">Kopf</label><input type="color" id="el_fk"></div><div><label for="el_fkt">Kopf-Schrift</label><input type="color" id="el_fkt"></div><div><label for="el_fa">Akzent</label><input type="color" id="el_fa"></div><div><label for="el_fh">Hintergrund</label><input type="color" id="el_fh"></div><div><label for="el_ft">Text</label><input type="color" id="el_ft"></div></div>
+<div class="reihe"><div><label for="el_breite">Breite (px)</label><input id="el_breite" type="number" min="400" max="900"></div><div><label style="display:flex;gap:8px;align-items:center;margin-top:26px"><input type="checkbox" id="el_logo" style="width:auto"> Logo im Kopf</label></div><div><label style="display:flex;gap:8px;align-items:center;margin-top:26px"><input type="checkbox" id="el_aktiv" style="width:auto"> HTML-E-Mails mit Layout</label></div></div>
+<label for="el_fuss">Fußzeile (Impressum, Kontakt …)</label><textarea id="el_fuss" rows="3" style="width:100%;font:inherit"></textarea>
+<div class="knoepfe el-schreib"><button class="k p" onclick="elSpeichern()">Layout speichern</button><input id="el_test_an" placeholder="Test an …" style="max-width:220px"><button class="k bn-admin" onclick="elTest()">Test-E-Mail</button></div>
+<h3 style="margin-top:16px">Vorlagen</h3><div class="knoepfe" style="margin-top:0"><select id="ev_wahl" onchange="evWahl()" style="max-width:300px"></select><button class="k el-schreib" onclick="evNeu()">Neue Vorlage</button></div>
+<div class="reihe"><div><label for="ev_name">Name der Vorlage</label><input id="ev_name" maxlength="60"></div><div><label for="ev_betreff">Betreff</label><input id="ev_betreff" maxlength="200"></div></div>
+<label>Text</label><div id="ev_editor"></div>
+<div class="knoepfe el-schreib"><button class="k p" onclick="evSpeichern()">Vorlage speichern</button><button class="k" onclick="evLoeschen()">Vorlage löschen</button></div><div class="log" id="log_el"></div></div>
+<div><h3>Vorschau <small style="font-weight:400;color:var(--muted)">(mit Beispieldaten)</small></h3><iframe id="el_vorschau" sandbox="" style="width:100%;height:620px;border:1px solid var(--line);border-radius:8px;background:#fff"></iframe></div></div></div>
 <div class="karte bn-admin"><h3>E-Mail-Versand (SMTP)</h3><p class="hint">Postfach, über das die Automationen E-Mails senden (z. B. das Vereins-Postfach beim Provider). Das Passwort wird nicht angezeigt; leer lassen = unverändert. Alternativ als Docker-Secret: <span class="mono">SPARTENET_SMTP_PASSWORD_FILE</span>.</p>
 <div class="reihe"><div><label for="sm_host">Server</label><input id="sm_host" placeholder="smtp.example.de"></div><div><label for="sm_port">Port</label><input id="sm_port" inputmode="numeric"></div>
 <div><label for="sm_sich">Verschlüsselung</label><select id="sm_sich"><option value="starttls">STARTTLS (Port 587)</option><option value="ssl">SSL/TLS (Port 465)</option><option value="keine">keine (nur im eigenen Netz)</option></select></div></div>
@@ -497,9 +539,9 @@ nav{position:sticky;top:0;z-index:20}
 </main>
 <script>
 const T="__TOKEN__";let LETZT=null,PLAN=null,PLANZ=null,PPSK=null,PPSKSP=null,CODES=[],VMIN=0,EINST={};
-const TABS=[["start","Start"],["verbindung","Verbindung"],["lesen","Auslesen"],["planung","Planung"],["abgleich","Abgleich"],["einrichten","Einrichten"],["uebertragen","Übertragen"],["tarife","Tarife"],["kalkulation","Kalkulation"],["netzplanung","Netzplanung"],["kartendesign","Kartendesign"],["voucher","Gast-Voucher"],["system","Systeminfo"],["daten","Alle Daten"],["unterlagen","Unterlagen"],["automationen","Automationen"],["benutzer","Benutzer"],["hilfe","Hilfe"]];
+const TABS=[["start","Start"],["verbindung","Verbindung"],["lesen","Auslesen"],["planung","Planung"],["abgleich","Abgleich"],["einrichten","Einrichten"],["uebertragen","Übertragen"],["tarife","Tarife"],["kalkulation","Kalkulation"],["netzplanung","Netzplanung"],["kartendesign","Kartendesign"],["voucher","Gast-Voucher"],["system","Systeminfo"],["daten","Alle Daten"],["unterlagen","Unterlagen"],["mitglieder","Mitglieder"],["tickets","Tickets"],["automationen","Automationen"],["benutzer","Benutzer"],["hilfe","Hilfe"]];
 const $=id=>document.getElementById(id);const nav=$("nav");TABS.forEach(([id,t])=>{const b=document.createElement("button");b.textContent=t;b.onclick=()=>zeige(id);b.id="n_"+id;nav.appendChild(b)});
-function zeige(id){if(!reiterErlaubt(id))id=startReiter();rechteHinweis(id);if(id=="start"&&!$("st_k").innerHTML&&typeof EINST!="undefined"&&EINST.konsole_id)startLaden().catch(()=>{});if(id=="verbindung")fernLaden().catch(()=>{});if(location.hash!="#"+id)history.replaceState(null,"","#"+id);setTimeout(()=>{const b=document.querySelector("nav button.aktiv");if(b&&b.scrollIntoView)b.scrollIntoView({inline:"center",block:"nearest"})},0);if(id=="kalkulation"&&!KK)kkLaden().catch(()=>{});if(id=="netzplanung"&&!GP)gpLaden().catch(()=>{});if(id=="netzplanung")ztLaden().catch(()=>{});if(id=="benutzer")bnStart();if(id=="unterlagen")ulLaden().catch(()=>{});if(id=="voucher"&&!VV)vvLaden().catch(()=>{});if(id=="automationen")auLaden().catch(()=>{});if(id=="system"&&ICH.admin){upLaden(true).catch(()=>{});siLaden().catch(()=>{})}if(id=="kartendesign"&&!DESIGN)designLaden();if(id=="tarife"&&!TF)tfLaden();if(id=="system"&&!SYS)sysLaden();if(id=="daten"&&!DLISTE)datenListe();document.querySelectorAll("section").forEach(s=>s.classList.toggle("aktiv",s.id==id));document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("aktiv",b.id=="n_"+id))}
+function zeige(id){if(!reiterErlaubt(id))id=startReiter();rechteHinweis(id);if(id=="start"&&!$("st_k").innerHTML&&typeof EINST!="undefined"&&EINST.konsole_id)startLaden().catch(()=>{});if(id=="verbindung")fernLaden().catch(()=>{});if(location.hash!="#"+id)history.replaceState(null,"","#"+id);setTimeout(()=>{const b=document.querySelector("nav button.aktiv");if(b&&b.scrollIntoView)b.scrollIntoView({inline:"center",block:"nearest"})},0);if(id=="kalkulation"&&!KK)kkLaden().catch(()=>{});if(id=="netzplanung"&&!GP)gpLaden().catch(()=>{});if(id=="netzplanung")ztLaden().catch(()=>{});if(id=="benutzer")bnStart();if(id=="unterlagen")ulLaden().catch(()=>{});if(id=="voucher"&&!VV)vvLaden().catch(()=>{});if(id=="automationen")auLaden().catch(()=>{});if(id=="mitglieder")mgLaden().catch(()=>{});if(id=="tickets")tkLaden().catch(()=>{});if(id=="system"&&ICH.admin){upLaden(true).catch(()=>{});siLaden().catch(()=>{})}if(id=="kartendesign"&&!DESIGN)designLaden();if(id=="tarife"&&!TF)tfLaden();if(id=="system"&&!SYS)sysLaden();if(id=="daten"&&!DLISTE)datenListe();document.querySelectorAll("section").forEach(s=>s.classList.toggle("aktiv",s.id==id));document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("aktiv",b.id=="n_"+id))}
 async function api(pfad,body,logid){const el=logid&&$(logid);const kn=[...document.querySelectorAll("button")];kn.forEach(b=>b.disabled=true);if(el)el.textContent="… bitte warten (über die Cloud kann das einige Sekunden dauern)";
  try{const r=await fetch(pfad,{method:body===undefined?"GET":"POST",headers:{"X-Token":T,"Content-Type":"application/json"},body:body===undefined?undefined:(body instanceof Blob?body:JSON.stringify(body))});
  if(r.status==401){location.reload();return new Promise(()=>{})}const d=await r.json().catch(()=>({}));if(d.zweiter_faktor_fehlt&&typeof zeige=="function"&&!document.querySelector("#benutzer.aktiv"))zeige("benutzer");if(r.status==403&&!d.recht){location.reload();return new Promise(()=>{})}if(!r.ok)throw new Error(d.fehler||r.status);if(el)el.textContent=d.log?d.log.join("\n"):"";return d}
@@ -939,7 +981,7 @@ function bnZeigen(d){BN=d;const box=$("bn_tab"),y=box.scrollTop;$("bn_2fa_pflich
  let h="<table><tr><th>Benutzername</th><th>Name</th><th>Kontoart</th><th>Rechte</th><th>angelegt</th><th>zuletzt angemeldet</th><th>Sitzungen</th><th>2FA</th><th></th></tr>";
  for(const z of d.zeilen){const n=esc(z.name),offen=BNOFFEN.has(z.name);
   h+=`<tr class="${z.art=="gesperrt"?"recht-gesperrt":""}"><td><b>${n}</b>${z.name==d.ich?" <small>(Sie)</small>":""}</td>
-  <td>${z.fest?esc(z.anzeige):`<input class="bn_anz" data-n="${n}" value="${esc(z.anzeige)}" style="min-width:170px">`}</td>
+  <td>${z.fest?esc(z.anzeige):`<input class="bn_anz" data-n="${n}" value="${esc(z.anzeige)}" style="min-width:170px">`}<br><input class="bn_mail" data-n="${n}" value="${esc(z.email||"")}" placeholder="E-Mail für Benachrichtigungen" style="min-width:170px;margin-top:4px;font-size:13px"></td>
   <td>${z.fest?"Administrator":`<select class="bn_art" data-n="${n}">${Object.entries(d.arten).map(([k,t])=>`<option value="${k}"${k==z.art?" selected":""}>${esc(t)}</option>`).join("")}</select>`}</td>
   <td>${esc(z.recht_text)}${z.sparten&&z.sparten.length?'<br><small>nur '+esc(z.sparten.join(", "))+'</small>':""}${z.art=="bereiche"?` <button class="k" onclick="bnAuf('${n}')">${offen?"Rechte schließen":"Rechte …"}</button>`:""}</td>
   <td>${esc(z.angelegt)}${z.von?" <small>von "+esc(z.von)+"</small>":""}</td><td>${esc(z.zuletzt)||"–"}</td><td>${z.sitzungen||"–"}</td><td>${z.zwei_faktor?`✔ <button class="k" onclick="zfReset('${n}')">zurücksetzen</button>`:"–"}</td>
@@ -950,6 +992,7 @@ function bnZeigen(d){BN=d;const box=$("bn_tab"),y=box.scrollTop;$("bn_2fa_pflich
  box.innerHTML=h+"</table>";box.scrollTop=y;
  box.querySelectorAll(".bn_art").forEach(e=>e.onchange=()=>{if(e.value=="bereiche")BNOFFEN.add(e.dataset.n);bnSpeichern({name:e.dataset.n,art:e.value})});
  box.querySelectorAll(".bn_anz").forEach(e=>e.onchange=()=>bnSpeichern({name:e.dataset.n,anzeige:e.value}));
+ box.querySelectorAll(".bn_mail").forEach(e=>e.onchange=async()=>{if(e.dataset.n=="admin"){await api("/api/admin-email",{email:e.value},"log_bn")}else bnSpeichern({name:e.dataset.n,email:e.value})});
  box.querySelectorAll(".bn_ber").forEach(e=>e.onchange=()=>bnSpeichern({name:e.dataset.n,bereiche:{[e.dataset.k]:e.value}}));
  box.querySelectorAll(".bn_sp").forEach(e=>e.onchange=()=>bnSpeichern({name:e.dataset.n,sparten:e.value}))}
 function bnAuf(n){BNOFFEN.has(n)?BNOFFEN.delete(n):BNOFFEN.add(n);bnZeigen(BN)}
@@ -1004,7 +1047,7 @@ function gvCsv(){if(!GP)return;const st=GP.standorte.find(s=>String(s.nr)==$("gv
 let AU=null,AUE=null;
 const auDarf=()=>ICH.admin||ICH.bereiche.automationen=="schreiben";
 function auAktText(a){if(a.typ=="email")return"E-Mail an "+(a.an||"")+(a.an_kunde?(a.an?" + ":"")+"Kunde":"")+": „"+a.betreff+"“";if(a.typ=="buchen")return"Tarif buchen: "+a.tarif;if(a.typ=="webhook")return"Webhook "+a.url;if(a.typ=="protokoll")return"Protokoll: "+a.text;return AU.aktionen[a.typ]}
-async function auLaden(){const d=await api("/api/automation",undefined,"log_au");AU=d;document.querySelectorAll(".au-schreib").forEach(e=>{if(e.id!="au_edit")e.hidden=!auDarf()});
+async function auLaden(){const d=await api("/api/automation",undefined,"log_au");AU=d;elLaden().catch(()=>{});document.querySelectorAll(".au-schreib").forEach(e=>{if(e.id!="au_edit")e.hidden=!auDarf()});
  $("au_st").textContent=d.regeln.filter(r=>r.aktiv).length+" aktiv"+(d.warteschlange?" · "+d.warteschlange+" in Warteschlange":"");
  $("au_tab").innerHTML=d.regeln.length?"<table><tr><th>Regel</th><th>Wenn</th><th>Nur wenn</th><th>Dann</th><th>zuletzt</th><th></th></tr>"+d.regeln.map(r=>{const b=r.bedingung||{};const bed=[b.sparte&&"Sparte "+b.sparte,b.tarif&&"Tarif "+b.tarif,b.betrag_min!=null&&"Betrag ≥ "+b.betrag_min+" €"].filter(Boolean).join(", ")||"immer";
   return`<tr${r.aktiv?"":' style="opacity:.55"'}><td><b>${esc(r.name)}</b>${r.aktiv?"":" (aus)"}</td><td>${esc(d.ausloeser[r.ausloeser])}${r.ereignis_name?" „"+esc(r.ereignis_name)+"“":""}</td><td>${esc(bed)}</td><td>${r.aktionen.map(a=>esc(auAktText(a))).join("<br>")}</td><td>${esc(r.zuletzt||"–")}</td>
@@ -1029,11 +1072,12 @@ function auFeld(i,f,wert,label,art){const id="au_a"+i+"_"+f;if(art=="area")retur
  if(art=="tarif")return`<div><label for="${id}">${label}</label><select id="${id}" data-i="${i}" data-f="${f}" class="au_f"><option value="{tarif}"${wert=="{tarif}"?" selected":""}>Tarif aus dem Ereignis</option>${AU.tarife.map(t=>`<option${t==wert?" selected":""}>${esc(t)}</option>`).join("")}</select></div>`;
  return`<div><label for="${id}">${label}</label><input id="${id}" data-i="${i}" data-f="${f}" class="au_f" value="${esc(wert)}"></div>`}
 function auAktZeigen(){$("au_akt").innerHTML=AUE.aktionen.map((a,i)=>`<div class="karte" style="margin:8px 0;padding:12px;background:var(--bg2,#f7f9f5)"><div style="display:flex;gap:8px;align-items:center"><b style="flex:1">${i+1}. ${esc(AU.aktionen[a.typ])}</b><button class="k" onclick="auAktWeg(${i})">Entfernen</button></div>
- <div class="reihe">${a.typ=="email"?auFeld(i,"an",a.an||"","Empfänger (Komma-getrennt)")+auFeld(i,"an_kunde",a.an_kunde,"zusätzlich an den Kunden ({email} aus dem Ereignis)","check")+auFeld(i,"betreff",a.betreff||"","Betreff")+auFeld(i,"text",a.text||"","Text","area")
+ <div class="reihe">${a.typ=="email"?auFeld(i,"an",a.an||"","Empfänger (Komma-getrennt)")+auFeld(i,"an_kunde",a.an_kunde,"zusätzlich an den Kunden ({email} aus dem Ereignis)","check")+`<div><label for="au_a${i}_vorlage">Vorlage</label><select id="au_a${i}_vorlage" data-i="${i}" data-f="vorlage" class="au_f" onchange="setTimeout(auAktZeigen,0)"><option value="">eigener Text</option>${(AU.vorlagen||[]).map(v=>`<option value="${esc(v.id)}"${v.id==a.vorlage?" selected":""}>${esc(v.name)}</option>`).join("")}</select></div>`+auFeld(i,"betreff",a.betreff||"",a.vorlage?"Betreff (leer = aus der Vorlage)":"Betreff")+(a.vorlage?'<div class="hint" style="grid-column:1/-1">Text kommt aus der Vorlage (bearbeiten unter „E-Mail-Layout und Vorlagen“).</div>':`<div style="grid-column:1/-1"><label>Text</label><div id="au_re_${i}"></div></div>`)
   :a.typ=="buchen"?auFeld(i,"tarif",a.tarif||"{tarif}","Tarif","tarif")+'<div class="hint" style="grid-column:1/-1">Bucht im Manager (Kalkulation/Tarife). Ans Gateway geht das erst über „Tarife → An das Gateway übertragen“.</div>'
   :a.typ=="webhook"?auFeld(i,"url",a.url||"","Adresse (https://…)")+'<div class="hint" style="grid-column:1/-1">POST mit JSON: {"ereignis", "daten", "regel", "zeit"} – ohne WLAN-Passwort.</div>'
   :a.typ=="protokoll"?auFeld(i,"text",a.text||"","Text"):'<div class="hint">Entfernt die Buchung der Parzelle aus dem Ereignis (nur im Manager).</div>'}</div></div>`).join("")||'<p class="hint">Noch keine Aktion.</p>';
- document.querySelectorAll(".au_f").forEach(e=>e.oninput=e.onchange=()=>{AUE.aktionen[+e.dataset.i][e.dataset.f]=e.type=="checkbox"?e.checked:e.value})}
+ document.querySelectorAll(".au_f").forEach(e=>e.oninput=e.onchange=()=>{AUE.aktionen[+e.dataset.i][e.dataset.f]=e.type=="checkbox"?e.checked:e.value});
+ AUE.aktionen.forEach((a,i)=>{if(a.typ=="email"&&!a.vorlage&&$("au_re_"+i))reAufbauen("au_re_"+i,a.html||textZuHtml(a.text||""),h=>{a.html=h;a.text=""})})}
 function auAktNeu(){}
 function auAktionNeu(){const t=$("au_neu_typ").value;AUE.aktionen.push(t=="email"?{typ:t,an:"",an_kunde:false,betreff:"",text:""}:t=="buchen"?{typ:t,tarif:"{tarif}"}:t=="webhook"?{typ:t,url:""}:t=="protokoll"?{typ:t,text:""}:{typ:t});auAktZeigen()}
 function auAktWeg(i){AUE.aktionen.splice(i,1);auAktZeigen()}
@@ -1062,6 +1106,15 @@ curl -X POST -H "Authorization: Bearer sn_…" -H "Content-Type: application/jso
 
 # Tarif buchen ("tarif":"" entfernt die Buchung) – löst die Automationen „Buchung“ bzw. „Kündigung“ aus
 curl -X POST -H "Authorization: Bearer sn_…" -H "Content-Type: application/json" -d '{"sparte":"BW","parzelle":12,"tarif":"Basic"}' ${o}/api/v1/buchung
+
+# Mitglied anlegen oder aktualisieren (gleiche E-Mail bzw. Parzelle + Nachname = aktualisieren) – Recht „mitglieder“
+curl -X POST -H "Authorization: Bearer sn_…" -H "Content-Type: application/json" \\
+  -d '{"vorname":"Erika","nachname":"Muster","email":"erika@example.de","telefon":"03381 12345","sparte":"BW","parzelle":12}' ${o}/api/v1/mitglied
+
+# Anfrage (Ticket) aus dem Kontaktformular – Recht „tickets“; Antwort enthält die Ticket-Nummer
+curl -X POST -H "Authorization: Bearer sn_…" -H "Content-Type: application/json" \\
+  -d '{"betreff":"WLAN geht nicht","text":"Seit gestern kein Netz","name":"Erika Muster","email":"erika@example.de","sparte":"BW","parzelle":12,"prioritaet":"hoch"}' ${o}/api/v1/ticket
+curl -H "Authorization: Bearer sn_…" "${o}/api/v1/ticket?nr=T-0001"
 
 # Buchungen und Tarife lesen
 curl -H "Authorization: Bearer sn_…" "${o}/api/v1/buchungen?sparte=BW"
@@ -1130,6 +1183,100 @@ async function umAusfuehren(eins){const w=[...document.querySelectorAll(".um_w:c
  if(!confirm((eins?"Nur das erste ausgewählte Netz":w.length+" Netz(e)")+" jetzt am Gateway umstellen?\n\nGeräte in diesen Netzen verlieren kurz die Verbindung und bekommen eine neue IP. Vorher eine Sicherung der Konsole machen. Der Manager sichert den alten Stand für „Umzug rückgängig“."))return;
  await api("/api/umzug",{ausfuehren:true,netze:w,nur_eins:eins},"log_um");$("um_los").disabled=$("um_eins").disabled=true;$("um_tab").innerHTML=""}
 async function umZurueck(){if(!confirm("Letzten Umzug rückgängig machen? Die Netze bekommen VLAN, Subnetz und DHCP-Bereich von vorher zurück."))return;await api("/api/umzug-rueckgaengig",{},"log_um")}
+
+// ---- kleiner Text-Editor (fett, kursiv, Überschrift, Listen, Link, Platzhalter) – der Server lässt nur sichere Elemente durch
+function textZuHtml(t){return String(t||"").split(/\n\n+/).filter(x=>x.trim()).map(x=>"<p>"+esc(x).replace(/\n/g,"<br>")+"</p>").join("")}
+const RE_PH=["{vorname}","{nachname}","{name}","{sparte_name}","{parzelle}","{tarif}","{preis}","{wlan}","{passwort}","{betrag}","{referenz}","{datum}","{ticket}","{betreff}","{status}","{zustaendig}"];
+function reAufbauen(id,html,aendern){const box=$(id);if(!box)return;
+ box.innerHTML=`<div class="re-leiste"><button type="button" data-c="bold" title="fett"><b>F</b></button><button type="button" data-c="italic" title="kursiv"><i>K</i></button><button type="button" data-c="underline" title="unterstrichen"><u>U</u></button>
+ <button type="button" data-b="h2" title="Überschrift">Ü1</button><button type="button" data-b="h3" title="Zwischenüberschrift">Ü2</button><button type="button" data-b="p" title="normaler Absatz">¶</button>
+ <button type="button" data-c="insertUnorderedList" title="Liste">• Liste</button><button type="button" data-c="insertOrderedList" title="nummerierte Liste">1. Liste</button><button type="button" data-l="1" title="Link">Link</button><button type="button" data-c="removeFormat" title="Formatierung entfernen">⌫</button>
+ <select title="Platzhalter einfügen"><option value="">Platzhalter …</option>${RE_PH.map(p=>`<option>${p}</option>`).join("")}</select></div><div class="re-feld" contenteditable="true"></div>`;
+ const f=box.querySelector(".re-feld");f.innerHTML=html||"<p><br></p>";const melden=()=>aendern&&aendern(f.innerHTML);
+ f.addEventListener("input",melden);f.addEventListener("blur",melden);
+ box.querySelectorAll("button").forEach(b=>b.onmousedown=e=>{e.preventDefault();f.focus();if(b.dataset.c)document.execCommand(b.dataset.c);else if(b.dataset.b)document.execCommand("formatBlock",false,b.dataset.b);
+  else if(b.dataset.l){const u=prompt("Adresse (https://… oder mailto:…)","https://");if(u&&/^(https?:\/\/|mailto:)/i.test(u))document.execCommand("createLink",false,u)}melden()});
+ const sel=box.querySelector("select");sel.onchange=()=>{if(sel.value){f.focus();document.execCommand("insertText",false,sel.value);sel.value="";melden()}}}
+function reWert(id){const f=$(id)&&$(id).querySelector(".re-feld");return f?f.innerHTML:""}
+
+let EL=null,EVAKT="";
+async function elLaden(){const d=await api("/api/email-layout",undefined,"log_el");EL=d;const l=d.layout;
+ $("el_kopf").value=l.kopf;$("el_schrift").value=l.schrift;$("el_fk").value=l.farbe_kopf;$("el_fkt").value=l.farbe_kopf_text;$("el_fa").value=l.farbe_akzent;$("el_fh").value=l.farbe_hinter;$("el_ft").value=l.farbe_text;
+ $("el_breite").value=l.breite;$("el_logo").checked=l.logo;$("el_aktiv").checked=l.aktiv;$("el_fuss").value=l.fuss;
+ const darf=ICH.admin||ICH.bereiche.automationen=="schreiben";document.querySelectorAll(".el-schreib").forEach(e=>e.hidden=!darf);
+ ["el_kopf","el_schrift","el_fk","el_fkt","el_fa","el_fh","el_ft","el_breite","el_logo","el_fuss"].forEach(i=>$(i).oninput=$(i).onchange=elVorschauBald);
+ evListe(d.vorlagen);if(!d.logo)$("log_el").textContent="ℹ Kein Logo hinterlegt – unter „Kartendesign“ hochladen, dann erscheint es auch in den E-Mails."}
+function elWerte(){return{kopf:$("el_kopf").value,schrift:$("el_schrift").value,farbe_kopf:$("el_fk").value,farbe_kopf_text:$("el_fkt").value,farbe_akzent:$("el_fa").value,farbe_hinter:$("el_fh").value,farbe_text:$("el_ft").value,breite:+$("el_breite").value||600,logo:$("el_logo").checked,aktiv:$("el_aktiv").checked,fuss:$("el_fuss").value}}
+let ELT=null;function elVorschauBald(){clearTimeout(ELT);ELT=setTimeout(elVorschau,350)}
+async function elVorschau(){try{const r=await fetch("/api/email-vorschau",{method:"POST",headers:{"X-Token":T,"Content-Type":"application/json"},body:JSON.stringify({layout:elWerte(),betreff:$("ev_betreff").value,html:reWert("ev_editor")})});const d=await r.json();if(r.ok)$("el_vorschau").srcdoc=d.html}catch(e){}}
+async function elSpeichern(){const d=await api("/api/email-layout",elWerte(),"log_el");EL=d;elVorschau()}
+async function elTest(){await api("/api/email-test",{an:$("el_test_an").value,html:reWert("ev_editor")},"log_el")}
+function evListe(v){EL.vorlagen=v;$("ev_wahl").innerHTML=v.length?v.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join(""):'<option value="">– noch keine Vorlage –</option>';
+ if(v.some(x=>x.id==EVAKT))$("ev_wahl").value=EVAKT;evWahl()}
+function evWahl(){const v=(EL.vorlagen||[]).find(x=>x.id==$("ev_wahl").value);EVAKT=v?v.id:"";$("ev_name").value=v?v.name:"Neue Vorlage";$("ev_betreff").value=v?v.betreff:"";
+ reAufbauen("ev_editor",v?v.html:"<h2>Hallo {vorname},</h2><p>vielen Dank für Ihre Buchung des Tarifs <b>{tarif}</b> für Parzelle {parzelle}.</p><p>Ihr WLAN: <b>{wlan}</b><br>Passwort: <b>{passwort}</b></p><p>Viele Grüße<br>Ihr SparteNet-Team</p>",elVorschauBald);
+ $("ev_betreff").oninput=elVorschauBald;elVorschau()}
+function evNeu(){EVAKT="";$("ev_wahl").value="";$("ev_name").value="Neue Vorlage";$("ev_betreff").value="";reAufbauen("ev_editor","<p>Hallo {vorname},</p><p><br></p>",elVorschauBald);$("ev_name").focus();elVorschau()}
+async function evSpeichern(){const d=await api("/api/email-vorlage-speichern",{vorlage:{id:EVAKT,name:$("ev_name").value,betreff:$("ev_betreff").value,html:reWert("ev_editor")}},"log_el");EVAKT=d.id;evListe(d.vorlagen);if(AU)AU.vorlagen=d.vorlagen}
+async function evLoeschen(){if(!EVAKT)return;if(!confirm("Vorlage „"+$("ev_name").value+"“ löschen?"))return;const d=await api("/api/email-vorlage-loeschen",{id:EVAKT},"log_el");EVAKT="";evListe(d.vorlagen);if(AU)AU.vorlagen=d.vorlagen}
+
+// ---- Mitglieder
+let MG=null,MGIMP=null;
+const mgDarf=()=>ICH.admin||ICH.bereiche.mitglieder=="schreiben";
+async function mgLaden(){const d=await api("/api/mitglieder",undefined,"log_mg");MG=d;document.querySelectorAll(".mg-schreib").forEach(e=>e.hidden=!mgDarf());
+ const sp=Object.entries(d.sparten).sort((a,b)=>a[0].localeCompare(b[0]));const f=$("mg_f").value;
+ $("mg_f").innerHTML='<option value="">alle Sparten</option>'+sp.map(([k,n])=>`<option value="${esc(k)}">${esc(k)} – ${esc(n)}</option>`).join("");$("mg_f").value=f;
+ $("mg_sp").innerHTML='<option value="">–</option>'+sp.map(([k,n])=>`<option value="${esc(k)}">${esc(k)} – ${esc(n)}</option>`).join("");$("mg_imp_sp").innerHTML='<option value="">aus der Datei</option>'+sp.map(([k])=>`<option>${esc(k)}</option>`).join("");
+ $("mg_st").textContent=d.zeilen.length+" Mitglieder";mgZeigen()}
+function mgZeigen(){const d=MG;if(!d)return;const f=$("mg_f").value,q=$("mg_such").value.trim().toLowerCase(),nur=$("mg_nur").checked;
+ const L=d.zeilen.filter(z=>(!f||z.sparte==f)&&(!nur||z.tarif)&&(!q||[z.vorname,z.nachname,z.email,z.telefon,z.notiz,String(z.parzelle)].join(" ").toLowerCase().includes(q)));
+ $("mg_tab").innerHTML=L.length?"<table><tr><th>Name</th><th>Sparte</th><th>Parzelle</th><th>Tarif</th><th>E-Mail</th><th>Telefon</th><th>Notiz</th><th></th></tr>"+L.map(z=>`<tr><td><b>${esc(z.nachname)}</b>${z.vorname?", "+esc(z.vorname):""}</td><td>${esc(z.sparte||"–")}</td><td>${esc(z.parzelle||"–")}</td><td>${z.tarif?'<span class="status ok">'+esc(z.tarif)+"</span>":"–"}</td>
+  <td>${z.email?`<a href="mailto:${esc(z.email)}">${esc(z.email)}</a>`:"–"}</td><td>${z.telefon?`<a href="tel:${esc(z.telefon.replace(/[^0-9+]/g,""))}">${esc(z.telefon)}</a>`:"–"}</td><td>${esc(z.notiz||"")}</td>
+  <td style="white-space:nowrap">${mgDarf()?`<button class="k" data-id="${esc(z.id)}" onclick="mgBearbeiten(this.dataset.id)">Bearbeiten</button>`:""}</td></tr>`).join("")+"</table>":'<p class="hint" style="padding:10px">Keine Mitglieder'+(f||q?" für diesen Filter":"")+".</p>";
+ const o=d.ohne_mitglied.filter(x=>!f||x.sparte==f);$("mg_ohne").innerHTML=o.length?`<p class="hint">Gebuchte Parzellen ohne Mitglied (${o.length}): `+o.slice(0,60).map(x=>`<a href="#" data-s="${esc(x.sparte)}" data-p="${x.parzelle}" onclick="mgNeu(this.dataset.s,this.dataset.p);return false">${esc(x.sparte)} ${x.parzelle}</a>`).join(", ")+(o.length>60?" …":"")+"</p>":""}
+function mgNeu(sp,p){mgFormular({id:"",vorname:"",nachname:"",email:"",telefon:"",sparte:sp||$("mg_f").value||"",parzelle:p||"",notiz:""})}
+function mgBearbeiten(id){mgFormular(MG.zeilen.find(z=>z.id==id))}
+function mgFormular(m){$("mg_form").hidden=false;$("mg_form_t").textContent=m.id?"Mitglied bearbeiten":"Neues Mitglied";$("mg_id").value=m.id;["vorname","nachname","email","telefon","parzelle","notiz"].forEach(k=>$("mg_"+k).value=m[k]||"");$("mg_sp").value=m.sparte||"";
+ $("mg_loeschen").hidden=!m.id;$("mg_form").scrollIntoView({behavior:"smooth",block:"center"});$("mg_vorname").focus()}
+async function mgSpeichern(){const m={id:$("mg_id").value,sparte:$("mg_sp").value};["vorname","nachname","email","telefon","parzelle","notiz"].forEach(k=>m[k]=$("mg_"+k).value.trim());
+ const d=await api("/api/mitglied-speichern",{mitglied:m},"log_mgf");MG=d;mgZeigen();$("mg_form").hidden=true;$("log_mg").textContent=d.log.join("\n")}
+async function mgLoeschen(){if(!confirm("Mitglied „"+$("mg_vorname").value+" "+$("mg_nachname").value+"“ löschen?"))return;const d=await api("/api/mitglied-loeschen",{id:$("mg_id").value},"log_mgf");MG=d;mgZeigen();$("mg_form").hidden=true;$("log_mg").textContent=d.log.join("\n")}
+async function mgImport(uebernehmen){const f=$("mg_datei").files[0];if(!f)return $("log_mgi").textContent="Bitte eine Datei wählen (.xlsx oder .csv).";
+ const p=new URLSearchParams({name:f.name,sparte:$("mg_imp_sp").value,uebernehmen:uebernehmen?"1":"0"});if(uebernehmen&&!confirm("Liste jetzt übernehmen? Vorhandene Mitglieder (gleiche E-Mail oder gleiche Parzelle und Name) werden aktualisiert."))return;
+ const d=await api("/api/mitglieder-import?"+p.toString(),f,"log_mgi");MGIMP=d;
+ $("mg_imp_tab").innerHTML="<table><tr><th>Zeile</th><th>Ergebnis</th><th>Name</th><th>Sparte</th><th>Parzelle</th><th>E-Mail</th><th>Hinweis</th></tr>"+d.zeilen.map(z=>`<tr class="${z.status=="Fehler"?"falsch":z.status=="aktualisieren"?"geaendert":""}"><td>${z.zeile}</td><td>${esc(z.status)}</td><td>${esc(z.name||"")}</td><td>${esc(z.sparte||"")}</td><td>${esc(z.parzelle||"")}</td><td>${esc(z.email||"")}</td><td>${esc(z.fehler||"")}</td></tr>`).join("")+"</table>";
+ $("mg_imp_ok").disabled=uebernehmen||!(d.neu+d.geaendert);if(uebernehmen){$("mg_datei").value="";mgLaden()}}
+async function mgExport(){try{await siBlob("/api/mitglieder-export",null,"SparteNet_Mitglieder.csv")}catch(e){$("log_mg").innerHTML='<span class="fehler">✖ '+esc(e.message)+'</span>'}}
+
+// ---- Tickets
+let TK=null,TKA=null;
+const tkDarf=()=>ICH.admin||ICH.bereiche.tickets=="schreiben";
+async function tkLaden(){const p=new URLSearchParams({status:$("tk_fs").value||"offen",zustaendig:$("tk_fz").value,q:$("tk_such").value.trim()});const d=await api("/api/tickets?"+p.toString(),undefined,"log_tk");TK=d;
+ document.querySelectorAll(".tk-schreib").forEach(e=>e.hidden=!tkDarf());$("tk_st").textContent=d.offen+" offen"+(d.meine?" · "+d.meine+" für Sie":"");
+ const nb=$("n_tickets");if(nb)nb.textContent="Tickets"+(d.meine?" ("+d.meine+")":"");
+ $("tk_tab").innerHTML=d.zeilen.length?"<table><tr><th>Nr.</th><th>Betreff</th><th>Kontakt</th><th>Sparte</th><th>Kategorie</th><th>Priorität</th><th>Status</th><th>Zuständig</th><th>eingegangen</th></tr>"+d.zeilen.map(z=>`<tr style="cursor:pointer${z.id==TKA?";outline:2px solid var(--green)":""}" data-id="${esc(z.id)}" onclick="tkOeffnen(this.dataset.id)"><td class="mono"><b>${esc(z.nr)}</b></td><td>${esc(z.betreff)}${z.antworten?` <small>(${z.antworten})</small>`:""}</td><td>${esc(z.kontakt.name||z.kontakt.email||"–")}</td><td>${esc(z.sparte||"")}${z.parzelle?" "+esc(z.parzelle):""}</td><td>${esc(z.kategorie)}</td><td class="tk-prio-${esc(z.prioritaet)}">${esc(d.prioritaeten[z.prioritaet]||z.prioritaet)}</td><td>${z.status=="neu"?'<span class="status">neu</span>':esc(d.status[z.status]||z.status)}</td><td>${esc(z.zustaendig||"–")}</td><td>${esc(z.erstellt)}</td></tr>`).join("")+"</table>":'<p class="hint" style="padding:10px">Keine Tickets für diesen Filter.</p>';
+ const opt=(o,w)=>o.map(([k,t])=>`<option value="${esc(k)}"${k==w?" selected":""}>${esc(t)}</option>`).join("");
+ $("tkn_kat").innerHTML=opt(d.kategorien.map(k=>[k,k]));$("tkn_zu").innerHTML='<option value="">niemand</option>'+opt(d.konten.map(k=>[k,k]));
+ if(!$("tkn_sp").options.length){const sp=Object.keys((PLAN&&PLAN.sparten?Object.fromEntries(PLAN.sparten.map(s=>[s.kz,1])):{}));$("tkn_sp").innerHTML='<option value="">–</option>'+sp.map(k=>`<option>${esc(k)}</option>`).join("")}
+ if(TKA&&d.zeilen.some(z=>z.id==TKA))tkOeffnen(TKA,true)}
+async function tkOeffnen(id,still){TKA=id;const r=await api("/api/ticket?id="+encodeURIComponent(id),undefined,still?null:"log_tkd");const t=r.ticket,d=TK,w=tkDarf();const k=t.kontakt||{};
+ const opt=(o,v)=>o.map(([a,b])=>`<option value="${esc(a)}"${a==v?" selected":""}>${esc(b)}</option>`).join("");
+ $("tk_detail").hidden=false;$("tk_detail_t").textContent=t.nr+" · "+t.betreff;
+ $("tk_felder").innerHTML=`<div class="reihe"><div><label>Status</label><select id="tkd_status"${w?"":" disabled"}>${opt(Object.entries(d.status),t.status)}</select></div><div><label>Zuständig</label><select id="tkd_zu"${w?"":" disabled"}><option value="">niemand</option>${opt(d.konten.map(x=>[x,x]),t.zustaendig)}</select></div>
+  <div><label>Priorität</label><select id="tkd_prio"${w?"":" disabled"}>${opt(Object.entries(d.prioritaeten),t.prioritaet)}</select></div><div><label>Kategorie</label><select id="tkd_kat"${w?"":" disabled"}>${opt([...new Set(d.kategorien.concat([t.kategorie]))].map(x=>[x,x]),t.kategorie)}</select></div></div>
+  <p class="hint" style="margin-top:10px"><b>Kontakt:</b> ${esc(k.name||"–")}${k.email?` · <a href="mailto:${esc(k.email)}">${esc(k.email)}</a>`:""}${k.telefon?` · <a href="tel:${esc(k.telefon)}">${esc(k.telefon)}</a>`:""}${t.sparte?" · Sparte "+esc(t.sparte):""}${t.parzelle?" Parzelle "+esc(t.parzelle):""}${k.mitglied?" · Mitglied ✔":""} · eingegangen ${esc(t.erstellt)} (${esc(t.quelle)})</p>
+  <div class="tk-verlauf" style="border-color:var(--navy)"><small>Anfrage</small><br>${esc(t.text||"(ohne Text)")}</div>`+t.verlauf.filter(v=>v.art!="angelegt").map(v=>`<div class="tk-verlauf ${esc(v.art)}"><small>${esc(v.zeit)} · ${esc(v.wer)} · ${{kommentar:"Notiz",antwort:"Antwort",aenderung:"Änderung"}[v.art]||esc(v.art)}</small><br>${esc(v.text)}</div>`).join("");
+ ["tkd_status","tkd_zu","tkd_prio","tkd_kat"].forEach(i=>{const e=$(i);if(e)e.onchange=tkFelderSpeichern});
+ $("tk_antwort").hidden=!w;$("tk_an_kontakt").disabled=!k.email;$("tk_an_kontakt_l").title=k.email?"":"keine E-Mail-Adresse beim Kontakt";
+ $("tk_vorlage").innerHTML='<option value="">ohne Vorlage</option>'+((EL&&EL.vorlagen)||[]).map(v=>`<option value="${esc(v.id)}">${esc(v.name)}</option>`).join("");
+ if(!$("tk_re").innerHTML)reAufbauen("tk_re","<p><br></p>",null);if(!still)$("tk_detail").scrollIntoView({behavior:"smooth",block:"start"})}
+async function tkFelderSpeichern(){const r=await api("/api/ticket-speichern",{ticket:{id:TKA,status:$("tkd_status").value,zustaendig:$("tkd_zu").value,prioritaet:$("tkd_prio").value,kategorie:$("tkd_kat").value}},"log_tkd");tkLaden()}
+async function tkAntworten(){const an=$("tk_an_kontakt").checked;if(an&&!confirm("Antwort per E-Mail an den Kontakt senden?"))return;
+ await api("/api/ticket-kommentar",{id:TKA,html:reWert("tk_re"),an_kontakt:an,vorlage:$("tk_vorlage").value,wartet:$("tk_wartet").checked},"log_tkd");reAufbauen("tk_re","<p><br></p>",null);tkLaden()}
+function tkVorlageEinsetzen(){const v=((EL&&EL.vorlagen)||[]).find(x=>x.id==$("tk_vorlage").value);if(v)reAufbauen("tk_re",v.html,null)}
+async function tkNeu(){const t={betreff:$("tkn_betreff").value,text:$("tkn_text").value,kategorie:$("tkn_kat").value,prioritaet:$("tkn_prio").value,zustaendig:$("tkn_zu").value,sparte:$("tkn_sp").value,parzelle:$("tkn_p").value,name:$("tkn_name").value,email:$("tkn_email").value,telefon:$("tkn_tel").value};
+ const r=await api("/api/ticket-speichern",{ticket:t},"log_tkn");["tkn_betreff","tkn_text","tkn_p","tkn_name","tkn_email","tkn_tel"].forEach(i=>$(i).value="");$("tkn_box").open=false;TKA=r.ticket.id;tkLaden()}
+async function tkLoeschen(){if(!confirm("Ticket endgültig löschen?"))return;await api("/api/ticket-loeschen",{id:TKA},"log_tkd");TKA=null;$("tk_detail").hidden=true;tkLaden()}
 
 let UL=null,ULNEU="";
 function ulOrdnerWahl(){const neu=$("ul_ordner").value=="__neu";$("ul_ordner_neu").hidden=!neu;if(neu)$("ul_ordner_neu").focus()}
