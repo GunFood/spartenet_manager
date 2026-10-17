@@ -46,7 +46,24 @@ GWP_FELDER = [
                                             ("Faser_f", "Glasfaser m je m Leitungsweg", ""), ("Kupfer_f", "Kupfer m je m Leitungsweg", ""),
                                             ("Kabel_je_AP", "Kupferkabel je AP", ""), ("Ports_Agg", "Anschlüsse je Aggregation-Switch", "")]),
 ]
-GWP_WAHL = ("standort", "zuleitung", "reihenfolge", "entfernung", "quote", "aps", "masten", "leitung", "parz", "leer")
+GWP_WAHL = ("standort", "zuleitung", "reihenfolge", "entfernung", "quote", "aps", "masten", "leitung", "parz", "leer", "kz", "vlanblock")
+
+# VLAN-Schema (ab 4.7) – eindeutig je Standort, weil alle Gateways eines Standorts über dieselbe Glasfaser verbunden sind:
+#   Parzellen:   VLAN = 1000 + 200 × (VLAN-Block − 1) + Parzellennummer   (Block 1 → 1001–1199, Block 2 → 1201–1399 … Block 15 → 3801–3999)
+#                → die letzten beiden Ziffern sind immer die Parzellennummer
+#   Dienstnetze: Vorstand 100 + Sparten-ID · Gäste 200 + Sparten-ID · Technik 300 + Sparten-ID   (Sparten-ID = Nr. 1–88, überall eindeutig)
+#   Subnetze:    10.<Sparten-ID>.<Parzelle>.0/24 · Vorstand .200 · Gäste .201 · Technik .250  (überall eindeutig)
+#   VLAN-Block:  Reihenfolge der Sparte am Standort (1 = Standort-Sparte), fest einstellbar 1–15
+VLAN_BLOECKE = 15
+DIENST_JE_SPARTE = 3
+
+
+def vlan_parz(block, p):
+    return 1000 + 200 * (int(block) - 1) + int(p)
+
+
+def vlan_dienst(sid):
+    return {"vorstand": 100 + int(sid), "gaeste": 200 + int(sid), "technik": 300 + int(sid)}
 
 
 def _ceil(x):
@@ -62,7 +79,8 @@ def gwp_anlagen(d):
     if g.get("anlagen"):
         return g["anlagen"]
     return [{"nr": t[0], "name": t[1], "adresse": t[2], "stufe": t[3], "eigentum": t[4], "parz": t[5], "parz_konzept": t[6], "leer": t[7],
-             "flaeche": t[8], "alter": list(t[9]), "x": t[10], "y": t[11], "vs_standort": t[12], "vs_zuleitung": t[13]} for t in GWP_ANLAGEN]
+             "flaeche": t[8], "alter": list(t[9]), "x": t[10], "y": t[11], "vs_standort": t[12], "vs_zuleitung": t[13],
+             "kz": GWP_KUERZEL.get(t[0], f"S{t[0]}")} for t in GWP_ANLAGEN]
 
 
 def gwp_annahmen(d):
@@ -109,6 +127,7 @@ def gwplan_berechnen(d):
             s["parz"] = int(w["parz"])
         if w.get("leer") is not None:
             s["leer"] = int(w["leer"])
+        s["kz"] = w.get("kz") or s.get("kz") or GWP_KUERZEL.get(s["nr"], f"S{s['nr']}")
     vn = a["Vorschlag_nutzen"] == 1
     # wirksamer Standort und Zuleitung
     for s in A:
@@ -173,6 +192,34 @@ def gwplan_berechnen(d):
             gesehen.add(x["nr"]); x = idx.get(x["D"])
         if not x or x["C"] != x["nr"]:
             s["pruefung"] = "Fehler: Zuleitung im Kreis – führt nicht zum Standort"
+    # VLAN-Plan: Block je Sparte am Standort, Parzellen je Gateway, Dienstnetze am ersten Gateway der Sparte
+    for st in {x["C"] for x in A}:
+        mit = sorted((t for t in A if t["C"] == st), key=lambda t: t["sort"])
+        fest = {t["w"]["vlanblock"] for t in mit if t["w"].get("vlanblock")}
+        frei = (b for b in range(1, 100) if b not in fest)
+        for t in mit:
+            t["vlanblock"] = t["w"].get("vlanblock") or next(frei)
+        for t in mit:
+            if t["pruefung"] == "OK" and t["vlanblock"] > VLAN_BLOECKE:
+                t["pruefung"] = f"Fehler: mehr als {VLAN_BLOECKE} Sparten am Standort – VLAN-Block {t['vlanblock']} (höchstens {VLAN_BLOECKE})"
+            if t["pruefung"] == "OK" and sum(1 for u in mit if u["vlanblock"] == t["vlanblock"]) > 1:
+                t["pruefung"] = f"Fehler: VLAN-Block {t['vlanblock']} am Standort doppelt"
+            if t["pruefung"] == "OK" and t["parz"] > 199:
+                t["pruefung"] = "Fehler: mehr als 199 Parzellen (Subnetz 10.<ID>.<Parzelle> reicht bis 199)"
+    kz_zahl = {}
+    for t in A:
+        kz_zahl[t["kz"]] = kz_zahl.get(t["kz"], 0) + 1
+    for t in A:
+        if t["pruefung"] == "OK" and kz_zahl[t["kz"]] > 1:
+            t["pruefung"] = f"Fehler: Kürzel {t['kz']} doppelt"
+        teile = []
+        for gw in range(t["gw_von"], t["gw_bis"] + 1):
+            lo, hi = max(t["davor"] + 1, (gw - 1) * PG + 1), min(t["davor"] + t["parz"], gw * PG)
+            if lo <= hi:
+                teile.append({"gw": gw, "p_von": lo - t["davor"], "p_bis": hi - t["davor"]})
+        t["teile"] = teile
+        t["vlan_von"], t["vlan_bis"] = vlan_parz(t["vlanblock"], 1), vlan_parz(t["vlanblock"], t["parz"])
+        t["vlan_d"] = vlan_dienst(t["nr"])
     # Buchungsquote
     for s in A:
         w, P, L = s["w"], max(1, s["parz"]), s["leer"]
@@ -230,9 +277,22 @@ def gwplan_berechnen(d):
         inv = gw * (a["P_UCG"] + a["P_DAC"]) * EK + (a["P_KVz"] + a["P_USV"] + a["P_MontStandort"] + agg * a["P_Agg"]) * EK
         lfd = (ans * a["Uplink_Monat"] * 12 + a["Strom_Standort"] + gw * a["Strom_GW"]) * EK + inv * a["Wartung"]
         pr = f"Achtung: mehr als {int(a['Max_GW'])} Gateways" if gw > a["Max_GW"] else (f"OK – {ans} Internet-Anschlüsse nötig" if ans > 1 else "OK")
+        gateways = []
+        for g_nr in range(1, gw + 1):
+            tl = []
+            for t in sorted(mit, key=lambda t: t["sort"]):
+                for x in t["teile"]:
+                    if x["gw"] == g_nr:
+                        tl.append({"nr": t["nr"], "kz": t["kz"], "name": t["name"], "p_von": x["p_von"], "p_bis": x["p_bis"], "block": t["vlanblock"],
+                                   "vlan_von": vlan_parz(t["vlanblock"], x["p_von"]), "vlan_bis": vlan_parz(t["vlanblock"], x["p_bis"]),
+                                   "dienst": x["gw"] == t["gw_von"], "vlan_d": t["vlan_d"], "parz_gesamt": t["parz"]})
+            n_p = sum(x["p_bis"] - x["p_von"] + 1 for x in tl)
+            n_d = sum(1 for x in tl if x["dienst"])
+            gateways.append({"gw": g_nr, "teile": tl, "parzellen": n_p, "dienstnetze": n_d * DIENST_JE_SPARTE, "vlans": n_p + n_d * DIENST_JE_SPARTE,
+                             "grenze": PG + n_d * DIENST_JE_SPARTE, "ok": n_p <= PG})
         standorte.append({"nr": s["nr"], "name": s["name"], "sparten": len(mit), "namen": [t["name"] for t in sorted(mit, key=lambda t: t["sort"])],
                           "parz": parz, "gw": gw, "belegung": parz / (gw * PG) if gw else 0, "straenge": straenge, "agg": agg, "kunden": round(kunden, 1),
-                          "bedarf": round(bedarf), "anschluesse": ans, "inv": round(inv, 2), "lfd": round(lfd, 2), "pruefung": pr})
+                          "bedarf": round(bedarf), "anschluesse": ans, "inv": round(inv, 2), "lfd": round(lfd, 2), "pruefung": pr, "gateways": gateways})
     st_idx = {x["nr"]: x for x in standorte}
     # Einnahmen und Ergebnis
     quelle, preis, anteile, tarife = gwp_preis(d, a)
@@ -263,7 +323,8 @@ def gwplan_berechnen(d):
             "amortisation": round(inv / db, 1) if db > 0 else None, "inv_kunde": round(inv / s["kunden"]) if s["kunden"] else None,
             "ist_gebucht": treffer["gebucht"] if treffer else None, "ist_einnahme": treffer["umsatz_brutto"] if treffer else None,
             "w": {k: s["w"].get(k) for k in GWP_WAHL if s["w"].get(k) is not None},
-            "vs_standort": s["vs_standort"], "vs_zuleitung": s["vs_zuleitung"]})
+            "vs_standort": s["vs_standort"], "vs_zuleitung": s["vs_zuleitung"],
+            "kz": s["kz"], "vlanblock": s["vlanblock"], "vlan_von": s["vlan_von"], "vlan_bis": s["vlan_bis"], "vlan_d": s["vlan_d"], "teile": s["teile"]})
     S = lambda liste, k: sum(float(x[k] or 0) for x in liste)
     parz = S(A, "parz")
     kunden = S(A, "kunden")
@@ -295,6 +356,51 @@ def gwplan_berechnen(d):
         log.append(f"⚠ Mindestens ein Standort hat mehr als {int(a['Max_GW'])} Gateways.")
     return {"zeilen": zeilen, "standorte": standorte, "gesamt": gesamt, "tarife": tarife, "annahmen": a, "felder": GWP_FELDER,
             "quelle_daten": "Excel-Import" if (d.get("gwplan") or {}).get("anlagen") else "Kleingartenentwicklungskonzept 2040 (eingebaut)", "log": log}
+
+
+def gwplan_gateway(d, standort, gw):
+    """Plan (wie im Reiter „Planung“) für ein Gateway eines Standorts aus der Netzplanung"""
+    r = gwplan_berechnen(d)
+    try:
+        standort, gw = int(standort), int(gw)
+    except (TypeError, ValueError):
+        raise Fehler("Standort und Gateway angeben.")
+    st = next((x for x in r["standorte"] if x["nr"] == standort), None)
+    g = next((x for x in (st or {}).get("gateways", []) if x["gw"] == gw), None)
+    if not g:
+        raise Fehler("Diesen Standort bzw. dieses Gateway gibt es in der Netzplanung nicht.")
+    fehler = [z for z in r["zeilen"] if z["standort"] == standort and z["pruefung"].startswith("Fehler")]
+    if fehler:
+        raise Fehler("Erst die Fehler in der Netzplanung beheben: " + "; ".join(f"{z['name']}: {z['pruefung']}" for z in fehler[:3]))
+    # fortlaufende Gateway-Nummer über alle Standorte (für das Verwaltungsnetz 10.0.<Nr>.0/24)
+    lfd = 0
+    for x in sorted(r["standorte"], key=lambda x: x["nr"]):
+        for y in x["gateways"]:
+            lfd += 1
+            if x["nr"] == standort and y["gw"] == gw:
+                nummer = lfd
+    alt = d.get("plan") or {}
+    return {"schema": "standort", "gateway": nummer, "gatewayname": f"{st['name']} – Gateway {gw}", "praefix": alt.get("praefix") or "SparteNet.de",
+            "standort": standort, "standort_name": st["name"], "standort_gw": gw,
+            "sparten": [{"name": t["name"], "kz": t["kz"], "sid": t["nr"], "n": t["parz_gesamt"], "block": t["block"], "p_von": t["p_von"], "p_bis": t["p_bis"],
+                         "dienst": t["dienst"]} for t in g["teile"]]}
+
+
+def akt_gwplan_vlan(d, standort, gw):
+    roh = gwplan_gateway(d, standort, gw)
+    p = plan_berechnen(roh)
+    return {"roh": roh, **p, "log": [f"{roh['gatewayname']}: {len(p['netze'])} VLANs ({sum(1 for n in p['netze'] if n['art'] == 'parzelle')} Parzellen)"]}
+
+
+def akt_gwplan_vlan_uebernehmen(d, b):
+    roh = gwplan_gateway(d, (b or {}).get("standort"), (b or {}).get("gw"))
+    plan_berechnen(roh)
+    d["plan_vorher"] = d.get("plan")
+    d["plan"] = roh
+    speichere(d)
+    journal(f"Planung aus Netzplanung übernommen: {roh['gatewayname']} ({len(roh['sparten'])} Sparte(n), Schema Standort)")
+    return {"log": [f"✔ „{roh['gatewayname']}“ ist jetzt die Planung (Reiter „Planung“). Die bisherige Planung ist gesichert.",
+                    "Weiter: unter „Verbindung“ die Konsole dieses Gateways wählen, dann „Abgleich“ und „Einrichten“."]}
 
 
 def _gwp_int(v, text, lo, hi):
@@ -338,6 +444,17 @@ def akt_gwplan_sparte(d, b):
             v = _gwp_int(wert, "Parzellen", 1, 2000)
         elif feld == "leer":
             v = _gwp_int(wert, "Leerstand", 0, 2000)
+        elif feld == "vlanblock":
+            v = _gwp_int(wert, "VLAN-Block", 1, VLAN_BLOECKE)
+        elif feld == "kz":
+            v = str(wert or "").strip().upper() or None
+            if v is not None:
+                if not re.fullmatch(r"[A-Z0-9]{2,5}", v):
+                    raise Fehler("Kürzel: 2–5 Zeichen, nur A–Z und 0–9 (keine Umlaute).")
+                andere = {(((d.get("gwplan") or {}).get("wahl") or {}).get(str(x["nr"])) or {}).get("kz") or x.get("kz") or GWP_KUERZEL.get(x["nr"])
+                          for x in nrs.values() if x["nr"] != nr}
+                if v in andere:
+                    raise Fehler(f"Kürzel {v} ist schon vergeben.")
         else:
             v = _zahl_oder_none(wert, {"entfernung": "Entfernung (m)", "aps": "Access Points", "masten": "Masten", "leitung": "Leitungsweg (m)"}[feld])
         if v is None:
@@ -424,7 +541,7 @@ def akt_gwplan_import(d, roh):
     an = lies("Anlagen") or {}
     zahl = lambda v: v if isinstance(v, (int, float)) else None
     anlagen, wahl = [], {}
-    felder = {"S": "standort", "T": "zuleitung", "U": "reihenfolge", "V": "entfernung", "W": "quote", "X": "aps", "Y": "masten", "Z": "leitung"}
+    felder = {"S": "standort", "T": "zuleitung", "U": "reihenfolge", "V": "entfernung", "W": "quote", "X": "aps", "Y": "masten", "Z": "leitung", "AB": "vlanblock"}
     for r in range(5, 1000):
         nr = zahl(an.get(f"A{r}"))
         if nr is None:
@@ -445,7 +562,10 @@ def akt_gwplan_import(d, roh):
         for c, f in felder.items():
             v = zahl(an.get(f"{c}{r}"))
             if v is not None:
-                w[f] = int(v) if f in ("standort", "zuleitung", "reihenfolge") else float(v)
+                w[f] = int(v) if f in ("standort", "zuleitung", "reihenfolge", "vlanblock") else float(v)
+        kz = str(an.get(f"AA{r}") or "").strip().upper()
+        if re.fullmatch(r"[A-Z0-9]{2,5}", kz) and kz != GWP_KUERZEL.get(nr):
+            w["kz"] = kz
         if w:
             wahl[str(nr)] = w
     if not anlagen:
