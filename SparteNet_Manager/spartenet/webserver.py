@@ -298,7 +298,7 @@ class Handler(BaseHTTPRequestHandler):
             if pfad == "/api/konsolen":
                 return self._send(200, {"konsolen": konsolen((b or {}).get("cloud_key") or d["cloud_key"])})
             if pfad == "/api/plan" and b is None:
-                return self._send(200, antwort_filtern(pfad, {"roh": d["plan"], **plan_berechnen(d["plan"])}, sp_erl))
+                return self._send(200, antwort_filtern(pfad, {"roh": d["plan"], **plan_aktiv(d)}, sp_erl))
             if pfad == "/api/plan":
                 plan_berechnen(b); d["plan"] = b; speichere(d)
                 return self._send(200, {"log": ["✔ Plan gespeichert."]})
@@ -329,6 +329,8 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/rueckgaengig": lambda: akt_rueckgaengig(d, b["sparte"]),
                 "/api/journal": lambda: akt_journal(),
                 "/api/ppsk-speichern": lambda: akt_ppsk_speichern(d, b["sparte"], b.get("aenderungen")),
+                "/api/wlans": lambda: akt_wlans(d, q.get("sparte", [""])[0]),
+                "/api/wlan-zuordnung": lambda: akt_wlan_zuordnung(d, b or {}),
                 "/api/passwort": lambda: {"passwoerter": passwoerter_erzeugen(min(200, int(q.get("n", ["1"])[0])), d)},
                 "/api/pw-regel": lambda: ({"regel": pw_regel(d)} if b is None else (d.__setitem__("pw_regel", {"praefix": str(b.get("praefix", "SN")), "ziffern": b.get("ziffern", 10)}) or speichere(d) or {"regel": pw_regel(d), "log": [f"✔ Regel gespeichert: {pw_regel(d)['praefix']} + {pw_regel(d)['ziffern']} Ziffern – gilt für alle neu erzeugten Passwörter."]})),
                 "/api/system": lambda: akt_system(d),

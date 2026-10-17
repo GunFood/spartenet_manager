@@ -93,7 +93,7 @@ def _isp_bereinigen(punkte):
 
 
 def akt_system(d):
-    g, plan = Gateway(d), plan_berechnen(d["plan"])
+    g, plan = Gateway(d), plan_aktiv(d)
     g.site_id()
     quellen = _parallel({
         "geraete": lambda: g.alle("/v1/sites/{site}/devices"),

@@ -37,7 +37,7 @@ def akt_lesen(d, was):
 
 
 def akt_abgleich(d, kz):
-    plan, g = plan_berechnen(d["plan"]), Gateway(d)
+    plan, g = plan_aktiv(d), Gateway(d)
     soll = [n for n in plan["netze"] if not kz or n["sparte"] == kz]
     ist = g.alle("/v1/sites/{site}/networks")
     nach_vlan, nach_name = {n.get("vlanId"): n for n in ist}, {n.get("name"): n for n in ist}
@@ -81,7 +81,7 @@ def _ersetze(obj, alt, neu):
 
 
 def akt_netze(d, kz, ausfuehren, nur_eins, namen=None):
-    plan, g = plan_berechnen(d["plan"]), Gateway(d)
+    plan, g = plan_aktiv(d), Gateway(d)
     soll = [n for n in plan["netze"] if n["sparte"] == kz]
     if not soll:
         raise Fehler("Sparte nicht im Plan.")
@@ -133,7 +133,7 @@ def akt_netze(d, kz, ausfuehren, nur_eins, namen=None):
 
 
 def akt_ppsk(d, kz, art):
-    plan = plan_berechnen(d["plan"])
+    plan = plan_aktiv(d)
     s = next((x for x in plan["sparten"] if x["kz"] == kz), None)
     if not s:
         raise Fehler("Sparte nicht im Plan.")
@@ -145,10 +145,10 @@ def akt_ppsk(d, kz, art):
     if art == "gateway":
         g = Gateway(d)
         nid = {n["_id"]: n["name"] for n in g.legacy("GET", "rest/networkconf")}
-        ssid = WLAN_PAECHTER.format(kz=kz, pre=plan["praefix"])
+        ssid = wlan_ssid(d, kz)
         wlan = next((w for w in g.legacy("GET", "rest/wlanconf") if w.get("name") == ssid), None)
         if not wlan:
-            raise Fehler(f"WLAN „{ssid}“ nicht gefunden.")
+            raise Fehler(f"WLAN „{ssid}“ nicht am Gateway gefunden – unter Schritt 2 „WLANs vom Gateway abrufen“ und das richtige Pächter-WLAN wählen.")
         u = 0
         for k in wlan.get("private_preshared_keys") or []:
             name = nid.get(k.get("networkconf_id"))
@@ -174,6 +174,68 @@ def akt_ppsk(d, kz, art):
     else:
         log.append(f"{sum(1 for z in zeilen if z['Passwort'])} von {len(zeilen)} Parzellen haben ein Passwort.")
     return {"log": log, "zeilen": zeilen, "sparte": s}
+
+
+def akt_wlans(d, kz):
+    """WLANs am Gateway auslesen – mit Vorschlag, welches zu dieser Sparte gehört (Pächter = PPSK mit Parzellennetzen der Sparte)"""
+    g = Gateway(d)
+    netze = {n["_id"]: n.get("name", "") for n in g.legacy("GET", "rest/networkconf")}
+    liste = []
+    for w in g.legacy("GET", "rest/wlanconf"):
+        keys = w.get("private_preshared_keys") or []
+        eigene = sum(1 for k in keys if str(netze.get(k.get("networkconf_id"), "")).startswith(f"{kz}-Paz."))
+        liste.append({"name": w.get("name", ""), "ppsk": bool(w.get("private_preshared_keys_enabled")), "schluessel": len(keys), "eigene": eigene,
+                      "gast": bool(w.get("is_guest")), "aktiv": w.get("enabled", True) is not False, "sicherheit": w.get("security", ""),
+                      "netz": netze.get(w.get("networkconf_id"), "")})
+    liste.sort(key=lambda w: w["name"].lower())
+    zu = (d.get("wlan_namen") or {}).get(kz) or {}
+    namen = [w["name"] for w in liste]
+    def vorschlag(art):
+        if zu.get(art) in namen:
+            return zu[art]
+        std = wlan_ssid({"plan": d.get("plan")}, kz, art)
+        if std in namen:
+            return std
+        kz_l = kz.lower()
+        if art == "paechter":
+            k = sorted([w for w in liste if w["eigene"]], key=lambda w: -w["eigene"]) or [w for w in liste if w["ppsk"] and kz_l in w["name"].lower()]
+        elif art == "gaeste":
+            k = [w for w in liste if w["gast"] and kz_l in w["name"].lower()] or [w for w in liste if w["gast"]]
+        else:
+            k = [w for w in liste if kz_l in w["name"].lower() and "vorstand" in w["name"].lower()]
+        return k[0]["name"] if k else ""
+    return {"wlans": liste, "zuordnung": {a: wlan_ssid(d, kz, a) for a in ("paechter", "gaeste", "vorstand")}, "eigen": bool(zu),
+            "vorschlag": {a: vorschlag(a) for a in ("paechter", "gaeste", "vorstand")},
+            "log": [f"{len(liste)} WLAN(s) am Gateway." + ("" if liste else " Bitte in der UniFi-Oberfläche anlegen.")]}
+
+
+def akt_wlan_zuordnung(d, b):
+    """WLAN-Namen einer Sparte festlegen (leer = nach Schema); die Passwortliste bekommt den neuen Namen"""
+    kz = kz_pruefen(b.get("sparte"), (d.get("plan") or {}).get("praefix") or "SparteNet.de")
+    if kz not in {s["kz"] for s in plan_aktiv(d)["sparten"]}:
+        raise Fehler("Sparte nicht im Plan.")
+    neu = {}
+    for art in ("paechter", "gaeste", "vorstand"):
+        v = str(b.get(art) or "").strip()
+        if len(v.encode("utf-8")) > 32 or any(c in v for c in "\r\n\t"):
+            raise Fehler(f"WLAN-Name „{v}“: höchstens 32 Zeichen, eine Zeile.")
+        if v:
+            neu[art] = v
+    alle = d.setdefault("wlan_namen", {})
+    if neu:
+        alle[kz] = neu
+    else:
+        alle.pop(kz, None)
+    ssid = wlan_ssid(d, kz)
+    zeilen = lese_ppsk(kz)
+    if zeilen and any(z.get("WLAN") != ssid for z in zeilen):
+        for z in zeilen:
+            z["WLAN"] = ssid
+        schreibe_ppsk(kz, zeilen)
+    speichere(d)
+    journal(f"WLAN-Namen {kz}: Pächter „{ssid}“, Gäste „{wlan_ssid(d, kz, 'gaeste')}“, Vorstand „{wlan_ssid(d, kz, 'vorstand')}“")
+    return {"zuordnung": {a: wlan_ssid(d, kz, a) for a in ("paechter", "gaeste", "vorstand")}, "eigen": bool(neu),
+            "log": [f"✔ WLAN-Namen für {kz} gespeichert – Pächter-WLAN „{ssid}“." + (f" Passwortliste ({len(zeilen)} Einträge) und Zugangskarten nutzen jetzt diesen Namen." if zeilen else "")]}
 
 
 def akt_ppsk_speichern(d, kz, aenderungen):
@@ -261,13 +323,13 @@ def akt_schreibtest(d):
 
 def _ppsk_lage(d, kz):
     """Soll (PPSK_<kz>.csv) gegen Ist (WLAN am Gateway) – gemeinsame Grundlage für Vergleich und Übertragung"""
-    plan = plan_berechnen(d["plan"])
-    ssid = WLAN_PAECHTER.format(kz=kz, pre=plan["praefix"])
+    plan = plan_aktiv(d)
+    ssid = wlan_ssid(d, kz)
     g = Gateway(d)
     nid = {n["name"]: n["_id"] for n in g.legacy("GET", "rest/networkconf")}
     wlan = next((w for w in g.legacy("GET", "rest/wlanconf") if w.get("name") == ssid), None)
     if not wlan:
-        raise Fehler(f"WLAN „{ssid}“ nicht am Gateway gefunden – erst in der UniFi-Oberfläche anlegen (WPA2, Private Pre-Shared Keys).")
+        raise Fehler(f"WLAN „{ssid}“ nicht am Gateway gefunden – unter „Einrichten“ Schritt 2 „WLANs vom Gateway abrufen“ und das richtige Pächter-WLAN wählen (oder in der UniFi-Oberfläche anlegen: WPA2, Private Pre-Shared Keys).")
     soll = {z["Netz"]: z for z in lese_ppsk(kz)}
     if not soll:
         raise Fehler(f"Noch keine Passwörter für {kz} – erst „Einrichten“ Schritt 3.")
@@ -298,7 +360,7 @@ STATUS_TEXT = {"neu": "neu – noch nicht am Gateway", "geaendert": "geändert",
 
 
 def akt_vergleich(d, kz):
-    plan = plan_berechnen(d["plan"])
+    plan = plan_aktiv(d)
     soll_netze = [n for n in plan["netze"] if n["sparte"] == kz]
     if not soll_netze:
         raise Fehler("Sparte nicht im Plan.")
@@ -415,11 +477,11 @@ def akt_ppsk_hochladen(d, kz, ausfuehren):
 
 
 def akt_ppsk_hochladen_alt(d, kz, ausfuehren):
-    plan = plan_berechnen(d["plan"])
+    plan = plan_aktiv(d)
     keys = [k for k in lese_ppsk(kz) if k.get("Passwort")]
     if not keys:
         raise Fehler("Keine Passwörter vorhanden – erst Schritt 3.")
-    ssid = WLAN_PAECHTER.format(kz=kz, pre=plan["praefix"])
+    ssid = wlan_ssid(d, kz)
     if not ausfuehren:
         return {"log": [f"Vorschau: WLAN „{ssid}“ bekommt bzw. behält {len(keys)} Parzellen-Passwörter. Andere Passwörter bleiben erhalten."]}
     if len({k["Passwort"] for k in keys}) != len(keys):
