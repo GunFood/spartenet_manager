@@ -81,10 +81,26 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, OFFLINE_HTML.encode("utf-8"), "text/html")
         return None
 
+    def _wartung(self):
+        """während des Umschaltens beim Update: kurze Hinweisseite statt Anfragen zu bearbeiten"""
+        if not WARTUNG["an"]:
+            return False
+        if self.path.split("?")[0] == "/":
+            self._send(503, ("<!doctype html><meta charset='utf-8'><meta http-equiv='refresh' content='5'><title>SparteNet Manager – Update</title>"
+                             "<body style='font-family:sans-serif;padding:24px'><h2>Wartungsmodus</h2><p>" + WARTUNG["text"] +
+                             "</p><p>Die Seite lädt in wenigen Sekunden neu.</p>").encode("utf-8"), "text/html", extra={"Retry-After": "5"})
+        else:
+            self._send(503, {"fehler": WARTUNG["text"] or "Wartungsmodus", "wartung": True}, extra={"Retry-After": "5"})
+        return True
+
     def do_GET(self):
         u = urllib.parse.urlparse(self.path)
         if u.path in PWA_ICONS or u.path in ("/manifest.webmanifest", "/sw.js", "/offline.html"):
             return self._statisch(u.path)
+        if u.path == "/status":  # öffentlich, wie status.php bei Nextcloud: Version und Wartungsmodus
+            return self._send(200, {"produkt": "SparteNet Manager", "version": VERSION, "wartung": WARTUNG["an"]})
+        if self._wartung():
+            return
         d = self._lade()
         if d is None:
             return
@@ -143,6 +159,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         u = urllib.parse.urlparse(self.path)
+        if self._wartung():
+            return
         if u.path == "/login":
             return self._anmelden()
         d = self._lade()
@@ -276,6 +294,11 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/benutzer-speichern": lambda: akt_benutzer_speichern(d, b or {}, ich),
                 "/api/benutzer-loeschen": lambda: akt_benutzer_loeschen(d, b or {}, ich),
                 "/api/benutzer-ich": lambda: akt_benutzer_ich(d, ich, b),
+                "/api/update": lambda: akt_update(d),
+                "/api/update-pruefen": lambda: akt_update_pruefen(d),
+                "/api/update-installieren": lambda: akt_update_installieren(d, b, ich),
+                "/api/update-zurueck": lambda: akt_update_zurueck(d, ich),
+                "/api/update-einstellungen": lambda: akt_update_einstellungen(d, b or {}),
             }
             if pfad in routen:
                 return self._send(200, routen[pfad]())
@@ -301,6 +324,16 @@ def main():
     datenbank_starten()
     d = lade()
     log_einrichten(d["log_aktiv"])
+    a = update_aktiv_lesen()
+    if a.get("ordner") and os.path.abspath(CODE_DIR) == os.path.abspath(os.path.join(UPDATE_DIR, a["ordner"])):
+        print(f"Aktualisierte Version aus dem Datenordner: {a['ordner']}")
+    elif a.get("fehler"):
+        print(f"Hinweis: die aktualisierte Version {a.get('version')} startete nicht – es läuft die mitgelieferte {VERSION} ({a['fehler']}).")
+    n = update_sitzungen_uebernehmen()
+    if n:
+        print(f"{n} Anmeldung(en) über den Neustart übernommen.")
+    if os.environ.get("SPARTENET_UPDATE_PRUEFEN", "1") != "0":
+        update_hintergrund()
     f = fern_daten(d)
     if HOST_OVERRIDE not in (None, "0.0.0.0", "127.0.0.1"):
         raise SystemExit("SPARTENET_HOST muss 127.0.0.1 oder 0.0.0.0 sein.")

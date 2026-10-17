@@ -17,3 +17,4 @@
 # Python artifacts
 __pycache__/
 *.py[cod]
+/SparteNet_Manager/updates/

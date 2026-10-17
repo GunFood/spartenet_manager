@@ -1,4 +1,4 @@
-SparteNet Manager 4.5 (Cloud)
+SparteNet Manager 4.6 (Cloud)
 ===============================
 
 Funktioniert komplett über die UniFi-Cloud (api.ui.com). Kein lokaler Zugriff, kein VPN.
@@ -69,6 +69,22 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   "Prognose": Sparten ohne Buchungen mit der Buchungsquote aus den Annahmen hochrechnen.
   Tarifpreise (€ pro Jahr) stehen im Reiter "Tarife".
 
+### AKTUALISIERUNG (Reiter "Systeminfo" → "Aktualisierung", nur Administratoren) – neu in 4.6
+  Wie bei Nextcloud: Der Manager prüft regelmäßig (Standard alle 24 Stunden) auf GitHub, ob es eine neuere
+  Version gibt; Administratoren sehen dann oben "⬆ Update x.y". "Jetzt aktualisieren" führt Schritt für Schritt:
+    1 neue Version prüfen · 2 Sicherung der Daten (updates/sicherung_vor_<Version>_<Zeit>.json)
+    3 herunterladen (genau der geprüfte Commit) · 4 Inhalt prüfen · 5 entpacken nach updates/<Version>-<Commit>/
+    6 Selbsttest (neue Version wird in einem eigenen Prozess geladen) · 7 Wartungsmodus · 8 umschalten, Neustart
+  Der Neustart passiert im selben Prozess (im Docker-Container ohne Neubau); die Seite lädt danach selbst neu.
+  "Vorherige Version" schaltet zurück. Startet eine neue Version nicht, nimmt der Manager automatisch wieder
+  die mitgelieferte Version. Wird das Docker-Image mit einer neueren Version gebaut, gilt immer die neuere.
+  Quelle (Kanal): main (jeder Stand auf GitHub main), release (nur veröffentlichte Releases) oder ein Zweig.
+  Optional "automatisch installieren" (nur nachts 2–5 Uhr). Öffentlicher Status: http://<server>:8765/status
+  Umgebungsvariablen: SPARTENET_UPDATE_REPO (Standard GunFood/spartenet_manager), SPARTENET_UPDATE_PRUEFEN=0 (aus),
+  SPARTENET_UPDATE_AUS=1 (immer mitgelieferte Version), SPARTENET_UPDATE_TOKEN_FILE (nur bei privatem Repository:
+  Docker-Secret mit einem GitHub-Token, das nur lesen darf). Der Server braucht Zugang zu api.github.com.
+  Hinweis: Die erste Version mit Update-Funktion (4.6) muss einmal per Docker-Neubau installiert werden.
+
 ### BENUTZERKONTEN UND ZUGRIFFSRECHTE JE BEREICH (Reiter "Benutzer") – Konten seit 4.4, Rechte je Bereich neu in 4.5
   Anmeldung mit Benutzername und Passwort. Das Konto "admin" ist fest eingebaut: Benutzername leer lassen
   oder "admin" und das Manager-Passwort (SPARTENET_PASSWORD bzw. Secret spartenet_password).
@@ -91,7 +107,7 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
 ### PROGRAMMAUFBAU – neu in 4.4
   SparteNet_Manager.py startet nur noch; der Code liegt im Ordner spartenet/ – je Aufgabe eine Datei
   (basis, speicher, einstellungen, cloud, plan, qrcode, ppsk, system, karten, tarife, auth, fern, pwa,
-  kalkulation, netzplanung_daten, netzplanung, benutzer, oberflaeche, webserver). Beim Kopieren oder
+  kalkulation, netzplanung_daten, netzplanung, benutzer, update, oberflaeche, webserver). Beim Kopieren oder
   Aktualisieren immer den ganzen Ordner SparteNet_Manager mit dem Unterordner spartenet/ nehmen.
 
 ### DATENBANK (MariaDB/MySQL) – neu in 4.3
