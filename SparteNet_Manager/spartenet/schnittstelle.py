@@ -11,11 +11,13 @@ Zugang mit API-Schlüssel (legt ein Administrator an, wird nur einmal angezeigt,
 
 Rechte je Schlüssel: ereignis · buchen · lesen; optional nur bestimmte Sparten. Am Gateway ändert die API nichts.
 """
-from .automation import *  # noqa: F401,F403 – alle Namen der vorherigen Module
+from .app import *  # noqa: F401,F403 – alle Namen der vorherigen Module
 
 API_RECHTE = {"ereignis": "Ereignisse melden (startet Automationen, z. B. Zahlung eingegangen)",
               "buchen": "Tarif buchen / Buchung entfernen (im Manager)",
-              "lesen": "Buchungen und Tarife lesen"}
+              "lesen": "Buchungen und Tarife lesen",
+              "mitglieder": "Mitglieder anlegen/ändern und lesen",
+              "tickets": "Anfragen (Tickets) anlegen und Status abfragen"}
 API_PRO_MINUTE = max(10, int(os.environ.get("SPARTENET_API_PRO_MINUTE", "120") or 120))
 API_MAX_BYTES = 64_000
 _API_ZAEHLER = {}
@@ -120,6 +122,42 @@ def api_anfrage(methode, pfad, q, roh, kopf):
                 d = lade()
                 r = akt_buchungen_speichern(d, kz, {p: str(b.get("tarif") or "")})
             antwort = {"ok": True, "sparte": kz, "parzelle": int(p), "tarif": str(b.get("tarif") or ""), "meldung": r["log"][0]}
+        elif (pfad, methode) == ("/api/v1/mitglied", "POST"):
+            _recht(s, "mitglieder")
+            if s.get("sparten"):
+                _sparte(s, d, b.get("sparte"))
+            with SCHREIB_SPERRE:
+                d = lade()
+                mid, neu = mitglied_eintragen(d, {k: b.get(k) for k in M_FELDER if k in b}, f"API:{s.get('name') or i}")
+                speichere(d)
+                m = mitglieder(d)[mid]
+                if neu:
+                    ereignis("mitglied_neu", {**{k: m.get(k, "") for k in M_FELDER}, "name": f"{m.get('vorname', '')} {m.get('nachname', '')}".strip()}, d)
+            journal(f"Mitglied {'angelegt' if neu else 'aktualisiert'} über API ({s.get('name') or i}): {m.get('sparte') or '–'} Parzelle {m.get('parzelle') or '–'}")
+            antwort = {"ok": True, "id": mid, "neu": neu, "mitglied": {k: m.get(k, "") for k in M_FELDER}}
+        elif (pfad, methode) == ("/api/v1/mitglieder", "GET"):
+            _recht(s, "mitglieder")
+            kz = _sparte(s, d, q.get("sparte", [""])[0], pflicht=False)
+            antwort = {"mitglieder": [{"id": i2, **{k: m.get(k, "") for k in M_FELDER}} for i2, m in mitglieder(d).items()
+                                      if (not kz or m.get("sparte") == kz) and (not s.get("sparten") or m.get("sparte") in s["sparten"])]}
+        elif (pfad, methode) == ("/api/v1/ticket", "POST"):
+            _recht(s, "tickets")
+            if s.get("sparten"):
+                _sparte(s, d, b.get("sparte"))
+            roh_t = {k: b[k] for k in ("betreff", "text", "kategorie", "prioritaet", "sparte", "parzelle", "name", "email", "telefon") if k in b}
+            if roh_t.get("prioritaet") not in (None, *T_PRIO):
+                raise ApiFehler(400, "„prioritaet“: niedrig, normal, hoch oder dringend.")
+            with SCHREIB_SPERRE:
+                d = lade()
+                tid, t = ticket_anlegen(d, roh_t, f"API:{s.get('name') or i}", f"API:{s.get('name') or i}")
+            antwort = {"ok": True, "ticket": t["nr"], "status": T_STATUS[t["status"]]}
+        elif (pfad, methode) == ("/api/v1/ticket", "GET"):
+            _recht(s, "tickets")
+            nr = str(q.get("nr", [""])[0]).upper()
+            t = next((t for t in tickets_daten(d)["liste"].values() if t.get("nr") == nr), None)
+            if not t or (s.get("sparten") and t.get("sparte") not in s["sparten"]):
+                raise ApiFehler(404, "Ticket nicht gefunden.")
+            antwort = {"ticket": t["nr"], "betreff": t.get("betreff", ""), "status": T_STATUS.get(t.get("status"), ""), "erstellt": t.get("erstellt"), "geaendert": t.get("geaendert")}
         elif (pfad, methode) == ("/api/v1/ereignis", "POST"):
             _recht(s, "ereignis")
             typ = re.sub(r"[^a-z0-9_.-]", "", str(b.get("ereignis") or b.get("typ") or "").lower())[:40]
@@ -146,11 +184,21 @@ def api_anfrage(methode, pfad, q, roh, kopf):
             if art == "api":
                 daten["ereignis_name"] = typ
             with SCHREIB_SPERRE:
-                ergebnisse = automation_verarbeiten(art, daten, lade())
+                d = lade()
+                rg = None
+                if art == "zahlung" and daten.get("referenz") and daten.get("betrag"):
+                    rg = next((x for x in rechnungen_daten(d)["liste"].values() if x.get("nr", "").upper() == str(daten["referenz"]).upper()
+                               and x.get("status") in ("offen", "teilweise")), None)
+                if rg:          # Rechnung bezahlen – das löst die Zahlungs-Automationen selbst aus
+                    zahlung_buchen(d, rg, float(daten["betrag"]), time.strftime("%Y-%m-%d"), f"API {s.get('name') or i}", daten["quelle"])
+                    speichere(d)
+                    ergebnisse = [{"regel": "Rechnung", "aktion": "Zahlung gebucht", "ok": True, "text": f"{rg['nr']}: {R_STATUS[rg['status']]}"}]
+                else:
+                    ergebnisse = automation_verarbeiten(art, daten, d)
             journal(f"API-Ereignis „{typ}“ von {s.get('name') or i}: {len(ergebnisse)} Aktion(en)")
             antwort = {"ok": True, "ereignis": typ, "aktionen": ergebnisse}
         else:
-            raise ApiFehler(404, "Unbekannter Endpunkt. Verfügbar: GET /api/v1/status, GET /api/v1/tarife, GET /api/v1/buchungen, POST /api/v1/buchung, POST /api/v1/ereignis")
+            raise ApiFehler(404, "Unbekannter Endpunkt. Verfügbar: GET /api/v1/status, GET /api/v1/tarife, GET /api/v1/buchungen, POST /api/v1/buchung, POST /api/v1/ereignis, POST /api/v1/mitglied, GET /api/v1/mitglieder, POST /api/v1/ticket, GET /api/v1/ticket?nr=")
         with SCHREIB_SPERRE:
             d2 = lade()
             x = api_daten(d2)["schluessel"].get(i)
