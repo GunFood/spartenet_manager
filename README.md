@@ -1,4 +1,4 @@
-SparteNet Manager 4.8.1 (Cloud)
+SparteNet Manager 4.8.2 (Cloud)
 ===============================
 
 Funktioniert komplett über die UniFi-Cloud (api.ui.com). Kein lokaler Zugriff, kein VPN.
@@ -100,6 +100,16 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
     POST /api/v1/buchung   {"sparte":"BW","parzelle":12,"tarif":"Basic"}   ("" = Buchung entfernen)
   Höchstens 120 Anfragen je Minute und Schlüssel (SPARTENET_API_PRO_MINUTE). Zahlungsanbieter über n8n/Zapier/Make
   anbinden. Von außen nur über HTTPS (Reverse-Proxy, dann SPARTENET_PROXY=1).
+
+### PARZELLEN EINZELN EINEM GATEWAY ZUORDNEN – neu in 4.8.2
+  Netzplanung → "Gateway-Zuteilung nach Buchung" → "Parzellen einzeln einem Gateway zuordnen": je Parzelle
+  Automatisch oder Gateway 1…n. Gebuchte Parzellen werden verschoben (fest zugeordnet); noch nicht gebuchte bekommen
+  eine Vorgabe für die spätere Buchung. "Auf möglichst wenige Gateways verdichten" legt alle nicht fest zugeordneten
+  Buchungen ab Gateway 1 zusammen – bei kleiner Buchungsrate reicht so ein Gateway.
+  Am Gateway: "Einrichten → Netze nach Buchungen" legt verschobene Netze am neuen Gateway an und bietet das alte Netz
+  am bisherigen Gateway zum Entfernen an (vorausgewählt, mit Vorschau).
+  Netzplanung → "Gateways bemessen nach": allen Parzellen (Vollausbau), erwarteten Kunden (Buchungsquote) oder
+  tatsächlichen Buchungen – Investition und laufende Kosten rechnen dann nur mit den nötigen Gateways.
 
 ### GAST-VOUCHER (Reiter "Gast-Voucher") – neu in 4.8.1
   Vorlagen: Gültigkeit, Geräte je Voucher, Datenvolumen, Download/Upload (0 = unbegrenzt) und Text für den Ausdruck.

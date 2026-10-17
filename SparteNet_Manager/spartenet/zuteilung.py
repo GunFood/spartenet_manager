@@ -68,6 +68,9 @@ def zuteilung_buchung(d, kz, p, tarif, r=None, bevorzugt=None):
     z = zuteilung_daten(d)
     k = _schluessel(kz, p)
     e = z["p"].get(k)
+    vorgabe = (z.get("vorgaben") or {}).get(k)
+    if tarif and vorgabe:
+        bevorzugt = vorgabe
     if tarif:
         if e:
             if e["status"] == "entfernen":
@@ -81,7 +84,9 @@ def zuteilung_buchung(d, kz, p, tarif, r=None, bevorzugt=None):
             return f"{kz}: Parzelle {p} gibt es laut Netzplanung nicht (1–{info['parz']})."
         g, hinweis = _gw_waehlen(d, z, r, info["standort"], bevorzugt)
         z["p"][k] = {"kz": kz, "p": int(p), "standort": info["standort"], "gw": g, "status": "anlegen", "seit": time.strftime("%Y-%m-%d %H:%M"),
-                     "vlan": vlan_parz(info["vlanblock"], p)}
+                     "vlan": vlan_parz(info["vlanblock"], p), "fest": bool(vorgabe and g == vorgabe)}
+        if vorgabe and g != vorgabe:
+            hinweis = (hinweis + " " if hinweis else "") + f"{kz} Parzelle {p}: Gateway {vorgabe} ist voll – zugeteilt zu Gateway {g}."
         journal(f"Gateway-Zuteilung: {kz} Parzelle {p} → Standort {info['standort']}, Gateway {g}")
         return hinweis
     if e:
@@ -214,6 +219,143 @@ def akt_zuteilung_einstellen(d, b, ich):
     return x
 
 
+# ---- Parzellen einzeln einem Gateway zuordnen ---------------------------------------------------------------------
+def _standort_info(r, standort):
+    st = next((x for x in r["standorte"] if x["nr"] == standort), None)
+    if not st:
+        raise Fehler("Standort nicht gefunden.")
+    return st
+
+
+def _zt_verschieben(e, gw):
+    """gebuchte Parzelle auf ein anderes Gateway legen; ein vorhandenes Netz bleibt am alten bis „Netze nach Buchungen“ es entfernt"""
+    if gw == e["gw"]:
+        return False
+    if e.get("alt_gw") == gw:            # zurück dorthin, wo das Netz noch steht
+        e.pop("alt_gw", None)
+        e.update(gw=gw, status="aktiv")
+    else:
+        if e["status"] == "aktiv" and not e.get("alt_gw"):
+            e["alt_gw"] = e["gw"]
+        e.update(gw=gw, status="anlegen")
+    e["seit"] = time.strftime("%Y-%m-%d %H:%M")
+    return True
+
+
+def akt_zuteilung_parzellen(d, standort):
+    """alle Parzellen der Sparten eines Standorts mit Buchung, Gateway und Vorgabe"""
+    try:
+        standort = int(standort)
+    except (TypeError, ValueError):
+        raise Fehler("Standort angeben.")
+    z = zuteilung_daten(d)
+    r = gwplan_berechnen(d)
+    st = _standort_info(r, standort)
+    buch = d.get("buchungen") or {}
+    vorg = z.get("vorgaben") or {}
+    sparten = []
+    for t in sorted([t for t in r["zeilen"] if t["standort"] == standort], key=lambda t: t["sort"]):
+        zeilen = []
+        for p in range(1, int(t["parz"]) + 1):
+            e = z["p"].get(_schluessel(t["kz"], p))
+            zeilen.append({"p": p, "tarif": (buch.get(t["kz"]) or {}).get(str(p), ""), "gw": e["gw"] if e else None, "status": e["status"] if e else "",
+                           "fest": bool(e and e.get("fest")), "alt_gw": e.get("alt_gw") if e else None, "vorgabe": vorg.get(_schluessel(t["kz"], p))})
+        sparten.append({"kz": t["kz"], "name": t["name"], "zeilen": zeilen})
+    return {"standort": standort, "name": st["name"], "gw_max": st["gw_max"], "gw_geplant": st["gw"], "pg": max(1, int(gwp_annahmen(d)["PG"])),
+            "belegung": _belegung(z, standort), "sparten": sparten, "log": []}
+
+
+def akt_zuteilung_setzen(d, b, ich):
+    """b = {"standort": n, "aenderungen": {"BW-12": 1, "BW-13": 0 (= automatisch)}}"""
+    if not zuteilung_an(d):
+        raise Fehler("Erst die Gateway-Zuteilung nach Buchung einschalten.")
+    z = zuteilung_daten(d)
+    r = gwplan_berechnen(d)
+    info = _sparten_info(r)
+    pg = max(1, int(gwp_annahmen(d)["PG"]))
+    vorg = z.setdefault("vorgaben", {})
+    aend = b.get("aenderungen") or {}
+    if not isinstance(aend, dict) or not aend:
+        raise Fehler("Keine Änderungen.")
+    log, verschoben, vorgemerkt = [], 0, 0
+    for k, gw in sorted(aend.items()):
+        m = re.fullmatch(r"([A-Za-z0-9-]{1,10})-(\d{1,3})", str(k))
+        if not m or m.group(1) not in info:
+            raise Fehler(f"Unbekannte Parzelle „{k}“.")
+        kz, p = m.group(1), int(m.group(2))
+        t = info[kz]
+        st = _standort_info(r, t["standort"])
+        if not 1 <= p <= int(t["parz"]):
+            raise Fehler(f"{kz}: Parzelle {p} gibt es nicht.")
+        try:
+            gw = int(gw or 0)
+        except (TypeError, ValueError):
+            raise Fehler("Gateway muss eine Zahl sein.")
+        if not 0 <= gw <= st["gw_max"]:
+            raise Fehler(f"Am Standort „{st['name']}“ gibt es Gateway 1–{st['gw_max']}.")
+        e = z["p"].get(_schluessel(kz, p))
+        if e and e["status"] != "entfernen":
+            if gw == 0:
+                e["fest"] = False
+                continue
+            if gw != e["gw"] and _belegung(z, t["standort"]).get(gw, 0) >= pg:
+                raise Fehler(f"Gateway {gw} am Standort „{st['name']}“ ist voll ({pg} Parzellen) – erst andere Parzellen verschieben.")
+            if _zt_verschieben(e, gw):
+                verschoben += 1
+                log.append(f"{kz} Parzelle {p} → Gateway {gw}" + (f" (Netz am Gateway {e['alt_gw']} wird über „Netze nach Buchungen“ entfernt)" if e.get("alt_gw") else ""))
+            e["fest"] = True
+        else:
+            if gw:
+                vorg[_schluessel(kz, p)] = gw
+            else:
+                vorg.pop(_schluessel(kz, p), None)
+            vorgemerkt += 1
+    _plan_nachziehen(d)
+    speichere(d)
+    journal(f"Gateway-Zuteilung von Hand: {verschoben} verschoben, {vorgemerkt} Vorgabe(n) für noch nicht gebuchte Parzellen durch {ich}")
+    x = akt_zuteilung(d)
+    x["log"] = [f"✔ {verschoben} gebuchte Parzelle(n) verschoben, {vorgemerkt} Vorgabe(n) für spätere Buchungen gespeichert."] + log[:30] + x["log"]
+    return x
+
+
+def akt_zuteilung_verdichten(d, b, ich):
+    """gebuchte Parzellen (ohne feste Zuordnung) auf möglichst wenige Gateways legen – füllt von Gateway 1 an auf"""
+    if not zuteilung_an(d):
+        raise Fehler("Erst die Gateway-Zuteilung nach Buchung einschalten.")
+    try:
+        standort = int((b or {}).get("standort"))
+    except (TypeError, ValueError):
+        raise Fehler("Standort angeben.")
+    z = zuteilung_daten(d)
+    pg = max(1, int(gwp_annahmen(d)["PG"]))
+    hier = [e for e in z["p"].values() if e.get("standort") == standort]
+    belegt = {}
+    for e in hier:
+        if e.get("fest") or e["status"] == "entfernen":
+            belegt[e["gw"]] = belegt.get(e["gw"], 0) + 1
+    beweglich = sorted([e for e in hier if not e.get("fest") and e["status"] != "entfernen"], key=lambda e: (e["gw"], e["kz"], e["p"]))
+    log = []
+    for e in beweglich:
+        g = 1
+        while belegt.get(g, 0) >= pg:
+            g += 1
+        if g < e["gw"]:
+            alt = e["gw"]
+            _zt_verschieben(e, g)
+            log.append(f"{e['kz']} Parzelle {e['p']}: Gateway {alt} → {g}")
+        else:
+            g = e["gw"]
+        belegt[g] = belegt.get(g, 0) + 1
+    _plan_nachziehen(d)
+    speichere(d)
+    journal(f"Gateway-Zuteilung verdichtet (Standort {standort}): {len(log)} Parzelle(n) verschoben durch {ich}")
+    x = akt_zuteilung(d)
+    benutzt = sorted({e["gw"] for e in hier if e["status"] != "entfernen"})
+    x["log"] = [f"✔ {len(log)} Parzelle(n) verschoben – belegt sind jetzt Gateway {', '.join(map(str, benutzt)) or '–'}."
+                + (" Am Gateway: „Netze nach Buchungen“ legt die Netze neu an und entfernt die alten." if log else "")] + log[:30] + x["log"]
+    return x
+
+
 # ---- am aktiven Gateway: Netze nach Zuteilung anlegen bzw. entfernen (Vorschau → Bestätigung) ------------------
 def _aktiv(d):
     p = d.get("plan") or {}
@@ -256,8 +398,11 @@ def _lage(d):
         if m and m.group(1) in am_standort and name not in soll_hier:
             kz, p = m.group(1), int(m.group(2))
             e = z["p"].get(_schluessel(kz, p))
-            grund = f"Parzelle ist Gateway {e['gw']} zugeteilt" if e else "Parzelle hat keine Buchung"
-            ueberzaehlig.append({"kz": kz, "p": p, "netz": name, "vlan": n.get("vlan"), "id": n.get("_id"), "grund": grund})
+            x = {"kz": kz, "p": p, "netz": name, "vlan": n.get("vlan"), "id": n.get("_id")}
+            if e and e.get("alt_gw") == gw:
+                entfernen.append({**x, "grund": f"umgezogen zu Gateway {e['gw']}"})
+            else:
+                ueberzaehlig.append({**x, "grund": f"Parzelle ist Gateway {e['gw']} zugeteilt" if e else "Parzelle hat keine Buchung"})
     if korrigiert:
         _plan_nachziehen(d)
         speichere(d)
@@ -320,6 +465,8 @@ def akt_zuteilung_gateway(d, b):
                 e = z["p"].get(_schluessel(x["kz"], x["p"]))
                 if e and e.get("standort") == standort and e["gw"] == gw:
                     del z["p"][_schluessel(x["kz"], x["p"])]
+                elif e and e.get("alt_gw") == gw:
+                    e.pop("alt_gw", None)        # Umzug abgeschlossen
             except Fehler as e:
                 log.append(f"✖ {x['netz']}: {e}")
         journal(f"Gateway-Zuteilung {name}: {len(weg)} Netz(e) entfernt ({', '.join(x['netz'] for x in weg[:20])})")
