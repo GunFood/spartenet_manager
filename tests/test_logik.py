@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 import spartenet.webserver as S   # noqa: E402  (lädt alle Module der Kette)
 import spartenet.zuteilung as Z   # noqa: E402
 import spartenet.umzug as U       # noqa: E402
+import spartenet.voucher as V     # noqa: E402
 
 
 class FakeGateway:
@@ -192,6 +193,95 @@ class Umzug(unittest.TestCase):
         self.d["plan"] = {"gateway": 1, "sparten": [{"name": "B", "kz": "BW", "sid": 1, "n": 5}]}
         with self.assertRaises(S.Fehler):
             S.akt_umzug(self.d, {})
+
+
+class FakeVoucherGateway:
+    """nachgebaute Integration-API für Hotspot-Voucher"""
+    voucher, posts = [], []
+
+    def __init__(self, d=None):
+        pass
+
+    def alle(self, pfad):
+        assert pfad == V.VOUCHER_PFAD
+        return [dict(x) for x in FakeVoucherGateway.voucher]
+
+    def req(self, methode, pfad, body=None):
+        if methode == "POST":
+            FakeVoucherGateway.posts.append(body)
+            neu = [{"id": f"n{len(FakeVoucherGateway.voucher) + i}", "code": f"{5550000000 + len(FakeVoucherGateway.voucher) + i}", "name": body["name"],
+                    "timeLimitMinutes": body["timeLimitMinutes"], "authorizedGuestLimit": body.get("authorizedGuestLimit", 1), "authorizedGuestCount": 0,
+                    "dataUsageLimitMBytes": body.get("dataUsageLimitMBytes"), "createdAt": "2026-10-17T08:00:00Z", "expired": False} for i in range(body["count"])]
+            FakeVoucherGateway.voucher += neu
+            return {"vouchers": neu}
+        if methode == "DELETE":
+            vid = pfad.rsplit("/", 1)[-1]
+            FakeVoucherGateway.voucher = [x for x in FakeVoucherGateway.voucher if x["id"] != vid]
+            return {}
+        raise AssertionError(pfad)
+
+
+class Voucher(unittest.TestCase):
+    def setUp(self):
+        self.d = frisch()
+        V.Gateway = FakeVoucherGateway
+        FakeVoucherGateway.posts = []
+        FakeVoucherGateway.voucher = [
+            {"id": "a", "code": "1234567890", "name": "Fest", "timeLimitMinutes": 1440, "authorizedGuestLimit": 1, "authorizedGuestCount": 1,
+             "activatedAt": "2026-10-17T08:00:00Z", "expiresAt": "2026-10-18T08:00:00Z", "createdAt": "2026-10-16T10:00:00Z", "expired": False},
+            {"id": "b", "code": "2222233333", "name": "Sommerfest", "timeLimitMinutes": 360, "authorizedGuestLimit": 3, "authorizedGuestCount": 0,
+             "createdAt": "2026-10-16T11:00:00Z", "expired": False},
+            {"id": "c", "code": "9999900000", "name": "Alt", "timeLimitMinutes": 60, "authorizedGuestCount": 1, "expired": True, "createdAt": "2026-01-01T10:00:00Z"},
+        ]
+
+    def test_vorlagen_pruefen(self):
+        r = S.akt_voucher_vorlagen(self.d, {"vorlagen": [{"name": "Fest", "minuten": 360, "geraete": 3, "daten_mb": 500, "down_kbps": 10000, "up_kbps": 2000, "text": "Sommerfest"}]})
+        self.assertEqual(r["vorlagen"][0]["minuten"], 360)
+        for falsch in ([], [{"name": ""}], [{"name": "x", "minuten": 0}], [{"name": "x", "minuten": 60, "down_kbps": 1}], [{"name": "A"}, {"name": "a"}]):
+            with self.assertRaises(S.Fehler):
+                S.akt_voucher_vorlagen(self.d, {"vorlagen": falsch})
+
+    def test_auslesen_status_und_vorschlaege(self):
+        r = S.akt_voucher_liste(self.d)
+        st = {z["code"]: z["status"] for z in r["zeilen"]}
+        self.assertEqual(st, {"1234567890": "voll belegt", "2222233333": "unbenutzt", "9999900000": "abgelaufen"})
+        self.assertEqual(next(z for z in r["zeilen"] if z["id"] == "a")["vorlage"], "Tagesgast")        # passt zur Standard-Vorlage
+        self.assertIn((360, 3), [(v["minuten"], v["geraete"]) for v in r["vorschlaege"]])
+
+    def test_erstellen_nach_vorlage(self):
+        S.akt_voucher_vorlagen(self.d, {"vorlagen": [{"id": "fest", "name": "Fest", "minuten": 360, "geraete": 3, "daten_mb": 500, "down_kbps": 10000, "up_kbps": 2000}]})
+        v = S.akt_voucher(self.d, 2, None, "", False, "fest")
+        self.assertEqual(FakeVoucherGateway.posts, [])                                                    # Vorschau ändert nichts
+        r = S.akt_voucher(self.d, 2, None, "", True, "fest")
+        self.assertEqual(FakeVoucherGateway.posts[0], {"count": 2, "name": "Fest", "timeLimitMinutes": 360, "authorizedGuestLimit": 3,
+                                                       "dataUsageLimitMBytes": 500, "rxRateLimitKbps": 10000, "txRateLimitKbps": 2000})
+        self.assertEqual(len(r["codes"]), 2)
+        self.assertIn("Vorschau", v["log"][0])
+
+    def test_druck_im_kartendesign(self):
+        r = S.akt_voucher_druck(self.d, {"ids": ["a", "b"], "sparte": "BW"})
+        h = r["html"]
+        self.assertEqual(h.count('class="seite"'), 2)
+        self.assertIn("SparteNet.de-BW-Gäste", h)
+        self.assertIn("12345-67890", h)
+        self.assertIn("18.10.2026, 10:00 Uhr", h)                     # expiresAt in Ortszeit (Sommerzeit)
+        self.assertIn("6 Stunden nach der ersten Anmeldung", h)       # noch nicht angemeldet
+        self.assertIn("bis 3 Geräte", h)
+        r = S.akt_voucher_druck(self.d, {"codes": ["22222-33333"], "ab_jetzt": True})
+        self.assertNotIn("nach der ersten Anmeldung", r["html"])
+        self.assertIn("Uhr", r["html"])
+        with self.assertRaises(S.Fehler):
+            S.akt_voucher_druck(self.d, {"ids": ["gibtsnicht"]})
+
+    def test_qr_offenes_wlan(self):
+        self.assertEqual(S.wlan_qr_text("Gast;1", ""), "WIFI:T:nopass;S:Gast\\;1;;")
+
+    def test_loeschen(self):
+        v = S.akt_voucher_loeschen(self.d, ["a", "c"], False)
+        self.assertEqual(len(FakeVoucherGateway.voucher), 3)
+        self.assertTrue(any("in Benutzung" in z for z in v["log"]))
+        S.akt_voucher_loeschen(self.d, ["a", "c"], True)
+        self.assertEqual([x["id"] for x in FakeVoucherGateway.voucher], ["b"])
 
 
 if __name__ == "__main__":

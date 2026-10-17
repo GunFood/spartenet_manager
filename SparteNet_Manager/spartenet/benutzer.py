@@ -57,11 +57,11 @@ _LESEN = {
     "/api/system": "auslesen", "/api/daten-liste": "auslesen", "/api/daten-pruefen": "auslesen",
     "/api/tarif-vergleich": "tarife", "/api/tarif-erkennen": "buchungen", "/api/kalkulation": "kalkulation", "/api/gwplan": "netzplanung", "/api/gwplan-vlan": "netzplanung", "/api/zuteilung": "netzplanung",
     "/api/karten-vorschau": "karten", "/api/karten": "karten", "/api/log": "verbindung",
-    "/api/unterlagen": "unterlagen", "/api/unterlage-datei": "unterlagen",
+    "/api/unterlagen": "unterlagen", "/api/unterlage-datei": "unterlagen", "/api/voucher-liste": "voucher", "/api/voucher-druck": "voucher",
     "/api/automation": "automationen",
 }
-_GET_LESEN_SONST_SCHREIBEN = {"/api/tarife": "tarife", "/api/buchungen": "buchungen", "/api/design": "karten", "/api/fern": "verbindung"}
-_VORSCHAU = {"/api/netze": "netze", "/api/uebertragen": "wlan_pw", "/api/ppsk-hochladen": "wlan_pw", "/api/tarif-uebertragen": "tarife", "/api/voucher": "voucher", "/api/zuteilung-gateway": "netze", "/api/umzug": "netze"}
+_GET_LESEN_SONST_SCHREIBEN = {"/api/voucher-vorlagen": "voucher", "/api/tarife": "tarife", "/api/buchungen": "buchungen", "/api/design": "karten", "/api/fern": "verbindung"}
+_VORSCHAU = {"/api/netze": "netze", "/api/uebertragen": "wlan_pw", "/api/ppsk-hochladen": "wlan_pw", "/api/tarif-uebertragen": "tarife", "/api/voucher": "voucher", "/api/voucher-loeschen": "voucher", "/api/zuteilung-gateway": "netze", "/api/umzug": "netze"}
 _SCHREIBEN = {
     "/api/excel": "planung", "/api/schreibtest": "netze", "/api/umzug-rueckgaengig": "netze",
     "/api/ppsk-speichern": "wlan_pw", "/api/rueckgaengig": "wlan_pw", "/api/passwort": "wlan_pw",

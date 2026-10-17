@@ -101,6 +101,16 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   Höchstens 120 Anfragen je Minute und Schlüssel (SPARTENET_API_PRO_MINUTE). Zahlungsanbieter über n8n/Zapier/Make
   anbinden. Von außen nur über HTTPS (Reverse-Proxy, dann SPARTENET_PROXY=1).
 
+### GAST-VOUCHER (Reiter "Gast-Voucher") – erweitert in 4.8
+  Vorlagen: Gültigkeit, Geräte je Voucher, Datenvolumen, Download/Upload (0 = unbegrenzt) und Text für den Ausdruck.
+  "Voucher am Gateway → Auslesen": alle Voucher mit Status (unbenutzt, in Benutzung, voll belegt, abgelaufen) und Vorlage;
+  Einstellungen ohne Vorlage werden als Vorschlag angezeigt ("Als Vorlage übernehmen").
+  Erstellen nach Vorlage: Vorschau → "Erstellen und übertragen" legt die Voucher am Gateway an.
+  Drucken im Kartendesign wie die Zugangskarten: Gast-WLAN der gewählten Sparte mit QR-Code, Voucher-Code, Laufzeit und
+  "Gültig bis" (bei schon benutzten Vouchern die Endzeit vom Gateway, sonst "… nach der ersten Anmeldung" oder auf Wunsch
+  ab jetzt berechnet). Je Voucher eine Seite; "Kleine Etiketten" für viele auf einem Blatt. Löschen mit Vorschau.
+  Zeitzone für den Ausdruck: Europe/Berlin (SPARTENET_ZEITZONE).
+
 ### UMZUGSHILFE (Reiter "Abgleich") – neu in 4.8
   Für Gateways mit dem alten Schema (z. B. Buchenweg): erst das Gateway aus der Netzplanung übernehmen und die
   Konsole wählen, dann "Vorschau". Netze mit gleichem Namen bekommen VLAN, Subnetz, Router-IP und DHCP-Bereich
