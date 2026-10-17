@@ -65,8 +65,14 @@ def plan_berechnen(roh):
     if len({s["sid"] for s in sparten}) != len(sparten) or len({s["kz"] for s in sparten}) != len(sparten):
         raise Fehler("Sparten-ID und Kürzel müssen je Sparte einmalig sein.")
     netze = []
+    wn = roh.get("wlan_namen") if isinstance(roh.get("wlan_namen"), dict) else {}
     for s in sparten:
         f = {"kz": s["kz"], "pre": pre}
+        eigen = wn.get(s["kz"]) if isinstance(wn.get(s["kz"]), dict) else {}
+        ssid_p = eigen.get("paechter") or WLAN_PAECHTER.format(**f)
+        ssid_g = eigen.get("gaeste") or WLAN_GAESTE.format(**f)
+        ssid_v = eigen.get("vorstand") or WLAN_VORSTAND.format(**f)
+        s["wlan"] = {"paechter": ssid_p, "gaeste": ssid_g, "vorstand": ssid_v, "eigen": bool(eigen)}
         def e(art, name, vlan, x, ssid, parz="", zugang=""):
             return {"sparte": s["kz"], "name": name, "vlan": vlan, "x": x, "sid": s["sid"], "netz": f"10.{s['sid']}.{x}.0/24",
                     "maske": "255.255.255.0", "router": f"10.{s['sid']}.{x}.1", "dhcp_start": f"10.{s['sid']}.{x}.10",
@@ -78,16 +84,30 @@ def plan_berechnen(roh):
             vp = lambda p: vlan_parzelle(s["slot"], p)
             vd = {"vorstand": 2000 + s["slot"] * 10 + 1, "gaeste": 2000 + s["slot"] * 10 + 2, "technik": 2000 + s["slot"] * 10 + 9}
         for p in s["parzellen"]:
-            netze.append(e("parzelle", NETZ_PARZELLE.format(p=p, **f), vp(p), p, WLAN_PAECHTER.format(**f), p, f"Passwort Parzelle {p}"))
+            netze.append(e("parzelle", NETZ_PARZELLE.format(p=p, **f), vp(p), p, ssid_p, p, f"Passwort Parzelle {p}"))
         if s["dienst"]:
-            netze.append(e("vorstand", NETZ_VORSTAND.format(**f), vd["vorstand"], 200, WLAN_VORSTAND.format(**f), "", "eigenes WLAN"))
-            netze.append(e("gaeste", NETZ_GAESTE.format(**f), vd["gaeste"], 201, WLAN_GAESTE.format(**f), "", "Voucher"))
+            netze.append(e("vorstand", NETZ_VORSTAND.format(**f), vd["vorstand"], 200, ssid_v, "", "eigenes WLAN"))
+            netze.append(e("gaeste", NETZ_GAESTE.format(**f), vd["gaeste"], 201, ssid_g, "", "Voucher"))
             netze.append(e("technik", NETZ_TECHNIK.format(**f), vd["technik"], 250, "", "", "Switches, Access Points"))
     if len({n["vlan"] for n in netze}) != len(netze):
         raise Fehler("VLAN-IDs im Plan sind nicht eindeutig.")
     return {"gateway": g, "gatewayname": str(roh.get("gatewayname") or f"Gateway {g}"), "praefix": pre, "sparten": sparten, "netze": netze, "schema": schema,
             "dynamisch": bool(roh.get("dynamisch")),
             "gateway_netz": {"name": "Gateway", "vlan": 1, "netz": f"10.0.{g}.0/24", "router": f"10.0.{g}.1"}}
+
+
+def plan_aktiv(d):
+    """aktive Planung mit den am Gateway zugeordneten WLAN-Namen (Einrichten → Schritt 2)"""
+    return plan_berechnen({**(d.get("plan") or {}), "wlan_namen": d.get("wlan_namen") or {}})
+
+
+def wlan_ssid(d, kz, art="paechter"):
+    """WLAN-Name einer Sparte: Zuordnung aus „Einrichten“, sonst nach Schema"""
+    eigen = (d.get("wlan_namen") or {}).get(kz) or {}
+    if eigen.get(art):
+        return eigen[art]
+    pre = (d.get("plan") or {}).get("praefix") or "SparteNet.de"
+    return {"paechter": WLAN_PAECHTER, "gaeste": WLAN_GAESTE, "vorstand": WLAN_VORSTAND}[art].format(pre=pre, kz=kz)
 
 
 def xlsx_lesen(roh_bytes):

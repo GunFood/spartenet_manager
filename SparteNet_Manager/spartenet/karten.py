@@ -95,10 +95,10 @@ h1{{font-size:{g["gr_titel"]}pt;margin:3mm 0 0;line-height:1.1}}
 
 
 def beispiel_zeile(d):
-    plan = plan_berechnen(d["plan"])
+    plan = plan_aktiv(d)
     s = plan["sparten"][0] if plan["sparten"] else {"name": "Musterverein e.V.", "kz": "MV"}
     pre = plan.get("praefix") or "SparteNet.de"
-    return s["name"], s["kz"], {"Parzelle": 1, "WLAN": WLAN_PAECHTER.format(pre=pre, kz=s["kz"]), "Passwort": "Gartenzwerg-4711"}
+    return s["name"], s["kz"], {"Parzelle": 1, "WLAN": (s.get("wlan") or {}).get("paechter") or WLAN_PAECHTER.format(pre=pre, kz=s["kz"]), "Passwort": "Gartenzwerg-4711"}
 
 
 def akt_karten_vorschau(d, design, drucken=False):
@@ -113,11 +113,11 @@ def akt_karten_vorschau(d, design, drucken=False):
 
 
 def akt_karten(d, kz, auswahl):
-    plan = plan_berechnen(d["plan"])
+    plan = plan_aktiv(d)
     s = next((x for x in plan["sparten"] if x["kz"] == kz), None)
     if not s:
         raise Fehler("Sparte nicht im Plan.")
-    zeilen = [z for z in lese_ppsk(kz) if z.get("Passwort")]
+    zeilen = [{**z, "WLAN": wlan_ssid(d, kz)} for z in lese_ppsk(kz) if z.get("Passwort")]
     if auswahl != "alle":
         wahl = {str(x) for x in auswahl}
         zeilen = [z for z in zeilen if str(z["Parzelle"]) in wahl]

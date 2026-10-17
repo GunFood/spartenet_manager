@@ -220,7 +220,10 @@ nav{position:sticky;top:0;z-index:20}
 <div class="tab" id="zg_tab"></div><div class="log" id="log_zg"></div></div>
 <div data-bereich="netze" class="karte schritt"><div class="nr">1</div><div><h3>Fehlende Netze anlegen</h3><p class="hint">Vorlage ist ein vorhandenes Parzellennetz (z. B. BW-Paz.004): DHCP, Isolation, Firewall-Zone werden übernommen, nur Name, VLAN und Adressen geändert.</p>
 <div class="knoepfe"><button class="k" onclick="netze(false,false)">Vorschau</button><button class="k p" onclick="netze(true,true)">Erstes Netz anlegen (Test)</button><button class="k r" onclick="netze(true,false)">Alle fehlenden anlegen</button></div></div></div>
-<div data-bereich="netze" class="karte schritt"><div class="nr">2</div><div><h3>WLANs prüfen</h3><p class="hint">Pächter <b id="ssid1"></b> (WPA2, PPSK) · Gäste <b id="ssid2"></b> (Hotspot/Voucher) · Vorstand <b id="ssid3"></b>.</p></div></div>
+<div data-bereich="wlan_pw" class="karte schritt"><div class="nr">2</div><div style="flex:1;min-width:0"><h3>WLANs der Sparte</h3><p class="hint">Pächter <b id="ssid1"></b> (WPA2, PPSK) · Gäste <b id="ssid2"></b> (Hotspot/Voucher) · Vorstand <b id="ssid3"></b><span id="ssid_eigen"></span>. Heißen die WLANs am Gateway anders: abrufen, das richtige wählen und speichern – Passwortliste, Übertragen und Zugangskarten nutzen dann diesen Namen.</p>
+<div class="knoepfe" style="margin-top:6px"><button class="k" onclick="wlAbrufen()">WLANs vom Gateway abrufen</button></div>
+<div id="wl_wahl" hidden><div class="reihe"><div><label for="wl_p">Pächter-WLAN (PPSK, Passwort je Parzelle)</label><select id="wl_p"></select></div><div><label for="wl_g">Gäste-WLAN (Voucher)</label><select id="wl_g"></select></div><div><label for="wl_v">Vorstand-WLAN</label><select id="wl_v"></select></div></div>
+<div class="knoepfe"><button class="k p" onclick="wlSpeichern()">Zuordnung speichern</button><button class="k" onclick="wlSchema()">Namen nach Schema</button></div></div><div class="log" id="log_wl"></div></div></div>
 <div data-bereich="wlan_pw" class="karte schritt"><div class="nr">3</div><div><h3>Passwörter je Parzelle</h3><p class="hint">Bereits verteilte Passwörter erst übernehmen, dann nur fehlende ergänzen. Gespeichert in PPSK_&lt;Kürzel&gt;.csv.</p>
 <div class="knoepfe"><button class="k" onclick="ppsk('anzeigen')">Anzeigen</button><button class="k" onclick="ppsk('gateway')">Vom Gateway übernehmen</button><button class="k p" onclick="ppsk('fehlende')">Fehlende erzeugen</button>
 <button class="k" onclick="ppsk('neu')">Alle neu erzeugen</button><button class="k" onclick="csvSpeichern(PPSK,'ppsk')">Als CSV</button></div>
@@ -418,9 +421,12 @@ nav{position:sticky;top:0;z-index:20}
 <div class="tab" id="ul_tab" style="--tab-h:620px"></div><div class="log" id="log_ul"></div></div>
 <div class="karte" data-bereich="unterlagen" id="ul_hoch"><h3>Hochladen</h3>
 <div id="ul_zone" style="border:2px dashed var(--line);border-radius:10px;padding:22px;text-align:center;color:var(--muted);cursor:pointer" onclick="$('ul_datei').click()">Dateien hierher ziehen oder <u>auswählen</u><input type="file" id="ul_datei" multiple style="display:none" onchange="ulHoch(this.files)"></div>
-<div class="reihe" style="margin-top:10px"><div><label for="ul_ordner">Ordner</label><input id="ul_ordner" list="ul_ordnerliste" value="Allgemein"><datalist id="ul_ordnerliste"></datalist></div>
+<div class="reihe" style="margin-top:10px"><div><label for="ul_ordner">In Ordner hochladen</label><select id="ul_ordner" onchange="ulOrdnerWahl()"></select><input id="ul_ordner_neu" placeholder="Name des neuen Ordners" maxlength="60" hidden style="margin-top:6px"></div>
 <div><label for="ul_sparte">Sparte</label><select id="ul_sparte"></select></div><div><label for="ul_beschr">Beschreibung (optional)</label><input id="ul_beschr" maxlength="300"></div></div>
-<div class="log" id="log_ulh"></div></div></section>
+<div class="log" id="log_ulh"></div>
+<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600">Ordner verwalten</summary>
+<div class="knoepfe"><input id="ul_neuer_ordner" placeholder="Neuer Ordner, z. B. Wartung" maxlength="60" style="max-width:300px"><button class="k" onclick="ulOrdnerNeu()">Ordner anlegen</button></div>
+<div class="tab" id="ul_ordner_tab"></div><div class="log" id="log_ulo"></div></details></div></section>
 
 <section id="automationen"><div class="karte" data-bereich="automationen"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0;flex:1">Automationen</h2><span id="au_st" class="status"></span><button class="k" onclick="auLaden()">Aktualisieren</button><button class="k p au-schreib" onclick="auNeu()">Neue Regel</button></div>
 <p class="hint">Wenn etwas passiert (eine Parzelle bucht, kündigt, eine Zahlung kommt über die API herein …), führt der Manager die hinterlegten Aktionen aus: E-Mail senden, Tarif buchen, Webhook aufrufen, Protokolleintrag. <b>Am Gateway ändert eine Automation nichts</b> – Übertragen bleibt ein Schritt mit Vorschau und Bestätigung (Reiter „Tarife“ bzw. „Übertragen“).</p>
@@ -527,7 +533,16 @@ async function excelHoch(){const f=$("xls").files[0];if(f){await api("/api/excel
 async function planLaden(still){try{PLAN=await api("/api/plan")}catch(e){$("log_p").innerHTML='<span class="fehler">✖ '+esc(e.message)+'</span>';return}
  editor(PLAN.roh);zgKarte();const o=PLAN.sparten.map(s=>`<option value="${esc(s.kz)}">${esc(s.name)} (${esc(s.kz)}, ${PLAN.schema=="standort"?"Parzellen "+parzText(s)+", VLAN-Block "+s.block:s.n+" Parzellen, Steckplatz "+s.slot})</option>`).join("");
  $("plan_sp").innerHTML='<option value="">Alle Sparten</option>'+o;$("ein_sp").innerHTML=o;$("ab_sp").innerHTML=o+'<option value="">Alle Sparten</option>';$("ue_sp").innerHTML=o;$("st_sp").innerHTML=o;ssid();planZeigen()}
-function ssid(){if(!PLAN)return;const kz=$("ein_sp").value,p=PLAN.praefix;$("ssid1").textContent=p+"-"+kz+"-Pächter";$("ssid2").textContent=p+"-"+kz+"-Gäste";$("ssid3").textContent=p+"-"+kz+"-Vorstand"}
+function ssid(){if(!PLAN)return;const kz=$("ein_sp").value,s=PLAN.sparten.find(x=>x.kz==kz);if(!s)return;const w=s.wlan||{};$("ssid1").textContent=w.paechter||"";$("ssid2").textContent=w.gaeste||"";$("ssid3").textContent=w.vorstand||"";
+ $("ssid_eigen").textContent=w.eigen?" (vom Gateway zugeordnet)":" (Namen nach Schema)";if($("wl_wahl"))$("wl_wahl").hidden=true;if($("log_wl"))$("log_wl").textContent=""}
+let WL=null;
+async function wlAbrufen(){const kz=$("ein_sp").value;const d=await api("/api/wlans?sparte="+encodeURIComponent(kz),undefined,"log_wl");WL=d;
+ const opt=(art,sel)=>'<option value="">– nach Schema –</option>'+d.wlans.map(w=>`<option value="${esc(w.name)}"${w.name==sel?" selected":""}>${esc(w.name)}${w.ppsk?" · PPSK, "+w.schluessel+" Schlüssel"+(w.eigene?" ("+w.eigene+" dieser Sparte)":""):""}${w.gast?" · Gast/Hotspot":""}${w.aktiv?"":" · aus"}</option>`).join("");
+ $("wl_p").innerHTML=opt("paechter",d.vorschlag.paechter);$("wl_g").innerHTML=opt("gaeste",d.vorschlag.gaeste);$("wl_v").innerHTML=opt("vorstand",d.vorschlag.vorstand);$("wl_wahl").hidden=false;
+ const geaendert=["paechter","gaeste","vorstand"].filter(a=>d.vorschlag[a]&&d.vorschlag[a]!=d.zuordnung[a]);
+ $("log_wl").textContent=d.log.join("\n")+(geaendert.length?"\nVorschlag vorausgewählt – bitte prüfen und „Zuordnung speichern“.":"")}
+async function wlSpeichern(){const kz=$("ein_sp").value;await api("/api/wlan-zuordnung",{sparte:kz,paechter:$("wl_p").value,gaeste:$("wl_g").value,vorstand:$("wl_v").value},"log_wl");const l=$("log_wl").textContent;PLAN=null;await planLaden(true);$("ein_sp").value=kz;ssid();$("log_wl").textContent=l}
+async function wlSchema(){if(!confirm("WLAN-Namen dieser Sparte wieder nach Schema verwenden?"))return;const kz=$("ein_sp").value;await api("/api/wlan-zuordnung",{sparte:kz},"log_wl");const l=$("log_wl").textContent;PLAN=null;await planLaden(true);$("ein_sp").value=kz;ssid();$("log_wl").textContent=l}
 function planZeigen(){if(!PLAN)return;const f=$("plan_sp").value,g=PLAN.gateway_netz;const z=[{bez:"Gateway (Hauptverteiler)",vlan:1,netz:g.netz,maske:"255.255.255.0",router:g.router,geraete:"Technik",zugang:"untagged",t:"kopf"}];
  PLAN.sparten.filter(s=>!f||s.kz==f).forEach(s=>{z.push({bez:(PLAN.schema=="standort"?"VLAN-Block "+s.block+": "+s.name+" ("+s.kz+", ID "+s.sid+", Parzellen "+parzText(s)+")":"Sparte "+s.slot+": "+s.name+" ("+s.kz+", ID "+s.sid+", "+s.n+" Parzellen)"),t:"kopf"});
  PLAN.netze.filter(n=>n.sparte==s.kz).forEach(n=>z.push({bez:n.art=="parzelle"?n.name+"  (Parzelle "+n.parzelle+")":n.name,vlan:n.vlan,netz:n.netz,maske:n.maske,router:n.router,geraete:n.dhcp_start+" – "+n.dhcp_ende,zugang:(n.ssid?n.ssid+" · ":"")+n.zugang,t:n.art=="parzelle"?"":"dienst"}))});
@@ -1116,11 +1131,18 @@ async function umAusfuehren(eins){const w=[...document.querySelectorAll(".um_w:c
  await api("/api/umzug",{ausfuehren:true,netze:w,nur_eins:eins},"log_um");$("um_los").disabled=$("um_eins").disabled=true;$("um_tab").innerHTML=""}
 async function umZurueck(){if(!confirm("Letzten Umzug rückgängig machen? Die Netze bekommen VLAN, Subnetz und DHCP-Bereich von vorher zurück."))return;await api("/api/umzug-rueckgaengig",{},"log_um")}
 
-let UL=null;
+let UL=null,ULNEU="";
+function ulOrdnerWahl(){const neu=$("ul_ordner").value=="__neu";$("ul_ordner_neu").hidden=!neu;if(neu)$("ul_ordner_neu").focus()}
+function ulZielordner(){if($("ul_ordner").value!="__neu")return $("ul_ordner").value||"Allgemein";const n=$("ul_ordner_neu").value.trim()||"Allgemein";ULNEU=n;return n}
+function ulOrdnerListe(){const d=UL;if(!d||!$("ul_ordner_tab"))return;const darf=ICH.admin||ICH.bereiche.unterlagen=="schreiben";
+ $("ul_ordner_tab").innerHTML="<table><tr><th>Ordner</th><th>Dateien</th><th></th></tr>"+d.ordner.map(o=>`<tr><td><a href="#" data-o="${esc(o)}" onclick="$('ul_f_ordner').value=this.dataset.o;ulZeigen();return false">${esc(o)}</a></td><td>${d.anzahl[o]||0}</td><td>${darf&&!d.standard.includes(o)&&!(d.anzahl[o])?`<button class="k" data-o="${esc(o)}" onclick="ulOrdnerWeg(this.dataset.o)">Entfernen</button>`:""}</td></tr>`).join("")+"</table>"}
+async function ulOrdnerNeu(){const n=$("ul_neuer_ordner").value.trim();if(!n)return;UL=await api("/api/unterlage-ordner",{neu:n},"log_ulo");$("ul_neuer_ordner").value="";ULNEU=n;await ulLaden();$("log_ulo").textContent="✔ Ordner „"+n+"“ angelegt – beim Hochladen auswählbar."}
+async function ulOrdnerWeg(n){if(!confirm("Leeren Ordner „"+n+"“ entfernen?"))return;UL=await api("/api/unterlage-ordner",{loeschen:n},"log_ulo");ulLaden()}
 async function ulLaden(){const d=await api("/api/unterlagen",undefined,"log_ul");UL=d;
  const sp=(d.sparten_erlaubt||[...new Set((GP?GP.zeilen.map(z=>z.kz):[]).concat(PLAN?PLAN.sparten.map(s=>s.kz):[]))].sort());
  $("ul_sparte").innerHTML=(d.sparten_erlaubt?"":'<option value="">Allgemein (alle Sparten)</option>')+sp.map(k=>`<option value="${esc(k)}">${esc(k)}</option>`).join("");
- $("ul_ordnerliste").innerHTML=d.ordner.map(o=>`<option value="${esc(o)}">`).join("");
+ const uo=$("ul_ordner").value;$("ul_ordner").innerHTML=d.ordner.map(o=>`<option value="${esc(o)}">${esc(o)}${d.anzahl&&d.anzahl[o]?" ("+d.anzahl[o]+")":""}</option>`).join("")+'<option value="__neu">+ Neuer Ordner …</option>';
+ $("ul_ordner").value=ULNEU&&d.ordner.includes(ULNEU)?ULNEU:(d.ordner.includes(uo)&&uo!="__neu"?uo:"Allgemein");$("ul_ordner_neu").value="";ULNEU="";ulOrdnerWahl();ulOrdnerListe();
  const fo=$("ul_f_ordner").value,fs=$("ul_f_sparte").value;
  $("ul_f_ordner").innerHTML='<option value="">alle Ordner</option>'+d.ordner.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join("");$("ul_f_ordner").value=fo;
  const ds=[...new Set(d.dateien.map(x=>x.sparte||""))].sort();$("ul_f_sparte").innerHTML='<option value="*">alle</option>'+ds.map(k=>`<option value="${esc(k)}">${k?esc(k):"Allgemein"}</option>`).join("");if([...$("ul_f_sparte").options].some(o=>o.value==fs))$("ul_f_sparte").value=fs;
@@ -1130,12 +1152,12 @@ function ulZeigen(){const d=UL;if(!d)return;const q=$("ul_such").value.trim().to
  const L=d.dateien.filter(x=>(!q||(x.name+" "+(x.beschreibung||"")).toLowerCase().includes(q))&&(!fo||x.ordner==fo)&&(fs=="*"||!fs&&fs!==""||(x.sparte||"")==fs));
  const darf=ICH.admin||ICH.bereiche.unterlagen=="schreiben";
  $("ul_tab").innerHTML=L.length?"<table><tr><th>Name</th><th>Ordner</th><th>Sparte</th><th>Größe</th><th>hochgeladen</th><th>Beschreibung</th><th></th></tr>"+L.map(x=>`<tr><td><b>${esc(x.name)}</b></td>
-  <td>${darf&&x.schreiben?`<input class="ul_in" data-id="${x.id}" data-f="ordner" value="${esc(x.ordner)}" list="ul_ordnerliste" style="min-width:120px">`:esc(x.ordner)}</td><td>${x.sparte?esc(x.sparte):"Allgemein"}</td><td>${groesse(x.groesse)}</td>
+  <td>${darf&&x.schreiben?`<select class="ul_in" data-id="${x.id}" data-f="ordner" style="min-width:140px">${d.ordner.map(o=>`<option value="${esc(o)}"${o==x.ordner?" selected":""}>${esc(o)}</option>`).join("")}</select>`:esc(x.ordner)}</td><td>${x.sparte?esc(x.sparte):"Allgemein"}</td><td>${groesse(x.groesse)}</td>
   <td>${esc(x.zeit)}<br><small>${esc(x.von)}</small></td><td>${darf&&x.schreiben?`<input class="ul_in" data-id="${x.id}" data-f="beschreibung" value="${esc(x.beschreibung||"")}" style="min-width:200px">`:esc(x.beschreibung||"")}</td>
   <td style="white-space:nowrap">${x.ansehen?`<button class="k" onclick="ulDatei('${x.id}',true)">Ansehen</button> `:""}<button class="k" onclick="ulDatei('${x.id}',false)">Herunterladen</button>${darf&&x.schreiben?` <button class="k" onclick="ulLoeschen('${x.id}')">Löschen</button>`:""}</td></tr>`).join("")+"</table>":'<p class="hint" style="padding:12px">Keine Unterlagen'+(q||fo?" für diesen Filter":"")+".</p>";
  document.querySelectorAll(".ul_in").forEach(e=>e.onchange=async()=>{UL=await api("/api/unterlage-aendern",{id:e.dataset.id,[e.dataset.f]:e.value},"log_ul");ulZeigen()})}
 async function ulHoch(files){const max=UL?UL.max_datei_mb:15;for(const f of files){if(f.size>max*1e6){$("log_ulh").innerHTML='<span class="fehler">✖ '+esc(f.name)+": größer als "+max+" MB</span>";continue}
-  const p=new URLSearchParams({name:f.name,ordner:$("ul_ordner").value||"Allgemein",sparte:$("ul_sparte").value||"",beschreibung:$("ul_beschr").value||""});
+  const p=new URLSearchParams({name:f.name,ordner:ulZielordner(),sparte:$("ul_sparte").value||"",beschreibung:$("ul_beschr").value||""});
   try{UL=await api("/api/unterlage-hochladen?"+p.toString(),f,"log_ulh")}catch(e){}}
  $("ul_datei").value="";$("ul_beschr").value="";if(UL)ulLaden()}
 async function ulDatei(id,ansehen){const x=UL.dateien.find(y=>y.id==id);const w=ansehen?window.open("","_blank"):null;

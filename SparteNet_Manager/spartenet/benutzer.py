@@ -57,19 +57,19 @@ _LESEN = {
     "/api/system": "auslesen", "/api/daten-liste": "auslesen", "/api/daten-pruefen": "auslesen",
     "/api/tarif-vergleich": "tarife", "/api/tarif-erkennen": "buchungen", "/api/kalkulation": "kalkulation", "/api/gwplan": "netzplanung", "/api/gwplan-vlan": "netzplanung", "/api/zuteilung": "netzplanung", "/api/zuteilung-parzellen": "netzplanung",
     "/api/karten-vorschau": "karten", "/api/karten": "karten", "/api/log": "verbindung",
-    "/api/unterlagen": "unterlagen", "/api/unterlage-datei": "unterlagen", "/api/voucher-liste": "voucher", "/api/voucher-druck": "voucher",
+    "/api/wlans": "wlan_pw", "/api/unterlagen": "unterlagen", "/api/unterlage-datei": "unterlagen", "/api/voucher-liste": "voucher", "/api/voucher-druck": "voucher",
     "/api/automation": "automationen",
 }
 _GET_LESEN_SONST_SCHREIBEN = {"/api/voucher-vorlagen": "voucher", "/api/tarife": "tarife", "/api/buchungen": "buchungen", "/api/design": "karten", "/api/fern": "verbindung"}
 _VORSCHAU = {"/api/netze": "netze", "/api/uebertragen": "wlan_pw", "/api/ppsk-hochladen": "wlan_pw", "/api/tarif-uebertragen": "tarife", "/api/voucher": "voucher", "/api/voucher-loeschen": "voucher", "/api/zuteilung-gateway": "netze", "/api/umzug": "netze"}
 _SCHREIBEN = {
     "/api/excel": "planung", "/api/schreibtest": "netze", "/api/umzug-rueckgaengig": "netze",
-    "/api/ppsk-speichern": "wlan_pw", "/api/rueckgaengig": "wlan_pw", "/api/passwort": "wlan_pw",
+    "/api/ppsk-speichern": "wlan_pw", "/api/rueckgaengig": "wlan_pw", "/api/wlan-zuordnung": "wlan_pw", "/api/passwort": "wlan_pw",
     "/api/tarif-rueckgaengig": "tarife", "/api/tarif-zuordnung": "buchungen",
     "/api/kalk-annahmen": "kalkulation", "/api/kalk-sparte": "kalkulation", "/api/kalk-import": "kalkulation",
     "/api/gwplan-vlan-uebernehmen": "planung", "/api/gwplan-sparte": "netzplanung", "/api/gwplan-annahmen": "netzplanung", "/api/gwplan-zuruecksetzen": "netzplanung", "/api/gwplan-import": "netzplanung", "/api/zuteilung-einstellen": "netzplanung", "/api/zuteilung-setzen": "netzplanung", "/api/zuteilung-verdichten": "netzplanung",
     "/api/logo": "karten", "/api/logo-loeschen": "karten",
-    "/api/unterlage-hochladen": "unterlagen", "/api/unterlage-aendern": "unterlagen", "/api/unterlage-loeschen": "unterlagen",
+    "/api/unterlage-hochladen": "unterlagen", "/api/unterlage-aendern": "unterlagen", "/api/unterlage-loeschen": "unterlagen", "/api/unterlage-ordner": "unterlagen",
     "/api/automation-speichern": "automationen", "/api/automation-loeschen": "automationen", "/api/automation-probe": "automationen",
     "/api/konsolen": "verbindung", "/api/log-loeschen": "verbindung", "/api/tailscale": "verbindung", "/api/diagnose": "verbindung",
 }
@@ -136,7 +136,7 @@ def konto_rechte(d, name):
 
 # ---- Rechte je Sparte: Konten mit Sparten-Liste sehen und ändern nur diese Sparten ------------------
 # gateway- oder spartenübergreifende Änderungen bleiben Konten ohne Beschränkung vorbehalten
-SPARTE_PFLICHT = {"/api/ppsk", "/api/ppsk-speichern", "/api/netze", "/api/uebertragen", "/api/rueckgaengig", "/api/vergleich", "/api/abgleich",
+SPARTE_PFLICHT = {"/api/ppsk", "/api/ppsk-speichern", "/api/wlans", "/api/wlan-zuordnung", "/api/netze", "/api/uebertragen", "/api/rueckgaengig", "/api/vergleich", "/api/abgleich",
                   "/api/ppsk-hochladen", "/api/karten", "/api/buchungen", "/api/parzelle", "/api/kalk-sparte"}
 NUR_OHNE_BESCHRAENKUNG = {"/api/excel", "/api/tarif-zuordnung", "/api/tarif-uebertragen", "/api/tarif-rueckgaengig", "/api/kalk-annahmen",
                           "/api/kalk-import", "/api/gwplan-annahmen", "/api/gwplan-zuruecksetzen", "/api/gwplan-import", "/api/gwplan-vlan-uebernehmen",
