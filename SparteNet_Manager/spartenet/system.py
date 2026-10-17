@@ -372,7 +372,7 @@ def akt_diagnose(d, anonym=True):
             "name": os.path.basename(datei), "inhalt": json.dumps(paket, ensure_ascii=False, indent=1)}
 
 
-ANSICHT_STANDARD = {"breite": 1200, "zoom": 0, "tabh": 520, "spalten": False, "kd": 430, "dl": 270}
+ANSICHT_STANDARD = {"breite": 1200, "zoom": 0, "tabh": 520, "spalten": False, "kd": 430, "dl": 270, "reiter": False}
 
 
 def ansicht_pruefen(roh):
@@ -387,6 +387,7 @@ def ansicht_pruefen(roh):
             continue
         a[k] = 0 if (null_erlaubt and v == 0) else round(min(hi, max(lo, v)), 2)
     a["spalten"] = bool(roh.get("spalten", a["spalten"]))
+    a["reiter"] = bool(roh.get("reiter", a["reiter"]))     # True: alle Reiter oben zeigen (sonst Menü ☰ und die Reiter des Bereichs)
     return a
 
 

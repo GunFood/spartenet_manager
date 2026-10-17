@@ -218,6 +218,44 @@ class AnmeldungSicherheit(unittest.TestCase):
         a.req("/api/sicherheit-einstellungen", {"2fa_merken_stunden": 0})
 
 
+def _png(farbe=0):
+    import struct, zlib
+    def chunk(t, x):
+        return struct.pack(">I", len(x)) + t + x + struct.pack(">I", zlib.crc32(t + x) & 0xffffffff)
+    roh = b"".join(b"\x00" + bytes([farbe, 120, 40]) * 4 for _ in range(4))
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 4, 4, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(roh)) + chunk(b"IEND", b"")
+
+
+class Logos(unittest.TestCase):
+    def test_logo_ablegen_und_auswaehlen(self):
+        a = admin()
+        code, _, x = a.roh("/api/logo?name=Vereinslogo.png", _png(10), {"Content-Type": "application/octet-stream"})
+        x = json.loads(x)
+        self.assertEqual(code, 200, x)
+        self.assertTrue(x["karte"])                                       # auch unter Unterlagen abgelegt
+        _, u = a.req("/api/unterlagen")
+        self.assertIn("Logos", u["ordner"])
+        self.assertTrue(any(f["ordner"] == "Logos" and f["name"] == "Vereinslogo.png" for f in u["dateien"]))
+        code, _, _ = a.roh("/api/unterlage-hochladen?name=Zweitlogo.png&ordner=Logos", _png(200), {"Content-Type": "application/octet-stream"})
+        self.assertEqual(code, 200)
+        _, l = a.req("/api/logos")
+        zweit = next(x for x in l["logos"] if x["name"] == "Zweitlogo.png")
+        code, kopf, bild = a.roh("/api/logo-bild?id=" + zweit["id"])
+        self.assertTrue(bild.startswith(b"\x89PNG"))
+        code, x = a.req("/api/logo-waehlen", {"id": zweit["id"]})
+        self.assertEqual(code, 200, x)
+        self.assertTrue(x["logo_uri"].startswith("data:image/png"))
+        code, x = a.req("/api/email-layout", {"logo_unterlage": zweit["id"]})
+        self.assertEqual((code, x["layout"]["logo_unterlage"]), (200, zweit["id"]), x)
+        _, v = a.req("/api/email-vorschau", {"html": "<p>Hallo</p>"})
+        self.assertIn("data:image/png;base64", v["html"])
+        code, _, pdf = a.roh("/api/unterlage-hochladen?name=Plan.pdf&ordner=Pl%C3%A4ne", b"%PDF-1.4 test", {"Content-Type": "application/octet-stream"})
+        _, u = a.req("/api/unterlagen")
+        pid = next(f["id"] for f in u["dateien"] if f["name"] == "Plan.pdf")
+        self.assertEqual(a.req("/api/logo-waehlen", {"id": pid})[0], 400)    # kein Bild
+        a.req("/api/email-layout", {"logo_unterlage": ""})
+
+
 class Unterlagen(unittest.TestCase):
     def test_html_als_pdf_abgelehnt_und_pdf_als_download(self):
         a = admin()

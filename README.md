@@ -1,4 +1,4 @@
-SparteNet Manager 5.1 (Cloud)
+SparteNet Manager 5.2 (Cloud)
 ===============================
 
 Funktioniert komplett über die UniFi-Cloud (api.ui.com). Kein lokaler Zugriff, kein VPN.
@@ -100,6 +100,18 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
     POST /api/v1/buchung   {"sparte":"BW","parzelle":12,"tarif":"Basic"}   ("" = Buchung entfernen)
   Höchstens 120 Anfragen je Minute und Schlüssel (SPARTENET_API_PRO_MINUTE). Zahlungsanbieter über n8n/Zapier/Make
   anbinden. Von außen nur über HTTPS (Reverse-Proxy, dann SPARTENET_PROXY=1).
+
+### MENÜ (☰) – neu in 5.2
+  Knopf ☰ oben links (oder Strg+K): alle Funktionen nach Bereichen geordnet – Übersicht, Einrichtung, WLAN & Zugang,
+  Tarife & Buchungen, Pächter & Verein, Dokumente & Automatik, Daten & Auswertung, System & Konto. Unter jedem Reiter die
+  einzelnen Karten (z. B. Tarife → "Laufzeiten und Zugang", Benutzer → "Anmeldung und Sicherheit") – ein Klick springt direkt
+  dorthin. Suchfeld mit Stichwörtern (z. B. "Logo", "SMTP", "2FA"). Oben stehen nur noch die Reiter des aktuellen Bereichs;
+  "Alle Reiter oben anzeigen" (im Menü oder unter "Ansicht") holt die alte Reiterleiste zurück. Nur erlaubte Bereiche erscheinen.
+
+### LOGOS IN DEN UNTERLAGEN – neu in 5.2
+  Unterlagen haben den Standard-Ordner "Logos". Ein unter "Kartendesign" hochgeladenes Logo (PNG, JPG, GIF, WEBP) wird dort
+  zusätzlich abgelegt. "Kartendesign → Logo → Aus Unterlagen wählen …" zeigt alle Bilder der Unterlagen (bis 2 MB) als Vorschau.
+  Im E-Mail-Layout kann ein eigenes Logo aus den Unterlagen gewählt werden (sonst das Logo der Zugangskarten).
 
 ### TARIFE MIT LAUFZEIT (Reiter "Tarife") – neu in 5.1
   Jeder Tarif kann eine Laufzeit haben (Stunden, Tage, Wochen, Monate; 0 = unbegrenzt), z. B. "Tag" = 1 Tag, "Woche" = 7 Tage.

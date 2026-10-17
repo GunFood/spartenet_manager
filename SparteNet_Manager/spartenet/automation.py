@@ -52,7 +52,7 @@ PLATZHALTER = {
     "{rechnung}": "Rechnungsnummer", "{faellig}": "Fälligkeit der Rechnung",
 }
 AKTION_ERWEITERUNG = {}   # Aktionen späterer Module: f(d, daten, aktion, werte, probe, regelname) → Text fürs Protokoll
-LAYOUT_STANDARD = {"aktiv": True, "logo": True, "farbe_kopf": "#1d2f3e", "farbe_kopf_text": "#ffffff", "farbe_akzent": "#3a9a1f",
+LAYOUT_STANDARD = {"aktiv": True, "logo": True, "logo_unterlage": "", "farbe_kopf": "#1d2f3e", "farbe_kopf_text": "#ffffff", "farbe_akzent": "#3a9a1f",
                    "farbe_hinter": "#f5f7f4", "farbe_text": "#1d2f3e", "schrift": "Arial, Helvetica, sans-serif", "breite": 600,
                    "kopf": "SparteNet.de", "fuss": "SparteNet.de · WLAN für Kleingärten\nDiese E-Mail wurde automatisch versendet."}
 _HTML_ERLAUBT = {"p": (), "br": (), "b": (), "strong": (), "i": (), "em": (), "u": (), "h2": (), "h3": (), "ul": (), "ol": (), "li": (),
@@ -234,7 +234,14 @@ def email_layout(d):
 
 
 def _logo_teil(d):
-    """(Bytes, Untertyp) des Kartenlogos für die E-Mail oder None"""
+    """(Bytes, Untertyp) des E-Mail-Logos: gewählte Unterlage, sonst das Logo der Zugangskarten – oder None"""
+    lu = email_layout(d).get("logo_unterlage")
+    if lu:
+        try:
+            roh, typ = logo_bild(d, lu)
+            return roh, typ.split("/", 1)[1]
+        except Fehler:
+            pass                      # Unterlage gelöscht → Kartenlogo
     uri = logo_daten_uri(d.get("design") or {})
     m = re.match(r"data:image/(png|jpeg|gif|webp);base64,(.+)", uri or "")
     if not m:
@@ -619,11 +626,13 @@ def akt_email_layout(d, b=None):
         for k in LAYOUT_STANDARD:
             if k in b:
                 roh[k] = b[k]
+        if roh.get("logo_unterlage"):
+            logo_bild(d, roh["logo_unterlage"])          # Fehler, wenn es keine passende Bild-Unterlage ist
         d["email_layout"] = roh
         d["email_layout"] = email_layout(d)
         speichere(d)
         journal("E-Mail-Layout gespeichert")
-    return {"layout": email_layout(d), "standard": LAYOUT_STANDARD, "logo": bool(_logo_teil(d)), "vorlagen": email_vorlagen(d),
+    return {"layout": email_layout(d), "standard": LAYOUT_STANDARD, "logo": bool(_logo_teil(d)), "vorlagen": email_vorlagen(d), "logos": logo_unterlagen(d),
             "log": ["✔ E-Mail-Layout gespeichert."] if b is not None else []}
 
 
@@ -635,17 +644,19 @@ def akt_email_vorschau(d, b):
     werte["passwort"] = werte.get("passwort") or "SN1234567890"
     werte["vorname"], werte["nachname"] = werte.get("vorname") or "Max", werte.get("nachname") or "Mustermann"
     inhalt = html_bereinigen(b.get("html") or "") or "<p>Beispieltext</p>"
-    logo = _logo_teil(d)
-    src = f"data:image/{logo[1]};base64,{base64.b64encode(logo[0]).decode()}" if logo else None
+    def _src():
+        logo = _logo_teil(d)
+        return f"data:image/{logo[1]};base64,{base64.b64encode(logo[0]).decode()}" if logo else None
     if b.get("layout"):
         alt = d.get("email_layout")
         d["email_layout"] = {**(alt or {}), **{k: v for k, v in b["layout"].items() if k in LAYOUT_STANDARD}}
         try:
+            src = _src()
             h = email_html(d, _ersetzen(inhalt, werte, html=True), _ersetzen(b.get("betreff", ""), werte), src)
         finally:
             d["email_layout"] = alt
     else:
-        h = email_html(d, _ersetzen(inhalt, werte, html=True), _ersetzen(b.get("betreff", ""), werte), src)
+        h = email_html(d, _ersetzen(inhalt, werte, html=True), _ersetzen(b.get("betreff", ""), werte), _src())
     return {"html": h, "betreff": _ersetzen(b.get("betreff", ""), werte), "log": []}
 
 

@@ -410,10 +410,21 @@ class Handler(BaseHTTPRequestHandler):
                 d["design"] = design_pruefen({**b.get("design", {}), "logo": d["design"]["logo"]}); speichere(d)
                 return self._send(200, {"log": ["✔ Kartendesign gespeichert – wird ab jetzt für alle Zugangskarten verwendet."]})
             if pfad == "/api/logo":
-                d["design"]["logo"] = logo_speichern(roh); speichere(d)
-                return self._send(200, {"log": [f"✔ Logo übernommen ({len(roh) // 1024} KB)."], "logo_uri": logo_daten_uri(d["design"])})
+                d["design"]["logo"] = logo_speichern(roh)
+                log = [f"✔ Logo übernommen ({len(roh) // 1024} KB)."]
+                ablage = ""
+                if q.get("ablegen", ["1"])[0] != "0" and (rechte["art"] == "admin" or STUFE_RANG.get(rechte["bereiche"].get("unterlagen", "kein"), 0) >= 2):
+                    ablage = logo_ablegen(d, roh, q.get("name", ["Logo"])[0], ich)
+                    if ablage:
+                        log.append(f"✔ Auch unter Unterlagen → {LOGO_ORDNER} abgelegt (dort später wieder auswählbar).")
+                d["logo_quelle"] = {**(d.get("logo_quelle") if isinstance(d.get("logo_quelle"), dict) else {}), "karte": ablage}
+                speichere(d)
+                return self._send(200, {"log": log, "logo_uri": logo_daten_uri(d["design"]), "karte": ablage})
             if pfad == "/api/logo-loeschen":
-                logo_entfernen(); d["design"]["logo"] = ""; speichere(d)
+                logo_entfernen(); d["design"]["logo"] = ""
+                if isinstance(d.get("logo_quelle"), dict):
+                    d["logo_quelle"]["karte"] = ""
+                speichere(d)
                 return self._send(200, {"log": ["✔ Logo entfernt."]})
             routen = {
                 "/api/test": lambda: akt_test(d),
@@ -535,6 +546,9 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/wochenbericht": lambda: akt_wochenbericht(d, b, ich),
                 "/api/portal-einstellungen": lambda: akt_portal_einstellungen(d, b, ich),
                 "/api/app-uebersicht": lambda: akt_app_uebersicht(d, ich, rechte),
+                "/api/logos": lambda: akt_logos(d, sp_erl),
+                "/api/logo-bild": lambda: akt_logo_bild(d, q, sp_erl),
+                "/api/logo-waehlen": lambda: akt_logo_waehlen(d, b or {}, ich, sp_erl),
                 "/api/laufzeiten": lambda: akt_laufzeiten(d, sp_erl),
                 "/api/laufzeit-verlaengern": lambda: akt_laufzeit_verlaengern(d, b or {}, ich, sp_erl),
                 "/api/laufzeit-starten": lambda: akt_laufzeit_starten(d, b or {}, ich, sp_erl),

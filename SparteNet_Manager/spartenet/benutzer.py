@@ -66,7 +66,7 @@ _LESEN = {
     "/api/tickets": "tickets", "/api/ticket": "tickets",
     "/api/rechnungen": "rechnungen", "/api/rechnung-pdf": "rechnungen",
     "/api/vertraege": "mitglieder", "/api/rundschreiben": "mitglieder", "/api/rundschreiben-empfaenger": "mitglieder", "/api/mitglied-auskunft": "mitglieder",
-    "/api/ueberwachung": "auslesen", "/api/laufzeiten": "buchungen",
+    "/api/ueberwachung": "auslesen", "/api/laufzeiten": "buchungen", "/api/logos": "karten", "/api/logo-bild": "karten",
 }
 _GET_LESEN_SONST_SCHREIBEN = {"/api/voucher-vorlagen": "voucher", "/api/tarife": "tarife", "/api/buchungen": "buchungen", "/api/design": "karten", "/api/fern": "verbindung"}
 _VORSCHAU = {"/api/zugang": "wlan_pw", "/api/netze": "netze", "/api/uebertragen": "wlan_pw", "/api/ppsk-hochladen": "wlan_pw", "/api/tarif-uebertragen": "tarife", "/api/voucher": "voucher", "/api/voucher-loeschen": "voucher", "/api/zuteilung-gateway": "netze", "/api/umzug": "netze"}
@@ -77,7 +77,7 @@ _SCHREIBEN = {
     "/api/tarif-rueckgaengig": "tarife", "/api/tarif-zuordnung": "buchungen",
     "/api/kalk-annahmen": "kalkulation", "/api/kalk-sparte": "kalkulation", "/api/kalk-import": "kalkulation",
     "/api/gwplan-vlan-uebernehmen": "planung", "/api/gwplan-sparte": "netzplanung", "/api/gwplan-annahmen": "netzplanung", "/api/gwplan-zuruecksetzen": "netzplanung", "/api/gwplan-import": "netzplanung", "/api/zuteilung-einstellen": "netzplanung", "/api/zuteilung-setzen": "netzplanung", "/api/zuteilung-verdichten": "netzplanung",
-    "/api/logo": "karten", "/api/logo-loeschen": "karten",
+    "/api/logo": "karten", "/api/logo-loeschen": "karten", "/api/logo-waehlen": "karten",
     "/api/unterlage-hochladen": "unterlagen", "/api/unterlage-aendern": "unterlagen", "/api/unterlage-loeschen": "unterlagen", "/api/unterlage-ordner": "unterlagen",
     "/api/email-vorlage-speichern": "automationen", "/api/email-vorlage-loeschen": "automationen",
     "/api/mitglied-speichern": "mitglieder", "/api/mitglied-loeschen": "mitglieder", "/api/mitglieder-import": "mitglieder",
@@ -155,7 +155,7 @@ SPARTE_PFLICHT = {"/api/ppsk", "/api/ppsk-speichern", "/api/wlans", "/api/wlan-z
                   "/api/ppsk-hochladen", "/api/karten", "/api/buchungen", "/api/parzelle", "/api/kalk-sparte"}
 NUR_OHNE_BESCHRAENKUNG = {"/api/excel", "/api/tarif-zuordnung", "/api/tarif-uebertragen", "/api/tarif-rueckgaengig", "/api/kalk-annahmen",
                           "/api/kalk-import", "/api/gwplan-annahmen", "/api/gwplan-zuruecksetzen", "/api/gwplan-import", "/api/gwplan-vlan-uebernehmen",
-                          "/api/logo", "/api/logo-loeschen", "/api/schreibtest", "/api/konsolen", "/api/log-loeschen", "/api/tailscale", "/api/diagnose",
+                          "/api/logo", "/api/logo-loeschen", "/api/logo-waehlen", "/api/schreibtest", "/api/konsolen", "/api/log-loeschen", "/api/tailscale", "/api/diagnose",
                           "/api/zuteilung-einstellen", "/api/zuteilung-gateway", "/api/zuteilung-setzen", "/api/zuteilung-verdichten", "/api/umzug", "/api/umzug-rueckgaengig",
                           "/api/email-vorlage-speichern", "/api/email-vorlage-loeschen", "/api/rechnungslauf", "/api/zahlungen-import", "/api/zahlungen-uebernehmen",
                           "/api/automation", "/api/automation-speichern", "/api/automation-loeschen", "/api/automation-probe"}

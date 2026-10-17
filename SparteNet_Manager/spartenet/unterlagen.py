@@ -19,7 +19,10 @@ UNTERLAGEN_TYPEN = {
 }
 _ANSEHEN = {"pdf": (b"%PDF",), "png": (b"\x89PNG",), "jpg": (b"\xff\xd8",), "jpeg": (b"\xff\xd8",), "gif": (b"GIF87a", b"GIF89a"), "webp": (b"RIFF",)}
 _ID_RE = re.compile(r"^[0-9a-f]{16}$")
-ORDNER_STANDARD = ["Allgemein", "Verträge", "Pläne", "Protokolle", "Rechnungen"]
+ORDNER_STANDARD = ["Allgemein", "Logos", "Verträge", "Pläne", "Protokolle", "Rechnungen"]
+LOGO_ORDNER = "Logos"
+LOGO_BILDTYPEN = ("png", "jpg", "jpeg", "gif", "webp")
+LOGO_MAX_BYTES = 2_000_000
 
 
 def _ordnername(n):
@@ -188,6 +191,77 @@ def akt_unterlage_loeschen(d, b, erlaubt):
     r = akt_unterlagen(d, erlaubt)
     r["log"] = [f"✔ „{x['name']}“ gelöscht."]
     return r
+
+
+# ---- Logos: unter Unterlagen ablegen und von dort für Zugangskarten und E-Mails auswählen -----------------------------
+def logo_unterlagen(d, erlaubt=None):
+    """alle Bilder aus den Unterlagen, die als Logo taugen (PNG/JPG/GIF/WEBP, höchstens 2 MB) – Ordner „Logos“ zuerst"""
+    aus = [{"id": k, "name": v.get("name"), "ordner": v.get("ordner"), "sparte": v.get("sparte", ""), "groesse": v.get("groesse", 0), "zeit": v.get("zeit", "")}
+           for k, v in unterlagen_daten(d)["dateien"].items()
+           if v.get("typ") in LOGO_BILDTYPEN and v.get("ansehen") and v.get("groesse", 0) <= LOGO_MAX_BYTES and _sichtbar(v, erlaubt)]
+    aus.sort(key=lambda x: (x["ordner"] != LOGO_ORDNER, (x["ordner"] or "").lower(), (x["name"] or "").lower()))
+    return aus
+
+
+def logo_bild(d, i, erlaubt=None):
+    """(Bytes, MIME-Typ) eines Logos aus den Unterlagen – nur echte Bilder bis 2 MB"""
+    i, x = _datei(d, i, erlaubt)
+    if x.get("typ") not in LOGO_BILDTYPEN or not x.get("ansehen") or x.get("groesse", 0) > LOGO_MAX_BYTES:
+        raise Fehler("Diese Unterlage ist kein Bild bis 2 MB (PNG, JPG, GIF oder WEBP).")
+    roh = ablage_lesen(f"Unterlage_{i}")
+    if not roh:
+        raise Fehler("Datei fehlt im Speicher.")
+    return roh, UNTERLAGEN_TYPEN[x["typ"]]
+
+
+def akt_logos(d, erlaubt=None):
+    q = d.get("logo_quelle") if isinstance(d.get("logo_quelle"), dict) else {}
+    return {"logos": logo_unterlagen(d, erlaubt), "karte": q.get("karte", ""), "ordner": LOGO_ORDNER, "log": []}
+
+
+def akt_logo_bild(d, q, erlaubt=None):
+    roh, typ = logo_bild(d, q.get("id", [""])[0], erlaubt)
+    return {"_datei": roh, "typ": typ, "name": "logo"}
+
+
+def akt_logo_waehlen(d, b, wer, erlaubt=None):
+    """Logo der Zugangskarten aus einer Unterlage übernehmen"""
+    roh, _ = logo_bild(d, b.get("id"), erlaubt)
+    i = str(b.get("id"))
+    d["design"]["logo"] = logo_speichern(roh)
+    q = d.get("logo_quelle") if isinstance(d.get("logo_quelle"), dict) else {}
+    q["karte"] = i
+    d["logo_quelle"] = q
+    speichere(d)
+    name = unterlagen_daten(d)["dateien"][i]["name"]
+    journal(f"Kartenlogo aus Unterlagen gewählt: {name} durch {wer}")
+    return {"log": [f"✔ Logo „{name}“ aus den Unterlagen übernommen – gilt für Zugangskarten und (wenn dort nichts anderes gewählt ist) für E-Mails."],
+            "logo_uri": logo_daten_uri(d["design"]), "karte": i}
+
+
+def logo_ablegen(d, roh, name, wer):
+    """hochgeladenes Logo zusätzlich unter Unterlagen → Logos ablegen (gleiche Datei nur einmal); gibt die ID oder "" zurück"""
+    sha = hashlib.sha256(roh).hexdigest()
+    for k, v in unterlagen_daten(d)["dateien"].items():
+        if v.get("sha256") == sha:
+            return k
+    if roh.startswith(b"\x89PNG"):
+        ext = "png"
+    elif roh.startswith(b"\xff\xd8"):
+        ext = "jpg"
+    elif roh[:6] in (b"GIF87a", b"GIF89a"):
+        ext = "gif"
+    elif roh[:4] == b"RIFF" and roh[8:12] == b"WEBP":
+        ext = "webp"
+    else:
+        return ""                      # SVG u. Ä. nicht in den Unterlagen (dort aus Sicherheitsgründen nicht erlaubt)
+    basis = _anzeigename(name or "Logo").rsplit(".", 1)[0] or "Logo"
+    try:
+        akt_unterlage_hochladen(d, {"name": [f"{basis}.{ext}"], "ordner": [LOGO_ORDNER], "beschreibung": ["Logo (über Kartendesign hochgeladen)"]}, roh, wer, None)
+    except Fehler as e:
+        LOG.warning("Logo nicht unter Unterlagen abgelegt: %s", e)
+        return ""
+    return next((k for k, v in unterlagen_daten(d)["dateien"].items() if v.get("sha256") == sha), "")
 
 
 __all__ = [_n for _n in dict(globals()) if not _n.startswith("__")]  # alle Namen an die folgenden Module weitergeben
