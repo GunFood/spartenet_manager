@@ -1,12 +1,12 @@
 """SparteNet Manager – Grundeinstellungen: Pfade, Umgebungsvariablen, Protokoll, Standardwerte, Kartendesign"""
-import base64, concurrent.futures, copy, csv, hashlib, hmac, io, ipaddress, json, shutil, socket, subprocess, os, re, secrets, ssl, sys, threading, time, urllib.error, urllib.parse, urllib.request, webbrowser, zipfile
+import base64, concurrent.futures, copy, csv, gzip, hashlib, hmac, io, ipaddress, json, shutil, socket, subprocess, os, re, secrets, ssl, sys, threading, time, urllib.error, urllib.parse, urllib.request, webbrowser, zipfile
 import xml.etree.ElementTree as ET
 import logging, logging.handlers, traceback
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from http.cookies import SimpleCookie, CookieError
 
 
-VERSION = "4.7"
+VERSION = "4.8"
 HIER = os.path.abspath(os.environ.get("SPARTENET_DATA_DIR") or os.path.dirname(os.path.abspath(sys.argv[0])))
 os.makedirs(HIER, exist_ok=True)
 DATEI = os.path.join(HIER, "SparteNet_Manager.json")
@@ -43,10 +43,47 @@ def log_einrichten(aktiv):
 
 def _maskiere(obj):
     if isinstance(obj, dict):
-        return {k: ("***" if k.lower() in ("password", "x_passphrase", "passphrase", "x_password", "cloud_key", "api_key") else _maskiere(v)) for k, v in obj.items()}
+        return {k: ("***" if k.lower() in ("password", "x_passphrase", "passphrase", "x_password", "cloud_key", "api_key",
+                                                         "passwort", "passwort2", "pin", "alt", "token", "geheim") else _maskiere(v)) for k, v in obj.items()}
     if isinstance(obj, list):
         return [_maskiere(x) for x in obj]
     return obj
+
+# ---- Grenzen für Anfragen und Uploads (S2) ---------------------------------------------------
+MAX_JSON_BYTES = 5_000_000          # JSON-Anfragen
+MAX_UPLOAD_BYTES = 25_000_000       # Excel, Logo, Unterlagen, Sicherungen (Unterlagen zusätzlich eigene Grenze)
+MAX_XLSX_ENTPACKT = 120_000_000     # Summe der entpackten Teile einer Excel-Datei
+KZ_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]{0,9}$")   # Kürzel: Dateinamen, Netz- und WLAN-Namen (S1)
+
+
+def kz_pruefen(kz, pre="SparteNet.de"):
+    kz = str(kz or "").strip()
+    if not KZ_RE.match(kz):
+        raise Fehler(f"Kürzel „{kz}“: 1–10 Zeichen, nur Buchstaben A–Z, Ziffern und Bindestrich (keine Umlaute, Leerzeichen oder Schrägstriche).")
+    for vorlage in ("{pre}-{kz}-Pächter", "{pre}-{kz}-Vorstand", "{pre}-{kz}-Gäste"):
+        if len(vorlage.format(pre=pre, kz=kz).encode("utf-8")) > 32:
+            raise Fehler(f"WLAN-Name „{vorlage.format(pre=pre, kz=kz)}“ ist länger als 32 Zeichen – Kürzel oder WLAN-Präfix kürzen.")
+    return kz
+
+
+def text_einzeilig(t, laenge=500):
+    """für Protokolle: keine Zeilenumbrüche/Steuerzeichen (S7)"""
+    return re.sub(r"[\x00-\x1f\x7f]+", " ", str(t))[:laenge]
+
+
+# ---- Ereignisse für Automationen (Empfänger trägt das Modul „automation“ ein) ------------------
+SCHREIB_SPERRE = threading.RLock()   # schreibende Anfragen nacheinander (Oberfläche, API, Automationen)
+EREIGNIS_EMPFAENGER = []
+
+
+def ereignis(typ, daten, d=None):
+    """meldet ein Ereignis (z. B. „buchung“) an die Automationen – Fehler dort brechen die eigentliche Aktion nie ab"""
+    for f in list(EREIGNIS_EMPFAENGER):
+        try:
+            f(typ, dict(daten), d)
+        except Exception:
+            LOG.error("Automation bei Ereignis %s fehlgeschlagen:\n%s", typ, traceback.format_exc())
+
 
 # ---- Namensschema -------------------------------------------------------------------------
 NETZ_PARZELLE = "{kz}-Paz.{p:03d}"

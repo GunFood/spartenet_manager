@@ -3,6 +3,11 @@ from .oberflaeche import *  # noqa: F401,F403 – alle Namen der vorherigen Modu
 
 
 # =============================================================== Webserver
+PROXY_VERTRAUEN = os.environ.get("SPARTENET_PROXY", "0").strip().lower() in ("1", "ja", "true", "yes")
+CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
+       "connect-src 'self'; frame-src 'self' blob: data:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'self'")
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -20,10 +25,27 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(503, {"fehler": str(e)})
             return None
 
+    def _quelle(self):
+        """Absenderadresse; hinter einem vertrauenswürdigen Reverse-Proxy (SPARTENET_PROXY=1) die vom Proxy gemeldete (S3)"""
+        ip = self.client_address[0]
+        if PROXY_VERTRAUEN:
+            xff = [x.strip() for x in (self.headers.get("X-Forwarded-For") or "").split(",") if x.strip()]
+            if xff:
+                return xff[-1][:64]
+            if self.headers.get("X-Real-IP"):
+                return self.headers.get("X-Real-IP").strip()[:64]
+        return ip
+
     def _send(self, code, daten, typ="application/json", extra=None):
         roh = daten if isinstance(daten, bytes) else json.dumps(daten, ensure_ascii=False).encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", typ + ("; charset=utf-8" if typ.startswith(("text/", "application/json", "application/javascript", "application/manifest")) else ""))
+        if len(roh) > 1400 and "gzip" in (self.headers.get("Accept-Encoding") or "") and typ.startswith(("text/", "application/json", "application/javascript")):
+            roh = gzip.compress(roh, 6)
+            self.send_header("Content-Encoding", "gzip")
+            self.send_header("Vary", "Accept-Encoding")
+        if typ.startswith("text/html"):
+            self.send_header("Content-Security-Policy", CSP)
         self.send_header("Content-Length", str(len(roh)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff"); self.send_header("Referrer-Policy", "no-referrer"); self.send_header("X-Frame-Options", "SAMEORIGIN")
@@ -93,6 +115,21 @@ class Handler(BaseHTTPRequestHandler):
             self._send(503, {"fehler": WARTUNG["text"] or "Wartungsmodus", "wartung": True}, extra={"Retry-After": "5"})
         return True
 
+    def _api_v1(self, methode, u):
+        """Schnittstelle für andere Programme: Anmeldung mit API-Schlüssel statt Sitzung (kein Cookie, kein X-Token)"""
+        roh = b""
+        if methode == "POST":
+            try:
+                n = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                return self._send(400, {"ok": False, "fehler": "Ungültige Anfrage."})
+            if n < 0 or n > API_MAX_BYTES:
+                return self._send(413, {"ok": False, "fehler": "Anfrage zu groß."})
+            roh = self.rfile.read(n)
+        code, antwort = api_anfrage(methode, u.path.rstrip("/"), urllib.parse.parse_qs(u.query), roh,
+                                    {"Authorization": self.headers.get("Authorization"), "X-API-Key": self.headers.get("X-API-Key")})
+        return self._send(code, antwort, extra={"WWW-Authenticate": "Bearer"} if code == 401 else None)
+
     def do_GET(self):
         u = urllib.parse.urlparse(self.path)
         if u.path in PWA_ICONS or u.path in ("/manifest.webmanifest", "/sw.js", "/offline.html"):
@@ -101,6 +138,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {"produkt": "SparteNet Manager", "version": VERSION, "wartung": WARTUNG["an"]})
         if self._wartung():
             return
+        if u.path.startswith("/api/v1/"):
+            return self._api_v1("GET", u)
         d = self._lade()
         if d is None:
             return
@@ -116,7 +155,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(401, {"fehler": "anmelden"})
         if self.headers.get("X-Token") != TOKEN:
             return self._send(403, {"fehler": "nicht erlaubt"})
-        self._antwort(u.path, urllib.parse.parse_qs(u.query), None, b"", wer)
+        self._antwort(u.path, urllib.parse.parse_qs(u.query), None, b"", wer, d)
 
     def _anmelden(self):
         try:
@@ -137,7 +176,14 @@ class Handler(BaseHTTPRequestHandler):
         geheim = b.get("passwort", b.get("pin"))
         name = str(b.get("benutzer") or "").strip().lower()
         try:
-            konto = benutzer_anmelden(d, name, geheim, self.client_address[0])
+            konto = benutzer_anmelden(d, name, geheim, self._quelle())
+            if zweifaktor_aktiv(d, konto):
+                if not str(b.get("code") or "").strip():
+                    return self._send(400, {"fehler": "Bitte den 6-stelligen Code aus der Authenticator-App eingeben (oder einen Notfall-Code).", "zweiter_faktor": True})
+                if not zweifaktor_pruefen(d, konto, b.get("code")):
+                    _konto_sperre(konto, False)
+                    LOG.warning("Falscher Zwei-Faktor-Code für „%s“", konto)
+                    return self._send(400, {"fehler": "Der Code stimmt nicht.", "zweiter_faktor": True})
             t = auth_sitzung_neu(b.get("geraet"), konto)
             cookie = f"sn_auth={t}"
             LOG.info("Anmeldung erfolgreich: %s", konto)
@@ -163,6 +209,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         if u.path == "/login":
             return self._anmelden()
+        if u.path.startswith("/api/v1/"):
+            return self._api_v1("POST", u)
         d = self._lade()
         if d is None:
             return
@@ -177,11 +225,21 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(401, {"fehler": "anmelden"})
         if self.headers.get("X-Token") != TOKEN:
             return self._send(403, {"fehler": "nicht erlaubt"})
-        roh = self.rfile.read(int(self.headers.get("Content-Length") or 0))
-        body = None if u.path in ("/api/excel", "/api/logo", "/api/kalk-import", "/api/gwplan-import") else json.loads(roh or b"{}")
-        self._antwort(u.path, {}, body, roh, wer)
+        roh_pfad = u.path in ROH_PFADE
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            return self._send(400, {"fehler": "Ungültige Anfrage."})
+        if n < 0 or n > (MAX_UPLOAD_BYTES if roh_pfad else MAX_JSON_BYTES):
+            return self._send(413, {"fehler": f"Anfrage zu groß (höchstens {(MAX_UPLOAD_BYTES if roh_pfad else MAX_JSON_BYTES) // 1_000_000} MB)."})
+        roh = self.rfile.read(n)
+        try:
+            body = None if roh_pfad else json.loads(roh or b"{}")
+        except (ValueError, UnicodeDecodeError):
+            return self._send(400, {"fehler": "Ungültige Anfrage (kein JSON)."})
+        self._antwort(u.path, urllib.parse.parse_qs(u.query), body, roh, wer, d)
 
-    def _antwort(self, pfad, q, b, roh, wer):
+    def _antwort(self, pfad, q, b, roh, wer, d_geladen=None):
         ich, rechte = wer
         if pfad in ("/api/ppsk-speichern", "/api/fern", "/api/benutzer-speichern", "/api/benutzer-ich"):
             LOG.info("Aktion %s von %s (Inhalt nicht protokolliert)", pfad, ich)
@@ -191,9 +249,21 @@ class Handler(BaseHTTPRequestHandler):
         if not erlaubt(rechte, noetig):
             LOG.warning("Keine Berechtigung: %s für %s (%s)", ich, pfad, "/".join(noetig))
             return self._send(403, {"fehler": fehlt_text(ich, rechte, noetig), "recht": "fehlt"})
+        if pfad not in ZWEIFAKTOR_FREI and zweifaktor_pflicht_offen(d_geladen or lade(), ich, rechte):
+            return self._send(403, {"fehler": "Für Administratoren ist die Zwei-Faktor-Anmeldung Pflicht – bitte zuerst unter „Benutzer → Mein Konto“ einrichten.", "recht": "fehlt", "zweiter_faktor_fehlt": True})
+        sp_erl = sparten_von(rechte)
+        if sp_erl is not None:
+            try:
+                sparte_pruefen(pfad, q, b, sp_erl, d_geladen or lade())
+            except Fehler as e:
+                LOG.warning("Keine Berechtigung (Sparte): %s für %s", ich, pfad)
+                return self._send(403, {"fehler": str(e), "recht": "fehlt"})
         ANFRAGE.benutzer = None if ich == ADMIN_NAME else ich
+        schreibend = noetig[0] == "admin" or (len(noetig) > 1 and noetig[1] == "schreiben")
+        if schreibend:
+            SCHREIB_SPERRE.acquire()
         try:
-            d = lade()
+            d = lade() if (schreibend or d_geladen is None) else d_geladen
             if self._fern() and not auth_sitzung_ok(self._auth_sitzung()) and (pfad in ("/api/fern", "/api/tailscale", "/api/beenden", "/api/log-loeschen", "/api/konsolen") or (pfad == "/api/einstellungen" and b is not None)):
                 raise Fehler("Diese Einstellung lässt sich nur direkt am PC ändern.")
             if pfad == "/api/einstellungen":
@@ -228,7 +298,7 @@ class Handler(BaseHTTPRequestHandler):
             if pfad == "/api/konsolen":
                 return self._send(200, {"konsolen": konsolen((b or {}).get("cloud_key") or d["cloud_key"])})
             if pfad == "/api/plan" and b is None:
-                return self._send(200, {"roh": d["plan"], **plan_berechnen(d["plan"])})
+                return self._send(200, antwort_filtern(pfad, {"roh": d["plan"], **plan_berechnen(d["plan"])}, sp_erl))
             if pfad == "/api/plan":
                 plan_berechnen(b); d["plan"] = b; speichere(d)
                 return self._send(200, {"log": ["✔ Plan gespeichert."]})
@@ -286,6 +356,11 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/gwplan-import": lambda: akt_gwplan_import(d, roh),
                 "/api/gwplan-vlan": lambda: akt_gwplan_vlan(d, q.get("standort", [""])[0], q.get("gw", [""])[0]),
                 "/api/gwplan-vlan-uebernehmen": lambda: akt_gwplan_vlan_uebernehmen(d, b),
+                "/api/zuteilung": lambda: akt_zuteilung(d),
+                "/api/zuteilung-einstellen": lambda: akt_zuteilung_einstellen(d, b or {}, ich),
+                "/api/zuteilung-gateway": lambda: akt_zuteilung_gateway(d, b or {}),
+                "/api/umzug": lambda: akt_umzug(d, b or {}),
+                "/api/umzug-rueckgaengig": lambda: akt_umzug_rueckgaengig(d),
                 "/api/buchungen": lambda: akt_buchungen(d, q.get("sparte", [""])[0]) if b is None else akt_buchungen_speichern(d, b.get("sparte", ""), b.get("aenderungen")),
                 "/api/fern": lambda: akt_fern(d) if b is None else akt_fern_speichern(d, b),
                 "/api/tailscale": lambda: akt_tailscale(bool(b.get("an"))),
@@ -296,6 +371,31 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/benutzer-speichern": lambda: akt_benutzer_speichern(d, b or {}, ich),
                 "/api/benutzer-loeschen": lambda: akt_benutzer_loeschen(d, b or {}, ich),
                 "/api/benutzer-ich": lambda: akt_benutzer_ich(d, ich, b),
+                "/api/unterlagen": lambda: akt_unterlagen(d, sp_erl),
+                "/api/unterlage-hochladen": lambda: akt_unterlage_hochladen(d, q, roh, ich, sp_erl),
+                "/api/unterlage-datei": lambda: akt_unterlage_datei(d, q, sp_erl),
+                "/api/unterlage-aendern": lambda: akt_unterlage_aendern(d, b or {}, sp_erl),
+                "/api/unterlage-loeschen": lambda: akt_unterlage_loeschen(d, b or {}, sp_erl),
+                "/api/sicherung": lambda: akt_sicherung(d),
+                "/api/sicherung-erstellen": lambda: akt_sicherung_erstellen(d, b, ich),
+                "/api/sicherung-datei": lambda: akt_sicherung_datei(d, q),
+                "/api/sicherung-jetzt": lambda: akt_sicherung_jetzt(d, ich),
+                "/api/sicherung-einstellungen": lambda: akt_sicherung_einstellungen(d, b or {}),
+                "/api/sicherung-einspielen": lambda: akt_sicherung_einspielen(d, roh, urllib.parse.unquote(self.headers.get("X-Sicherung-Passwort") or ""), ich),
+                "/api/2fa-start": lambda: akt_2fa_start(d, ich),
+                "/api/2fa-bestaetigen": lambda: akt_2fa_bestaetigen(d, ich, (b or {}).get("code")),
+                "/api/2fa-aus": lambda: akt_2fa_aus(d, ich, (b or {}).get("code")),
+                "/api/2fa-zuruecksetzen": lambda: akt_2fa_zuruecksetzen(d, (b or {}).get("name"), ich),
+                "/api/sicherheit-einstellungen": lambda: akt_sicherheit_einstellungen(d, b or {}, ich),
+                "/api/automation": lambda: akt_automation(d, mit_smtp=rechte["art"] == "admin"),
+                "/api/automation-speichern": lambda: akt_automation_speichern(d, b or {}, ich),
+                "/api/automation-loeschen": lambda: akt_automation_loeschen(d, b or {}, ich),
+                "/api/automation-probe": lambda: akt_automation_probe(d, b or {}),
+                "/api/smtp-speichern": lambda: akt_smtp_speichern(d, b or {}, ich),
+                "/api/smtp-test": lambda: akt_smtp_test(d, b or {}),
+                "/api/api-schluessel": lambda: akt_api(d),
+                "/api/api-schluessel-neu": lambda: akt_api_schluessel_neu(d, b or {}, ich),
+                "/api/api-schluessel-aendern": lambda: akt_api_schluessel_aendern(d, b or {}, ich),
                 "/api/update": lambda: akt_update(d),
                 "/api/update-pruefen": lambda: akt_update_pruefen(d),
                 "/api/update-installieren": lambda: akt_update_installieren(d, b, ich),
@@ -303,7 +403,14 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/update-einstellungen": lambda: akt_update_einstellungen(d, b or {}),
             }
             if pfad in routen:
-                return self._send(200, routen[pfad]())
+                antwort = routen[pfad]()
+                if isinstance(antwort, dict) and "_datei" in antwort:   # Dateiinhalt (Unterlagen, Sicherung): immer als Download, nie als Webseite
+                    name = antwort.get("name") or "Datei"
+                    ascii_name = re.sub(r"[^A-Za-z0-9._-]+", "_", name)[:100] or "Datei"
+                    return self._send(200, antwort["_datei"], antwort.get("typ") or "application/octet-stream", extra={
+                        "Content-Disposition": f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{urllib.parse.quote(name)}",
+                        "Content-Security-Policy": "default-src 'none'; sandbox"})
+                return self._send(200, antwort_filtern(pfad, antwort, sp_erl))
             if pfad == "/api/beenden":
                 self._send(200, {"log": ["Beendet."]})
                 threading.Thread(target=lambda: (time.sleep(0.5), os._exit(0)), daemon=True).start(); return
@@ -312,10 +419,16 @@ class Handler(BaseHTTPRequestHandler):
             LOG.warning("Meldung an Benutzer: %s", e)
             self._send(400, {"fehler": str(e)})
         except Exception as e:
-            LOG.error("Unerwarteter Fehler bei %s:\n%s", pfad, traceback.format_exc())
-            self._send(500, {"fehler": f"Unerwarteter Fehler: {type(e).__name__}: {e}" + (" – Details in der Protokolldatei." if lade()["log_aktiv"] else " – Protokoll einschalten (Verbindung) und erneut versuchen.")})
+            ref = secrets.token_hex(3)
+            LOG.error("Unerwarteter Fehler %s bei %s:\n%s", ref, pfad, traceback.format_exc())
+            self._send(500, {"fehler": f"Unerwarteter Fehler (Nr. {ref}, {type(e).__name__}) – Details im Protokoll unter dieser Nummer."})
         finally:
             ANFRAGE.benutzer = None
+            if schreibend:
+                SCHREIB_SPERRE.release()
+
+
+ROH_PFADE = {"/api/excel", "/api/logo", "/api/kalk-import", "/api/gwplan-import", "/api/unterlage-hochladen", "/api/sicherung-einspielen"}
 
 
 def main():
@@ -334,6 +447,8 @@ def main():
     n = update_sitzungen_uebernehmen()
     if n:
         print(f"{n} Anmeldung(en) über den Neustart übernommen.")
+    if os.environ.get("SPARTENET_SICHERUNG", "1") != "0":
+        sicherung_hintergrund()
     if os.environ.get("SPARTENET_UPDATE_PRUEFEN", "1") != "0":
         update_hintergrund()
     f = fern_daten(d)

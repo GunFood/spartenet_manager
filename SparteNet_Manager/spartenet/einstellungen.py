@@ -40,12 +40,7 @@ def speichere(d):
         if isinstance(d, Daten):
             d._stand = neu
         return
-    with open(DATEI, "w", encoding="utf-8") as f:
-        json.dump(d, f, ensure_ascii=False, indent=2)
-    try:
-        os.chmod(DATEI, 0o600)
-    except OSError:
-        pass
+    datei_atomar(DATEI, json.dumps(d, ensure_ascii=False, indent=2).encode("utf-8"))
 
 
 # =============================================================== Tarife (Bandbreite per QoS-Regel, Netzgröße per Subnetz/DHCP)

@@ -380,6 +380,10 @@ def gwplan_gateway(d, standort, gw):
             if x["nr"] == standort and y["gw"] == gw:
                 nummer = lfd
     alt = d.get("plan") or {}
+    from .zuteilung import zuteilung_an, zuteilung_teile   # Gateway-Zuteilung nach Buchung (spätere Datei)
+    if zuteilung_an(d):
+        return {"schema": "standort", "dynamisch": True, "gateway": nummer, "gatewayname": f"{st['name']} – Gateway {gw}", "praefix": alt.get("praefix") or "SparteNet.de",
+                "standort": standort, "standort_name": st["name"], "standort_gw": gw, "sparten": zuteilung_teile(d, r, standort, gw)}
     return {"schema": "standort", "gateway": nummer, "gatewayname": f"{st['name']} – Gateway {gw}", "praefix": alt.get("praefix") or "SparteNet.de",
             "standort": standort, "standort_name": st["name"], "standort_gw": gw,
             "sparten": [{"name": t["name"], "kz": t["kz"], "sid": t["nr"], "n": t["parz_gesamt"], "block": t["block"], "p_von": t["p_von"], "p_bis": t["p_bis"],
@@ -451,6 +455,7 @@ def akt_gwplan_sparte(d, b):
             if v is not None:
                 if not re.fullmatch(r"[A-Z0-9]{2,5}", v):
                     raise Fehler("Kürzel: 2–5 Zeichen, nur A–Z und 0–9 (keine Umlaute).")
+                kz_pruefen(v, ((d.get("plan") or {}).get("praefix")) or "SparteNet.de")
                 andere = {(((d.get("gwplan") or {}).get("wahl") or {}).get(str(x["nr"])) or {}).get("kz") or x.get("kz") or GWP_KUERZEL.get(x["nr"])
                           for x in nrs.values() if x["nr"] != nr}
                 if v in andere:

@@ -206,6 +206,7 @@ def akt_buchungen_speichern(d, kz, aenderungen):
         raise Fehler("Sparte unbekannt oder ungültige Angaben.")
     namen = {t["name"] for t in tarife_pruefen(d["tarife"])}
     b = d.setdefault("buchungen", {}).setdefault(kz, {})
+    vorher = dict(b)
     for p, t in aenderungen.items():
         if not str(p).isdigit() or not 1 <= int(p) <= sp["n"]:
             raise Fehler(f"Parzelle {p} gibt es in {kz} nicht (1–{sp['n']}).")
@@ -219,49 +220,16 @@ def akt_buchungen_speichern(d, kz, aenderungen):
         d["buchungen"].pop(kz, None)
     speichere(d)
     journal(f"Buchungen {kz}: {len(aenderungen)} Änderung(en), jetzt {len(b)} gebucht")
+    for p in sorted({str(int(x)) for x in aenderungen}, key=int):
+        if vorher.get(p) != b.get(p):
+            ereignis("buchung" if b.get(p) else "kuendigung", {"sparte": kz, "sparte_name": sp["name"], "parzelle": int(p),
+                                                             "tarif": b.get(p, ""), "tarif_alt": vorher.get(p, "")}, d)
     return {"log": [f"✔ {len(aenderungen)} Änderung(en) gespeichert – {len(b)} von {sp['n']} Parzellen gebucht. "
                     "Ans Gateway (Bandbreite/Netzgröße) geht das über den Reiter „Tarife“."]}
 
 
 def _xlsx_blaetter(roh_bytes):
-    """liest alle Blätter einer xlsx (gespeicherte Werte, auch Formelergebnisse) – ohne Zusatzpakete"""
-    M = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
-    R = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
-    try:
-        z = zipfile.ZipFile(io.BytesIO(roh_bytes))
-    except zipfile.BadZipFile:
-        raise Fehler("Das ist keine Excel-Datei (.xlsx).")
-    wb = ET.fromstring(z.read("xl/workbook.xml"))
-    rels = {r.get("Id"): r.get("Target") for r in ET.fromstring(z.read("xl/_rels/workbook.xml.rels"))}
-    strings = []
-    if "xl/sharedStrings.xml" in z.namelist():
-        for si in ET.fromstring(z.read("xl/sharedStrings.xml")).iter(M + "si"):
-            strings.append("".join(t.text or "" for t in si.iter(M + "t")))
-    def lies(name):
-        rid = next((s.get(R + "id") for s in wb.iter(M + "sheet") if s.get("name") == name), None)
-        if not rid:
-            return None
-        ziel = rels[rid].lstrip("/")
-        ziel = ziel if ziel.startswith("xl/") else "xl/" + ziel
-        zellen = {}
-        for c in ET.fromstring(z.read(ziel)).iter(M + "c"):
-            v, t = c.find(M + "v"), c.get("t")
-            if t == "inlineStr":
-                zellen[c.get("r")] = "".join(x.text or "" for x in c.iter(M + "t"))
-            elif v is None or t == "e":
-                continue
-            elif t == "s":
-                zellen[c.get("r")] = strings[int(v.text)]
-            elif t in ("str", "b"):
-                zellen[c.get("r")] = v.text
-            else:
-                try:
-                    f = float(v.text)
-                    zellen[c.get("r")] = int(f) if f == int(f) else f
-                except ValueError:
-                    zellen[c.get("r")] = v.text
-        return zellen
-    return [s.get("name") for s in wb.iter(M + "sheet")], lies
+    return xlsx_lesen(roh_bytes)
 
 
 def _norm(s):

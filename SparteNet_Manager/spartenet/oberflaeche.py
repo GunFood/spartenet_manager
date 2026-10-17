@@ -1,5 +1,5 @@
 """SparteNet Manager – Oberfläche (HTML, CSS, JavaScript der Web-App)"""
-from .update import *  # noqa: F401,F403 – alle Namen der vorherigen Module
+from .schnittstelle import *  # noqa: F401,F403 – alle Namen der vorherigen Module
 
 
 # =============================================================== Oberfläche
@@ -7,13 +7,14 @@ HTML = r"""<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name
 <meta name="theme-color" content="#1d2f3e"><link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/favicon.png"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="SparteNet"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>SparteNet Manager</title>
+<script>try{const f=localStorage.getItem("sn_farbe");if(f=="hell"||f=="dunkel")document.documentElement.dataset.farbe=f}catch(e){}</script>
 <style>
-:root{--navy:#1d2f3e;--green:#3a9a1f;--lgreen:#e7f3e1;--bg:#f5f7f4;--line:#d9e0d6;--red:#b42318;--amber:#9a6700;--text:#1d2f3e;--muted:#5d6b75}
+:root{--navy:#1d2f3e;--green:#3a9a1f;--lgreen:#e7f3e1;--bg:#f5f7f4;--line:#d9e0d6;--red:#b42318;--amber:#9a6700;--text:#1d2f3e;--muted:#5d6b75;--card:#fff;--hover:#eef2f5;--line2:#eef1ec;--bg2:#f4f6f2;color-scheme:light}
 *{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text)}
-header{background:var(--navy);color:#fff;padding:14px 22px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+header{background:var(--kopf,var(--navy));color:#fff;padding:14px 22px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
 @media (max-width:600px){header{padding:12px 16px;gap:8px 12px}nav{padding:0 8px}nav button{padding:11px 10px}main{padding:16px}}
 header b{font-size:22px}header b span{color:#6cc24a}header small{opacity:.7}#verb{font-size:13px;opacity:.85}
-nav{display:flex;gap:4px;padding:0 22px;background:#fff;border-bottom:1px solid var(--line);flex-wrap:wrap}
+nav{display:flex;gap:4px;padding:0 22px;background:var(--card);border-bottom:1px solid var(--line);flex-wrap:wrap}
 nav button{border:0;background:none;padding:13px 16px;font-size:15px;cursor:pointer;color:var(--muted);border-bottom:3px solid transparent}
 nav button.aktiv{color:var(--navy);border-bottom-color:var(--green);font-weight:600}
 main{max-width:var(--main-b,1200px);margin:0 auto;padding:22px;position:relative}
@@ -23,24 +24,24 @@ main{max-width:var(--main-b,1200px);margin:0 auto;padding:22px;position:relative
 body.zieht{user-select:none;cursor:ew-resize}body.zieht iframe{pointer-events:none}
 main.mehrspaltig section.aktiv:not(#kartendesign):not(#daten){display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,760px),1fr));gap:16px;align-items:start}
 main.mehrspaltig section.aktiv:not(#kartendesign):not(#daten)>.karte{margin-bottom:0}
-#ansicht{position:fixed;top:64px;right:16px;width:min(380px,calc(100vw - 32px));background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.22);padding:16px 18px;z-index:50;display:none;max-height:calc(var(--vh,100vh) - 90px);overflow:auto}
+#ansicht{position:fixed;top:64px;right:16px;width:min(380px,calc(100vw - 32px));background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.22);padding:16px 18px;z-index:50;display:none;max-height:calc(var(--vh,100vh) - 90px);overflow:auto}
 #ansicht.offen{display:block}#ansicht h3{margin:0 0 4px}#ansicht .feld output{font-size:13px}section{display:none}section.aktiv{display:block}
-.karte{background:#fff;border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin-bottom:16px}
+.karte{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin-bottom:16px}
 h2{margin:0 0 6px;font-size:19px}h3{margin:0 0 8px;font-size:16px}p.hint{color:var(--muted);margin:4px 0 14px;font-size:14px}
 label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
-input,select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:7px;font-size:15px;background:#fff}
+input,select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:7px;font-size:15px;background:var(--card)}
 .reihe{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
 .knoepfe{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
-button.k{border:1px solid var(--navy);background:#fff;color:var(--navy);padding:9px 16px;border-radius:7px;font-size:14px;cursor:pointer}
-label.k{display:inline-flex;align-items:center;border:1px solid var(--navy);background:#fff;color:var(--navy);padding:9px 16px;border-radius:7px;font-size:14px;cursor:pointer}
-button.k:hover,label.k:hover{background:#eef2f5}button.p{background:var(--green);border-color:var(--green);color:#fff}button.p:hover{background:#318417}
+button.k{border:1px solid var(--navy);background:var(--card);color:var(--navy);padding:9px 16px;border-radius:7px;font-size:14px;cursor:pointer}
+label.k{display:inline-flex;align-items:center;border:1px solid var(--navy);background:var(--card);color:var(--navy);padding:9px 16px;border-radius:7px;font-size:14px;cursor:pointer}
+button.k:hover,label.k:hover{background:var(--hover)}button.p{background:var(--green);border-color:var(--green);color:#fff}button.p:hover{background:#318417}
 button.r{background:var(--red);border-color:var(--red);color:#fff}button.r:hover{background:#8f1b13}button:disabled{opacity:.5;cursor:wait}
 .log{background:#0f1a22;color:#d6f5c9;font-family:Consolas,monospace;font-size:13px;border-radius:8px;padding:12px;max-height:340px;overflow:auto;white-space:pre-wrap;margin-top:12px}
 .log:empty{display:none}.fehler{color:#ffb4ab}
 .tab{overflow:auto;max-height:var(--tab-h,520px);border:1px solid var(--line);border-radius:8px;margin-top:12px}.tab:empty{display:none}
-table{border-collapse:collapse;width:100%;font-size:14px;background:#fff;font-variant-ligatures:none;font-feature-settings:"calt" 0,"liga" 0}
+table{border-collapse:collapse;width:100%;font-size:14px;background:var(--card);font-variant-ligatures:none;font-feature-settings:"calt" 0,"liga" 0}
 th{position:sticky;top:0;background:var(--navy);color:#fff;text-align:left;padding:8px 10px;font-weight:600;z-index:1}
-td{padding:6px 10px;border-top:1px solid #eef1ec}tr.kopf td{background:#548235;color:#fff;font-weight:600}tr.dienst td{background:var(--lgreen)}
+td{padding:6px 10px;border-top:1px solid var(--line2)}tr.kopf td{background:#548235;color:#fff;font-weight:600}tr.dienst td{background:var(--lgreen)}
 td input{padding:6px 8px;font-size:14px}.mono{font-family:Consolas,monospace}
 .schritt{display:grid;grid-template-columns:44px 1fr;gap:14px;align-items:start}.schritt>div{min-width:0}.nr{width:40px;height:40px;border-radius:50%;background:var(--green);color:#fff;display:grid;place-items:center;font-weight:700}
 .status{display:inline-block;padding:2px 8px;border-radius:12px;font-size:12px;background:#eee;color:#555;margin-left:6px}.status.ok{background:#dcf2d2;color:#24661a}
@@ -64,7 +65,7 @@ td input.pwfeld{font-family:Consolas,'DejaVu Sans Mono',monospace;min-width:190p
 #gp_tab td,#gp_tab th,#gp_st td,#gp_st th{white-space:nowrap}#gp_tab td:nth-child(2){white-space:normal;min-width:150px}#gp_st td:nth-child(3){white-space:normal;min-width:220px;font-size:12px}
 .gp_in{width:64px;background:#fff8d6}.gp_in.w{width:84px}.gp_an h4{margin:14px 0 6px;color:var(--muted);font-size:13px}
 .pwst{font-size:12px;white-space:nowrap}.pwst.f{color:var(--red)}.pwst.g{color:var(--amber)}
-button.mini{border:1px solid var(--line);background:#fff;border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer;color:var(--navy);margin-right:3px}button.mini:hover{background:#eef2f5}
+button.mini{border:1px solid var(--line);background:var(--card);border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer;color:var(--navy);margin-right:3px}button.mini:hover{background:var(--hover)}
 .balken{position:relative;height:16px;min-width:90px;background:#eef1ec;border-radius:8px;overflow:hidden}.balken i{position:absolute;inset:0 auto 0 0;background:var(--green)}
 .balken i.w{background:#d4a017}.balken i.s{background:var(--red)}.balken span{position:relative;font-size:11px;padding-left:6px;line-height:16px;color:var(--text);font-weight:600}
 .punkt{display:inline-block;width:9px;height:9px;border-radius:50%;background:#bbb;margin-right:6px}.punkt.on{background:var(--green)}.punkt.off{background:var(--red)}
@@ -73,10 +74,10 @@ button.mini{border:1px solid var(--line);background:#fff;border-radius:6px;paddi
 #sys_k .kachel b{font-size:21px;white-space:nowrap}#sys_ger td,#sys_ger th,#sys_top td{white-space:nowrap}
 .kachel small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
 .dgrid{display:grid;grid-template-columns:var(--d-links,270px) 8px minmax(0,1fr);gap:8px;align-items:start}
-.dliste{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px;max-height:calc(var(--vh,100vh) - 140px);overflow:auto;position:sticky;top:12px}
+.dliste{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px;max-height:calc(var(--vh,100vh) - 140px);overflow:auto;position:sticky;top:12px}
 .dliste h4{margin:10px 8px 4px;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
 .dliste button{display:flex;width:100%;justify-content:space-between;gap:8px;border:0;background:none;text-align:left;padding:7px 8px;border-radius:6px;font-size:14px;cursor:pointer;color:var(--text)}
-.dliste button:hover{background:#eef2f5}.dliste button.aktiv{background:var(--lgreen);font-weight:600}
+.dliste button:hover{background:var(--hover)}.dliste button.aktiv{background:var(--lgreen);font-weight:600}
 .dliste button em{font-style:normal;font-size:11px;padding:1px 7px;border-radius:10px;background:#eee;color:#666;align-self:center}.dliste button em.ok{background:#dcf2d2;color:#24661a}.dliste button em.nein{background:#fde8e6;color:var(--red)}
 pre.json{background:#0f1a22;color:#d6f5c9;font-size:12.5px;border-radius:8px;padding:12px;max-height:620px;overflow:auto;margin-top:12px}
 td.zelle{max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -102,7 +103,7 @@ nav{position:sticky;top:0;z-index:20}
 @media (pointer:coarse){button.k,label.k{min-height:44px}nav button{min-height:46px}input,select{font-size:16px;min-height:44px}td input,td select{min-height:38px}button.mini{padding:8px 10px;font-size:13px}}
 @media (display-mode:standalone){#beenden_k{display:none}}
 .schnell{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-top:8px}
-.schnell button{border:1px solid var(--line);background:#fff;border-radius:12px;padding:16px 10px;font-size:15px;cursor:pointer;color:var(--navy);text-align:center;min-height:70px}
+.schnell button{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:16px 10px;font-size:15px;cursor:pointer;color:var(--navy);text-align:center;min-height:70px}
 .schnell button:hover{background:var(--lgreen)}.schnell button b{display:block;font-size:22px;margin-bottom:4px}
 .pz{display:grid;grid-template-columns:minmax(0,1fr) minmax(170px,260px);gap:16px;align-items:center;margin-top:14px;border:2px solid var(--green);border-radius:14px;padding:16px}
 .pz .qr svg{width:100%;height:auto;display:block;background:#fff}.pz dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:15px}.pz dt{color:var(--muted)}.pz dd{margin:0;font-weight:600;overflow-wrap:anywhere}
@@ -114,15 +115,28 @@ nav{position:sticky;top:0;z-index:20}
 .hinweis{background:#fff6dd;border:1px solid #f0d58a;border-radius:8px;padding:10px 12px;font-size:14px;margin-top:10px}
 .k.ich{background:none;color:#fff;border-color:rgba(255,255,255,.55);font-size:13px;padding:6px 12px}.nurlesen{background:#fff6dd;color:#7a5a00;border-bottom:1px solid #ecd9a0;padding:8px 22px;font-size:14px}
 #bn_ich .kachel b{font-size:19px;overflow-wrap:anywhere}#bn_tab td,#bn_tab th{white-space:nowrap}#bn_tab select{min-width:150px}#bn_tab tr.bn_detail td{background:#f7f9f5;white-space:normal}.bn_matrix{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:8px 18px;padding:6px 2px}.bn_matrix label{display:flex;justify-content:space-between;gap:10px;align-items:center;margin:0;font-size:13px;color:var(--text)}.bn_matrix select{min-width:175px!important;max-width:190px}.bn_matrix select.kein{color:var(--muted)}.bn_matrix select.schreiben{border-color:#3a9a1f;font-weight:600}[data-bereich].nurlesen-karte{position:relative}[data-bereich].nurlesen-karte::after{content:"nur lesen";position:absolute;top:-9px;right:18px;font-size:11px;background:#fff6dd;color:#7a5a00;border:1px solid #ecd9a0;border-radius:10px;padding:1px 8px}.recht-gesperrt td{color:var(--muted)}.recht-gesperrt td:first-child{text-decoration:line-through}
-@media print{header,nav,.nurlesen,.karte:not(.druck),.log{display:none!important}main{padding:0}}
+.karte{position:relative}.druckknopf{position:absolute;top:-11px;left:16px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:1px 9px;font-size:11px;line-height:18px;color:var(--muted);cursor:pointer;z-index:1}
+.druckknopf:hover{color:var(--text);border-color:#9fb19a}.druckkopf{display:none}
+@media print{header,nav,.nurlesen,.karte:not(.druck),.log{display:none!important}main{padding:0}.druckknopf{display:none!important}
+ body.einzeldruck .karte{display:none!important}body.einzeldruck .karte.druck-diese,body.einzeldruck .karte.druck-diese .karte{display:block!important}
+ body.einzeldruck .karte.druck-diese{border:0;padding:0;margin:0;box-shadow:none}body.einzeldruck #ansicht,body.einzeldruck #griff{display:none!important}
+ body.einzeldruck .druck-diese .tab{max-height:none!important;overflow:visible!important;border:0}
+ body.einzeldruck .druck-diese button,body.einzeldruck .druck-diese .knoepfe,body.einzeldruck .druck-diese input[type=file]{display:none!important}
+ body.einzeldruck .druck-diese .log{display:none!important}body.einzeldruck .druckkopf{display:block;border-bottom:1px solid #999;margin-bottom:8px;padding-bottom:4px;font-size:10px;color:#444}
+ body.einzeldruck .druck-diese table{font-size:9.5px}body.einzeldruck .druck-diese th,body.einzeldruck tr.kopf td{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+
+/* Farbschema: hell / dunkel / wie das System (Auswahl unter „Ansicht“, je Browser gespeichert) */
+@media screen and (prefers-color-scheme:dark){:root:not([data-farbe=hell]){--bg:#0f161c;--card:#18222a;--line:#2e3c46;--line2:#24313a;--text:#e2e8ec;--muted:#9aa9b3;--lgreen:#1d3317;--hover:#24323c;--bg2:#1f2a33;--kopf:#0b1218;--red:#ff8a7a;--amber:#e8b64c;color-scheme:dark}:root:not([data-farbe=hell]) button.k,:root:not([data-farbe=hell]) label.k,:root:not([data-farbe=hell]) button.mini,:root:not([data-farbe=hell]) .schnell button{color:var(--text);border-color:#5d7689}:root:not([data-farbe=hell]) button.p{color:#fff;border-color:var(--green)}:root:not([data-farbe=hell]) nav button.aktiv{color:var(--text)}:root:not([data-farbe=hell]) input,:root:not([data-farbe=hell]) select,:root:not([data-farbe=hell]) textarea{color:var(--text)}:root:not([data-farbe=hell]) th{background:#25394a}:root:not([data-farbe=hell]) .status{background:#2a3741;color:#c9d3da}:root:not([data-farbe=hell]) .status.ok,:root:not([data-farbe=hell]) .dliste button em.ok{background:#1d3a17;color:#9fe08a}:root:not([data-farbe=hell]) tr.geaendert td,:root:not([data-farbe=hell]) .hinweis,:root:not([data-farbe=hell]) .nurlesen,:root:not([data-farbe=hell]) [data-bereich].nurlesen-karte::after{background:#3a3214;color:#f0d58a;border-color:#6b5a22}:root:not([data-farbe=hell]) tr.falsch td,:root:not([data-farbe=hell]) .dliste button em.nein{background:#45211d}:root:not([data-farbe=hell]) .gp_in{background:#3a3518}:root:not([data-farbe=hell]) #bn_tab tr.bn_detail td{background:var(--bg2)}:root:not([data-farbe=hell]) .dliste button em,:root:not([data-farbe=hell]) .balken{background:#2a3741;color:#c9d3da}:root:not([data-farbe=hell]) .teiler::after,:root:not([data-farbe=hell]) #griff::after{background:#3a4955}:root:not([data-farbe=hell]) .druckknopf:hover{border-color:#6f8a6a}:root:not([data-farbe=hell]) a{color:#8cc8ff}}
+@media screen{:root[data-farbe=dunkel]{--bg:#0f161c;--card:#18222a;--line:#2e3c46;--line2:#24313a;--text:#e2e8ec;--muted:#9aa9b3;--lgreen:#1d3317;--hover:#24323c;--bg2:#1f2a33;--kopf:#0b1218;--red:#ff8a7a;--amber:#e8b64c;color-scheme:dark}:root[data-farbe=dunkel] button.k,:root[data-farbe=dunkel] label.k,:root[data-farbe=dunkel] button.mini,:root[data-farbe=dunkel] .schnell button{color:var(--text);border-color:#5d7689}:root[data-farbe=dunkel] button.p{color:#fff;border-color:var(--green)}:root[data-farbe=dunkel] nav button.aktiv{color:var(--text)}:root[data-farbe=dunkel] input,:root[data-farbe=dunkel] select,:root[data-farbe=dunkel] textarea{color:var(--text)}:root[data-farbe=dunkel] th{background:#25394a}:root[data-farbe=dunkel] .status{background:#2a3741;color:#c9d3da}:root[data-farbe=dunkel] .status.ok,:root[data-farbe=dunkel] .dliste button em.ok{background:#1d3a17;color:#9fe08a}:root[data-farbe=dunkel] tr.geaendert td,:root[data-farbe=dunkel] .hinweis,:root[data-farbe=dunkel] .nurlesen,:root[data-farbe=dunkel] [data-bereich].nurlesen-karte::after{background:#3a3214;color:#f0d58a;border-color:#6b5a22}:root[data-farbe=dunkel] tr.falsch td,:root[data-farbe=dunkel] .dliste button em.nein{background:#45211d}:root[data-farbe=dunkel] .gp_in{background:#3a3518}:root[data-farbe=dunkel] #bn_tab tr.bn_detail td{background:var(--bg2)}:root[data-farbe=dunkel] .dliste button em,:root[data-farbe=dunkel] .balken{background:#2a3741;color:#c9d3da}:root[data-farbe=dunkel] .teiler::after,:root[data-farbe=dunkel] #griff::after{background:#3a4955}:root[data-farbe=dunkel] .druckknopf:hover{border-color:#6f8a6a}:root[data-farbe=dunkel] a{color:#8cc8ff}}
 </style></head><body>
-<header><b>Sparte<span>Net</span></b><small>Manager __VERSION__ · Cloud</small><span id="verb"></span><div style="flex:1"></div><button class="k ich" id="up_chip" onclick="zeige('system')" hidden title="Neue Version verfügbar"></button><button class="k ich" id="ich_k" onclick="zeige('benutzer')" title="Mein Konto und Benutzerkonten"></button><button class="k" style="background:none;color:#fff;border-color:#fff" onclick="ansichtPanel()" title="Breite, Größe und Tabellenhöhe an den Bildschirm anpassen">Ansicht</button><button class="k pc-nur" id="beenden_k" style="background:none;color:#fff;border-color:#fff" onclick="beenden()">Beenden</button></header>
+<header><b>Sparte<span>Net</span></b><small>Manager __VERSION__ · Cloud</small><span id="verb"></span><div style="flex:1"></div><button class="k ich" id="up_chip" onclick="zeige('system')" hidden title="Neue Version verfügbar"></button><button class="k ich" id="ich_k" onclick="zeige('benutzer')" title="Mein Konto und Benutzerkonten"></button><button class="k" style="background:none;color:#fff;border-color:#fff" onclick="ansichtPanel()" title="Breite, Größe, Tabellenhöhe und Farbschema (hell/dunkel) anpassen">Ansicht</button><button class="k ich" id="farbe_k" onclick="farbeWechseln()" title="Farbschema: System → Hell → Dunkel"></button><button class="k pc-nur" id="beenden_k" style="background:none;color:#fff;border-color:#fff" onclick="beenden()">Beenden</button></header>
 <div id="ansicht"><h3>Ansicht anpassen</h3><p class="hint" style="margin:2px 0 6px">Für FHD bis 8K, normal oder curved. Wird gespeichert. Breite auch direkt am rechten Rand ziehen (Doppelklick = volle Breite).</p>
 <div class="feld"><label for="an_breite_sel">Breite des Inhalts</label><output id="an_breite_o"></output><select id="an_breite_sel" onchange="ansSet('breite',+this.value)"><option value="1200">Standard (FHD)</option><option value="1600">Breit (WQHD)</option><option value="2200">Sehr breit (4K)</option><option value="3200">Ultra (5K / Curved)</option><option value="0">Volle Fensterbreite</option><option value="-1">Eigene …</option></select>
 <input type="range" id="an_breite" min="800" max="6000" step="50" oninput="ansSet('breite',+this.value)"></div>
 <div class="feld"><label for="an_zoom_sel">Größe (Skalierung)</label><output id="an_zoom_o"></output><select id="an_zoom_sel" onchange="ansSet('zoom',+this.value)"><option value="0">Automatisch nach Bildschirm</option><option value="0.8">80 %</option><option value="0.9">90 %</option><option value="1">100 %</option><option value="1.1">110 %</option><option value="1.25">125 %</option><option value="1.5">150 %</option><option value="1.75">175 %</option><option value="2">200 %</option><option value="2.5">250 %</option><option value="3">300 %</option></select></div>
 <div class="feld"><label for="an_tabh_sel">Höhe der Tabellen</label><output id="an_tabh_o"></output><select id="an_tabh_sel" onchange="ansSet('tabh',+this.value)"><option value="0">An Fensterhöhe anpassen</option><option value="320">Niedrig</option><option value="520">Standard</option><option value="900">Hoch</option><option value="-1">Eigene …</option></select>
 <input type="range" id="an_tabh" min="200" max="3000" step="20" oninput="ansSet('tabh',+this.value)"></div>
+<div class="feld"><label for="an_farbe">Farbschema</label><select id="an_farbe" onchange="farbeSetzen(this.value)"><option value="system">Wie das System (hell/dunkel automatisch)</option><option value="hell">Hell</option><option value="dunkel">Dunkel</option></select></div>
 <div class="feld chk"><input type="checkbox" id="an_spalten" onchange="ansSet('spalten',this.checked)"><label for="an_spalten">Karten nebeneinander, wenn Platz ist (breite Monitore)</label></div>
 <div class="knoepfe"><button class="k" onclick="ansZurueck()">Zurücksetzen</button><button class="k p" onclick="ansichtPanel(false)">Fertig</button></div></div>
 <div id="nurlesen" class="nurlesen" hidden></div>
@@ -193,10 +207,17 @@ nav{position:sticky;top:0;z-index:20}
 <h3 style="margin-top:18px" id="h_hin"></h3><div class="tab" id="tab_hin"></div>
 <h3 style="margin-top:18px" id="h_feh"></h3><div class="tab" id="tab_feh"></div>
 <h3 style="margin-top:18px" id="h_abw"></h3><div class="tab" id="tab_abw"></div>
-<h3 style="margin-top:18px" id="h_cli"></h3><div class="tab" id="tab_cli"></div></div></section>
+<h3 style="margin-top:18px" id="h_cli"></h3><div class="tab" id="tab_cli"></div></div>
+<div class="karte" data-bereich="netze" id="um_karte"><h2>Umzugshilfe: vorhandene Netze auf das neue VLAN-Schema</h2>
+<p class="hint">Für Gateways, die schon mit dem alten Schema laufen (z. B. Buchenweg): Netze mit gleichem Namen bekommen die VLAN-ID, das Subnetz, die Router-IP und den DHCP-Bereich aus der aktiven Planung. Netzmaske (Tarif) und Netz-ID bleiben – Passwörter, Tarife und Port-Profile gelten weiter. Die Reihenfolge wählt der Manager so, dass nie zwei Netze dieselbe VLAN-ID oder dasselbe Subnetz haben. <b>Geräte in umgestellten Netzen brauchen danach eine neue IP</b> (WLAN aus/an) – am besten außerhalb der Gartenzeit und erst mit „nur das erste“ testen.</p>
+<div class="knoepfe"><button class="k" onclick="umVorschau()">Vorschau</button><button class="k p" id="um_los" onclick="umAusfuehren(false)" disabled>Ausgewählte umstellen</button><button class="k" id="um_eins" onclick="umAusfuehren(true)" disabled>Nur das erste umstellen</button><button class="k" onclick="umZurueck()">Umzug rückgängig</button></div>
+<div class="tab" id="um_tab"></div><div class="log" id="log_um"></div></div></section>
 
 <section id="einrichten"><div class="karte"><h2>Sparte einrichten</h2><p class="hint">Immer zuerst „Vorschau“. Vor Änderungen eine Sicherung der Konsole machen.</p>
 <label>Sparte</label><select id="ein_sp" onchange="ssid()"></select></div>
+<div class="karte" data-bereich="netze" id="zg_karte" hidden><h3>Netze nach Buchungen – dieses Gateway</h3><p class="hint" id="zg_hint"></p>
+<div class="knoepfe"><button class="k" onclick="zgVorschau()">Vorschau</button><button class="k p" id="zg_los" onclick="zgAusfuehren()" disabled>Ausgewählte am Gateway ausführen</button></div>
+<div class="tab" id="zg_tab"></div><div class="log" id="log_zg"></div></div>
 <div data-bereich="netze" class="karte schritt"><div class="nr">1</div><div><h3>Fehlende Netze anlegen</h3><p class="hint">Vorlage ist ein vorhandenes Parzellennetz (z. B. BW-Paz.004): DHCP, Isolation, Firewall-Zone werden übernommen, nur Name, VLAN und Adressen geändert.</p>
 <div class="knoepfe"><button class="k" onclick="netze(false,false)">Vorschau</button><button class="k p" onclick="netze(true,true)">Erstes Netz anlegen (Test)</button><button class="k r" onclick="netze(true,false)">Alle fehlenden anlegen</button></div></div></div>
 <div data-bereich="netze" class="karte schritt"><div class="nr">2</div><div><h3>WLANs prüfen</h3><p class="hint">Pächter <b id="ssid1"></b> (WPA2, PPSK) · Gäste <b id="ssid2"></b> (Hotspot/Voucher) · Vorstand <b id="ssid3"></b>.</p></div></div>
@@ -303,6 +324,10 @@ nav{position:sticky;top:0;z-index:20}
 <select id="gv_st" onchange="gvZeigen()" style="max-width:280px"></select><button class="k" onclick="gvCsv()">VLAN-Liste als CSV</button></div>
 <p class="hint"><b>Schema</b> (eindeutig je Standort, alle Gateways eines Standorts hängen an derselben Glasfaser): Parzelle = <span class="mono">1000 + 200 × (VLAN-Block − 1) + Parzelle</span> – die letzten beiden Ziffern sind die Parzellennummer (Block 1: 1001–1199, Block 2: 1201–1399 … Block 15: 3801–3999). Dienstnetze je Sparte: Vorstand <span class="mono">100 + Sparten-ID</span>, Gäste <span class="mono">200 + ID</span>, Technik <span class="mono">300 + ID</span> (überall eindeutig). Subnetze <span class="mono">10.&lt;Sparten-ID&gt;.&lt;Parzelle&gt;.0/24</span>. VLAN-Block = Reihenfolge am Standort, in der Tabelle oben fest einstellbar. Je Gateway höchstens 55 Parzellen + Vorstand/Gäste/Technik der Sparten, die dort beginnen.</p>
 <div class="tab" id="gv_tab"></div><div class="log" id="log_gv"></div></div>
+<div class="karte" data-bereich="netzplanung" id="zt_karte"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h3 style="margin:0;flex:1">Gateway-Zuteilung nach Buchung</h3><span id="zt_st" class="status"></span><button class="k" onclick="ztLaden()">Aktualisieren</button></div>
+<p class="hint">Eingeschaltet bekommt eine Parzelle ihr VLAN-Netz erst, wenn sie <b>bucht</b> – am ersten Gateway ihres Standorts mit freiem Platz (höchstens <span id="zt_pg">55</span> Parzellen je Gateway). Erst wenn Gateway 1 voll ist, kommt Gateway 2 dran. Wird eine Buchung gelöscht, kann das Netz entfernt werden; der Platz wird dann frei und von der nächsten Buchung zuerst wieder belegt. Die VLAN-ID bleibt fest an der Parzelle (Schema oben), Passwort und Zugangskarte bleiben gleich. Zugeteilte Parzellen werden nie automatisch umgezogen. Dienstnetze (Vorstand/Gäste/Technik) liegen am ersten Gateway des Standorts. <b>Am Gateway ändert sich nur etwas über „Einrichten → Netze nach Buchungen“ mit Vorschau und Bestätigung.</b></p>
+<div class="knoepfe zt-schreib"><label style="display:flex;gap:8px;align-items:center;margin:0"><input type="checkbox" id="zt_an" style="width:auto" onchange="ztSchalten()"> Gateway-Zuteilung nach Buchung eingeschaltet</label><button class="k" onclick="ztAbgleichen()">Mit Buchungen abgleichen</button></div>
+<select id="zt_stf" onchange="ztZeigen()" style="max-width:280px;margin:6px 0"></select><div class="tab" id="zt_tab"></div><div class="log" id="log_zt"></div></div>
 <div class="karte"><h3>Gateway-Standorte</h3><p class="hint">Alle Gateways eines Standorts teilen sich einen Internet-Anschluss – ein weiterer erst, wenn der Bedarf größer ist als die Kapazität.</p><div class="tab" id="gp_st"></div></div>
 <div class="karte"><h3>Einstellungen</h3><p class="hint">Netz-Regeln, Buchungsquote, Kosten und Preise. Leeres Feld = Standardwert.</p><div id="gp_an"></div>
 <div class="knoepfe"><button class="k p" onclick="gpAnSpeichern()">Einstellungen speichern</button><button class="k" onclick="gpReset('annahmen')">Auf Standard zurücksetzen</button></div><div class="log" id="log_gpa"></div></div>
@@ -317,7 +342,19 @@ nav{position:sticky;top:0;z-index:20}
 <div class="kd" id="kd_box"><div id="kd_form"></div><div class="teiler" data-k="kd" data-box="kd_box" title="Ziehen: Breite der Einstellungen ändern"></div>
 <div class="vorschau"><iframe id="kd_vor" title="Vorschau Zugangskarte"></iframe><div class="log" id="log_kd"></div></div></div></section>
 
-<section id="system"><div class="karte bn-admin" id="up_karte"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0;flex:1">Aktualisierung</h2><span id="up_st" class="status"></span>
+<section id="system"><div class="karte bn-admin" id="si_karte"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0;flex:1">Datensicherung</h2><button class="k" onclick="siLaden()">Aktualisieren</button></div>
+<p class="hint">Eine Datei mit allem: Einstellungen, Planung, Buchungen, Netzplanung, Benutzer (nur Prüfsummen), Passwörter je Parzelle, WLAN-/Tarif-Sicherungen, Kartenlogo, Unterlagen und Änderungsprotokoll. <b>Mit Passwort</b> wird die Datei verschlüsselt (AES-256) – ohne Passwort enthält sie WLAN-Passwörter und den Cloud-Key im Klartext. Das Passwort gut aufheben: ohne es lässt sich die Sicherung nicht einspielen.</p>
+<div class="reihe"><div><label for="si_pw">Passwort für die Sicherung (mind. 10 Zeichen, empfohlen)</label><input id="si_pw" type="password" autocomplete="new-password"></div>
+<div><label for="si_pw2">Passwort wiederholen</label><input id="si_pw2" type="password" autocomplete="new-password"></div></div>
+<div class="knoepfe"><button class="k p" onclick="siHerunterladen()">Sicherung herunterladen</button><button class="k" onclick="siJetzt()">Jetzt auf dem Server sichern</button></div>
+<h3>Automatisch auf dem Server</h3><div class="reihe"><div><label style="display:flex;gap:8px;align-items:center;margin-top:26px"><input type="checkbox" id="si_auto" style="width:auto"> täglich sichern</label></div>
+<div><label for="si_uhr">um … Uhr</label><input id="si_uhr" inputmode="numeric"></div><div><label for="si_anz">Anzahl behalten</label><input id="si_anz" inputmode="numeric"></div></div>
+<div class="knoepfe"><button class="k" onclick="siEinstellungen()">Speichern</button></div><div class="tab" id="si_liste"></div>
+<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600">Sicherung einspielen</summary><p class="hint">Ersetzt <b>alle</b> Daten des Managers durch die Sicherung. Der jetzige Stand wird vorher automatisch auf dem Server gesichert. Am Gateway ändert sich nichts.</p>
+<div class="reihe"><div><label for="si_ein_pw">Passwort der Sicherung (falls verschlüsselt)</label><input id="si_ein_pw" type="password" autocomplete="off"></div>
+<div><label class="k" style="margin-top:22px;display:inline-block">Sicherung wählen und einspielen …<input type="file" id="si_datei" accept=".zip,.sns" onchange="siEinspielen()" style="display:none"></label></div></div></details>
+<div class="log" id="log_si"></div></div>
+<div class="karte bn-admin" id="up_karte"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0;flex:1">Aktualisierung</h2><span id="up_st" class="status"></span>
 <button class="k" onclick="upPruefen()">Nach Updates suchen</button><button class="k p" id="up_los" onclick="upInstallieren()" hidden>Jetzt aktualisieren</button></div>
 <p class="hint">Wie bei Nextcloud: Der Manager fragt GitHub nach einer neueren Version, sichert die Daten, lädt die neue Version, prüft sie, testet sie und startet dann neu – ohne Docker-Neubau. Die neue Version liegt im Datenordner unter <span class="mono">updates/</span>; „Vorherige Version“ schaltet jederzeit zurück (startet eine neue Version nicht, geschieht das automatisch).</p>
 <div class="kacheln" id="up_k"></div><div id="up_notiz"></div><div id="up_schritte"></div>
@@ -355,15 +392,62 @@ nav{position:sticky;top:0;z-index:20}
 <div class="knoepfe"><button class="k" onclick="voucher(false)">Vorschau</button><button class="k p" onclick="voucher(true)">Erstellen</button><button class="k" onclick="voucherDruck()">Drucken</button></div>
 <div class="log" id="log_vo"></div><div class="tab" id="tab_vo"></div></div></section>
 
+<section id="unterlagen"><div class="karte"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0;flex:1">Unterlagen</h2><span id="ul_st" class="status"></span><button class="k" onclick="ulLaden()">Aktualisieren</button></div>
+<p class="hint">Verträge, Pläne, Protokolle, Rechnungen … allgemein oder je Sparte hinterlegen. Erlaubt: PDF, Bilder, Office-/OpenOffice-Dateien, CSV, Text, ZIP – keine Webseiten, SVG oder Programme. PDF und Bilder lassen sich direkt ansehen, alles andere wird heruntergeladen.</p>
+<div class="reihe"><div><label for="ul_such">Suchen</label><input id="ul_such" placeholder="Name oder Beschreibung …" oninput="ulZeigen()"></div>
+<div><label for="ul_f_ordner">Ordner</label><select id="ul_f_ordner" onchange="ulZeigen()"></select></div><div><label for="ul_f_sparte">Sparte</label><select id="ul_f_sparte" onchange="ulZeigen()"></select></div></div>
+<div class="tab" id="ul_tab" style="--tab-h:620px"></div><div class="log" id="log_ul"></div></div>
+<div class="karte" data-bereich="unterlagen" id="ul_hoch"><h3>Hochladen</h3>
+<div id="ul_zone" style="border:2px dashed var(--line);border-radius:10px;padding:22px;text-align:center;color:var(--muted);cursor:pointer" onclick="$('ul_datei').click()">Dateien hierher ziehen oder <u>auswählen</u><input type="file" id="ul_datei" multiple style="display:none" onchange="ulHoch(this.files)"></div>
+<div class="reihe" style="margin-top:10px"><div><label for="ul_ordner">Ordner</label><input id="ul_ordner" list="ul_ordnerliste" value="Allgemein"><datalist id="ul_ordnerliste"></datalist></div>
+<div><label for="ul_sparte">Sparte</label><select id="ul_sparte"></select></div><div><label for="ul_beschr">Beschreibung (optional)</label><input id="ul_beschr" maxlength="300"></div></div>
+<div class="log" id="log_ulh"></div></div></section>
+
+<section id="automationen"><div class="karte" data-bereich="automationen"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0;flex:1">Automationen</h2><span id="au_st" class="status"></span><button class="k" onclick="auLaden()">Aktualisieren</button><button class="k p au-schreib" onclick="auNeu()">Neue Regel</button></div>
+<p class="hint">Wenn etwas passiert (eine Parzelle bucht, kündigt, eine Zahlung kommt über die API herein …), führt der Manager die hinterlegten Aktionen aus: E-Mail senden, Tarif buchen, Webhook aufrufen, Protokolleintrag. <b>Am Gateway ändert eine Automation nichts</b> – Übertragen bleibt ein Schritt mit Vorschau und Bestätigung (Reiter „Tarife“ bzw. „Übertragen“).</p>
+<div class="tab" id="au_tab"></div><div class="log" id="log_au"></div></div>
+<div class="karte au-schreib" id="au_edit" hidden><h3 id="au_edit_t">Regel</h3>
+<div class="reihe"><div><label for="au_name">Name</label><input id="au_name" maxlength="80" placeholder="z. B. Willkommens-Mail bei Buchung"></div>
+<div><label for="au_aus">Wenn …</label><select id="au_aus" onchange="auAusWechsel()"></select></div>
+<div id="au_evn_w" hidden><label for="au_evn">Name des Ereignisses (API)</label><input id="au_evn" placeholder="z. B. mahnung" maxlength="40"></div>
+<div><label style="display:flex;gap:8px;align-items:center;margin-top:26px"><input type="checkbox" id="au_aktiv" style="width:auto" checked> aktiv</label></div></div>
+<h3>Nur wenn … (leer = immer)</h3><div class="reihe"><div><label for="au_b_sp">Sparte</label><select id="au_b_sp"></select></div><div><label for="au_b_tf">Tarif</label><select id="au_b_tf"></select></div>
+<div><label for="au_b_bt">Betrag mindestens (€, nur Zahlung)</label><input id="au_b_bt" inputmode="decimal"></div></div>
+<h3>Dann …</h3><div id="au_akt"></div>
+<div class="knoepfe"><select id="au_neu_typ" style="max-width:240px"></select><button class="k" onclick="auAktionNeu()">Aktion hinzufügen</button></div>
+<details style="margin-top:8px"><summary style="cursor:pointer">Platzhalter für Betreff und Text</summary><div class="tab" id="au_ph"></div></details>
+<div class="knoepfe"><button class="k p" onclick="auSpeichern()">Regel speichern</button><button class="k" onclick="auProbe()">Probelauf (sendet und bucht nichts)</button><button class="k" onclick="$('au_edit').hidden=true">Abbrechen</button></div><div class="log" id="log_aue"></div></div>
+<div class="karte" data-bereich="automationen"><h3>Verlauf</h3><p class="hint">Die letzten ausgeführten Aktionen (höchstens 300 werden aufbewahrt).</p><div class="tab" id="au_verlauf" style="--tab-h:360px"></div></div>
+<div class="karte bn-admin"><h3>E-Mail-Versand (SMTP)</h3><p class="hint">Postfach, über das die Automationen E-Mails senden (z. B. das Vereins-Postfach beim Provider). Das Passwort wird nicht angezeigt; leer lassen = unverändert. Alternativ als Docker-Secret: <span class="mono">SPARTENET_SMTP_PASSWORD_FILE</span>.</p>
+<div class="reihe"><div><label for="sm_host">Server</label><input id="sm_host" placeholder="smtp.example.de"></div><div><label for="sm_port">Port</label><input id="sm_port" inputmode="numeric"></div>
+<div><label for="sm_sich">Verschlüsselung</label><select id="sm_sich"><option value="starttls">STARTTLS (Port 587)</option><option value="ssl">SSL/TLS (Port 465)</option><option value="keine">keine (nur im eigenen Netz)</option></select></div></div>
+<div class="reihe"><div><label for="sm_ben">Benutzername</label><input id="sm_ben" autocomplete="off"></div><div><label for="sm_pw">Passwort</label><input id="sm_pw" type="password" autocomplete="new-password"></div>
+<div><label for="sm_abs">Absender-Adresse</label><input id="sm_abs" placeholder="wlan@verein.de"></div><div><label for="sm_absn">Absender-Name</label><input id="sm_absn"></div></div>
+<div class="knoepfe"><button class="k p" onclick="smSpeichern()">Speichern</button><input id="sm_test_an" placeholder="Test an …" style="max-width:240px"><button class="k" onclick="smTest()">Test-E-Mail senden</button></div><div class="log" id="log_sm"></div></div>
+<div class="karte bn-admin"><h3>API-Schnittstelle für andere Programme</h3><p class="hint">Andere Programme (Buchhaltung, Zahlungseingang, n8n, Zapier, Home Assistant …) melden Ereignisse oder buchen Tarife. Jeder Schlüssel bekommt nur die nötigen Rechte und optional nur bestimmte Sparten. Der Schlüssel wird <b>nur einmal</b> angezeigt und nur als Prüfsumme gespeichert. Höchstens <span id="api_min"></span> Anfragen je Minute und Schlüssel.</p>
+<div class="tab" id="api_tab"></div>
+<h3>Neuer Schlüssel</h3><div class="reihe"><div><label for="api_name">Name</label><input id="api_name" placeholder="z. B. Buchhaltung"></div><div><label for="api_sp">Nur Sparten (Kürzel, Komma; leer = alle)</label><input id="api_sp"></div></div>
+<div id="api_rechte" style="display:flex;gap:16px;flex-wrap:wrap;margin:6px 0"></div>
+<div class="knoepfe"><button class="k p" onclick="apiNeu()">Schlüssel erzeugen</button></div><div id="api_neu" hidden class="hinweis" style="margin:8px 0"></div><div class="log" id="log_api"></div>
+<details style="margin-top:10px"><summary style="cursor:pointer;font-weight:600">Beispiele</summary><pre class="mono" id="api_bsp" style="white-space:pre-wrap;font-size:12px;background:var(--bg2,#f4f6f2);padding:10px;border-radius:8px"></pre>
+<p class="hint">Zahlungsanbieter (Bank, PayPal, Stripe …) senden ihre eigenen Formate – dazwischen übersetzt z. B. n8n, Zapier oder Make die Meldung in einen Aufruf von <span class="mono">/api/v1/ereignis</span>. Der Manager muss dafür von dort erreichbar sein (z. B. über den Reverse-Proxy, nur HTTPS).</p></details></div></section>
+
 <section id="benutzer"><div class="karte"><h2>Mein Konto</h2><div class="kacheln" id="bn_ich"></div>
 <div class="tab" id="bn_ich_liste" style="--tab-h:420px"></div>
 <div id="bn_ich_pw"><h3>Eigenes Passwort ändern</h3><div class="reihe" style="max-width:820px"><div><label for="bn_alt">Bisheriges Passwort</label><input id="bn_alt" type="password" autocomplete="current-password"></div>
 <div><label for="bn_neu1">Neues Passwort (mind. 12 Zeichen)</label><input id="bn_neu1" type="password" autocomplete="new-password"></div><div><label for="bn_neu2">Neues Passwort wiederholen</label><input id="bn_neu2" type="password" autocomplete="new-password"></div></div>
 <div class="knoepfe"><button class="k p" onclick="bnEigenesPw()">Passwort ändern</button></div></div>
+<div id="bn_2fa"><h3>Zwei-Faktor-Anmeldung</h3><p class="hint" id="bn_2fa_st"></p>
+<div class="knoepfe"><button class="k p" id="bn_2fa_ein" onclick="zfStart()">Einrichten</button><button class="k" id="bn_2fa_aus" onclick="zfAus()">Ausschalten</button></div>
+<div id="bn_2fa_neu" hidden><div style="display:flex;gap:18px;flex-wrap:wrap;align-items:center"><div id="bn_2fa_qr" style="width:200px;background:#fff;padding:8px;border:1px solid var(--line);border-radius:8px"></div>
+<div><p class="hint">1. QR-Code mit der Authenticator-App scannen (z. B. Google/Microsoft Authenticator, Aegis, 2FAS) – oder den Schlüssel eintippen:<br><b class="mono" id="bn_2fa_geheim"></b></p>
+<label for="bn_2fa_code">2. Angezeigten Code eingeben</label><div style="display:flex;gap:8px"><input id="bn_2fa_code" inputmode="numeric" maxlength="6" style="max-width:140px"><button class="k p" onclick="zfBestaetigen()">Bestätigen</button></div></div></div></div>
+<div id="bn_2fa_notfall" hidden></div></div>
 <p class="hint" id="bn_admin_hint" hidden>Das Konto „admin“ meldet sich mit dem Manager-Passwort an. Geändert wird es in der Docker-Konfiguration (Secret spartenet_password) – danach den Manager neu starten.</p>
 <div class="knoepfe"><button class="k" onclick="abmelden()">Abmelden</button></div><div class="log" id="log_bni"></div></div>
 <div class="karte bn-admin"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h3 style="margin:0;flex:1">Benutzerkonten</h3><button class="k" onclick="bnLaden()">Aktualisieren</button></div>
 <p class="hint"><b>Administrator</b>: alles, auch Benutzerkonten. <b>Gesperrt</b>: keine Anmeldung, offene Sitzungen enden sofort. <b>Rechte je Bereich</b>: für jedes Arbeitsblatt bzw. jede Funktion einzeln <i>kein Zugriff</i> (ausgeblendet), <i>lesen</i> (ansehen, Vorschau) oder <i>lesen und schreiben</i> (ändern, ans Gateway übertragen) – z. B. alles nur lesen, aber WLAN-Passwörter schreiben und Tarife buchen. „Rechte“ öffnet die Liste; jede Änderung wird sofort gespeichert.</p>
+<label style="display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" id="bn_2fa_pflicht" style="width:auto" onchange="zfPflicht(this.checked)"> Zwei-Faktor-Anmeldung für alle Administratoren verpflichtend</label>
 <div class="tab" id="bn_tab" style="--tab-h:900px"></div><div class="log" id="log_bn"></div></div>
 <div class="karte bn-admin"><h3>Neues Benutzerkonto</h3>
 <div class="reihe"><div><label for="bn_name">Benutzername</label><input id="bn_name" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="z. B. vorstand.buchenweg"></div>
@@ -388,17 +472,18 @@ nav{position:sticky;top:0;z-index:20}
 </main>
 <script>
 const T="__TOKEN__";let LETZT=null,PLAN=null,PLANZ=null,PPSK=null,PPSKSP=null,CODES=[],VMIN=0,EINST={};
-const TABS=[["start","Start"],["verbindung","Verbindung"],["lesen","Auslesen"],["planung","Planung"],["abgleich","Abgleich"],["einrichten","Einrichten"],["uebertragen","Übertragen"],["tarife","Tarife"],["kalkulation","Kalkulation"],["netzplanung","Netzplanung"],["kartendesign","Kartendesign"],["voucher","Gast-Voucher"],["system","Systeminfo"],["daten","Alle Daten"],["benutzer","Benutzer"],["hilfe","Hilfe"]];
+const TABS=[["start","Start"],["verbindung","Verbindung"],["lesen","Auslesen"],["planung","Planung"],["abgleich","Abgleich"],["einrichten","Einrichten"],["uebertragen","Übertragen"],["tarife","Tarife"],["kalkulation","Kalkulation"],["netzplanung","Netzplanung"],["kartendesign","Kartendesign"],["voucher","Gast-Voucher"],["system","Systeminfo"],["daten","Alle Daten"],["unterlagen","Unterlagen"],["automationen","Automationen"],["benutzer","Benutzer"],["hilfe","Hilfe"]];
 const $=id=>document.getElementById(id);const nav=$("nav");TABS.forEach(([id,t])=>{const b=document.createElement("button");b.textContent=t;b.onclick=()=>zeige(id);b.id="n_"+id;nav.appendChild(b)});
-function zeige(id){if(!reiterErlaubt(id))id=startReiter();rechteHinweis(id);if(id=="start"&&!$("st_k").innerHTML&&typeof EINST!="undefined"&&EINST.konsole_id)startLaden().catch(()=>{});if(id=="verbindung")fernLaden().catch(()=>{});if(location.hash!="#"+id)history.replaceState(null,"","#"+id);setTimeout(()=>{const b=document.querySelector("nav button.aktiv");if(b&&b.scrollIntoView)b.scrollIntoView({inline:"center",block:"nearest"})},0);if(id=="kalkulation"&&!KK)kkLaden().catch(()=>{});if(id=="netzplanung"&&!GP)gpLaden().catch(()=>{});if(id=="benutzer")bnStart();if(id=="system"&&ICH.admin)upLaden(true).catch(()=>{});if(id=="kartendesign"&&!DESIGN)designLaden();if(id=="tarife"&&!TF)tfLaden();if(id=="system"&&!SYS)sysLaden();if(id=="daten"&&!DLISTE)datenListe();document.querySelectorAll("section").forEach(s=>s.classList.toggle("aktiv",s.id==id));document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("aktiv",b.id=="n_"+id))}
+function zeige(id){if(!reiterErlaubt(id))id=startReiter();rechteHinweis(id);if(id=="start"&&!$("st_k").innerHTML&&typeof EINST!="undefined"&&EINST.konsole_id)startLaden().catch(()=>{});if(id=="verbindung")fernLaden().catch(()=>{});if(location.hash!="#"+id)history.replaceState(null,"","#"+id);setTimeout(()=>{const b=document.querySelector("nav button.aktiv");if(b&&b.scrollIntoView)b.scrollIntoView({inline:"center",block:"nearest"})},0);if(id=="kalkulation"&&!KK)kkLaden().catch(()=>{});if(id=="netzplanung"&&!GP)gpLaden().catch(()=>{});if(id=="netzplanung")ztLaden().catch(()=>{});if(id=="benutzer")bnStart();if(id=="unterlagen")ulLaden().catch(()=>{});if(id=="automationen")auLaden().catch(()=>{});if(id=="system"&&ICH.admin){upLaden(true).catch(()=>{});siLaden().catch(()=>{})}if(id=="kartendesign"&&!DESIGN)designLaden();if(id=="tarife"&&!TF)tfLaden();if(id=="system"&&!SYS)sysLaden();if(id=="daten"&&!DLISTE)datenListe();document.querySelectorAll("section").forEach(s=>s.classList.toggle("aktiv",s.id==id));document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("aktiv",b.id=="n_"+id))}
 async function api(pfad,body,logid){const el=logid&&$(logid);const kn=[...document.querySelectorAll("button")];kn.forEach(b=>b.disabled=true);if(el)el.textContent="… bitte warten (über die Cloud kann das einige Sekunden dauern)";
  try{const r=await fetch(pfad,{method:body===undefined?"GET":"POST",headers:{"X-Token":T,"Content-Type":"application/json"},body:body===undefined?undefined:(body instanceof Blob?body:JSON.stringify(body))});
- if(r.status==401){location.reload();return new Promise(()=>{})}const d=await r.json().catch(()=>({}));if(r.status==403&&!d.recht){location.reload();return new Promise(()=>{})}if(!r.ok)throw new Error(d.fehler||r.status);if(el)el.textContent=d.log?d.log.join("\n"):"";return d}
+ if(r.status==401){location.reload();return new Promise(()=>{})}const d=await r.json().catch(()=>({}));if(d.zweiter_faktor_fehlt&&typeof zeige=="function"&&!document.querySelector("#benutzer.aktiv"))zeige("benutzer");if(r.status==403&&!d.recht){location.reload();return new Promise(()=>{})}if(!r.ok)throw new Error(d.fehler||r.status);if(el)el.textContent=d.log?d.log.join("\n"):"";return d}
  catch(e){if(el)el.innerHTML='<span class="fehler">✖ '+esc(e.message)+'</span>';throw e}finally{kn.forEach(b=>b.disabled=false)}}
 function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 const SK=s=>Array.isArray(s)?s[0]:s,SL=s=>Array.isArray(s)?(s[1]||s[0]):s,SC=s=>Array.isArray(s)&&s[2]?" class='"+s[2]+"'":"";
 function tabelle(id,sp,z,kl){$(id).innerHTML=z.length?"<table><tr>"+sp.map(s=>"<th>"+esc(SL(s))+"</th>").join("")+"</tr>"+z.map(r=>"<tr class='"+(kl?kl(r):"")+"'>"+sp.map(s=>"<td"+SC(s)+">"+esc(r[SK(s)])+"</td>").join("")+"</tr>").join("")+"</table>":""}
-function csvSpeichern(d,name){if(!d||!d.zeilen.length)return alert("Keine Daten.");const sp=d.spalten.map(SK);const t="﻿"+[d.spalten.map(SL).join(";")].concat(d.zeilen.map(z=>sp.map(k=>'"'+String(z[k]??"").replace(/"/g,'""')+'"').join(";"))).join("\r\n");
+function csvWert(v){let s=String(v??"");if(/^[=+\-@\t\r]/.test(s)&&!/^-?\d+([.,]\d+)?( ?%| ?€)?$/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"'}
+function csvSpeichern(d,name){if(!d||!d.zeilen.length)return alert("Keine Daten.");const sp=d.spalten.map(SK);const t="﻿"+[d.spalten.map(SL).join(";")].concat(d.zeilen.map(z=>sp.map(k=>csvWert(z[k])).join(";"))).join("\r\n");
  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([t],{type:"text/csv"}));a.download=name+".csv";a.click()}
 async function logSchalten(){await api("/api/einstellungen",{log_aktiv:$("log_aktiv").checked},"log_datei")}
 async function logZeigen(){await api("/api/log",undefined,"log_datei");const el=$("log_datei");el.scrollTop=el.scrollHeight}
@@ -415,17 +500,17 @@ async function lesen(w){const d=await api("/api/lesen?was="+w,undefined,"log_l")
 function editor(roh){if(roh.schema=="standort")return editorStandort(roh);$("p_gw").value=roh.gateway;$("p_gwname").value=roh.gatewayname;$("p_pre").value=roh.praefix;const z=[...roh.sparten];while(z.length<10)z.push({name:"",kz:"",sid:"",n:""});
  $("p_tab").innerHTML="<table><tr><th>Steckplatz</th><th>Sparte (Name)</th><th>Kürzel</th><th>Sparten-ID (1–254)</th><th>Parzellen (1–199)</th></tr>"+z.map((s,i)=>`<tr><td>${i+1}</td><td><input data-f="name" value="${esc(s.name)}"></td><td><input data-f="kz" value="${esc(s.kz)}" style="max-width:110px"></td><td><input data-f="sid" type="number" value="${esc(s.sid)}" style="max-width:120px"></td><td><input data-f="n" type="number" value="${esc(s.n)}" style="max-width:120px"></td></tr>`).join("")+"</table>"}
 function editorStandort(roh){$("p_gw").value=roh.gateway;$("p_gwname").value=roh.gatewayname;$("p_pre").value=roh.praefix;
- $("p_tab").innerHTML=`<p class="hint" style="padding:10px 12px;margin:0">Diese Planung kommt aus der <b>Netzplanung</b> (Standort ${esc(roh.standort_name||"")}, Gateway ${esc(roh.standort_gw||"")}). VLANs nach dem Standort-Schema. Sparten, Parzellen und VLAN-Blöcke bitte in der Netzplanung ändern und dort neu übernehmen.</p>`+
- "<table><tr><th>VLAN-Block</th><th>Sparte</th><th>Kürzel</th><th>Sparten-ID</th><th>Parzellen an diesem Gateway</th><th>Dienstnetze hier</th></tr>"+roh.sparten.map(s=>`<tr><td>${s.block}</td><td>${esc(s.name)}</td><td class="mono">${esc(s.kz)}</td><td>${s.sid}</td><td>${s.p_von}–${s.p_bis} von ${s.n}</td><td>${s.dienst?"ja":"–"}</td></tr>`).join("")+"</table>"}
+ $("p_tab").innerHTML=`<p class="hint" style="padding:10px 12px;margin:0">Diese Planung kommt aus der <b>Netzplanung</b> (Standort ${esc(roh.standort_name||"")}, Gateway ${esc(roh.standort_gw||"")})${roh.dynamisch?" – <b>Gateway-Zuteilung nach Buchung</b>: hier stehen nur die gebuchten Parzellen, die diesem Gateway zugeteilt sind; die Liste aktualisiert sich bei jeder Buchung":""}. VLANs nach dem Standort-Schema. Sparten, Parzellen und VLAN-Blöcke bitte in der Netzplanung ändern und dort neu übernehmen.</p>`+
+ "<table><tr><th>VLAN-Block</th><th>Sparte</th><th>Kürzel</th><th>Sparten-ID</th><th>Parzellen an diesem Gateway</th><th>Dienstnetze hier</th></tr>"+roh.sparten.map(s=>`<tr><td>${s.block}</td><td>${esc(s.name)}</td><td class="mono">${esc(s.kz)}</td><td>${s.sid}</td><td>${parzText(s)} von ${s.n}</td><td>${s.dienst?"ja":"–"}</td></tr>`).join("")+"</table>"}
 async function planSpeichern(){if(PLAN&&PLAN.roh&&PLAN.roh.schema=="standort"){await api("/api/plan",{...PLAN.roh,gateway:+$("p_gw").value||PLAN.roh.gateway,gatewayname:$("p_gwname").value,praefix:$("p_pre").value||"SparteNet.de"},"log_p");return planLaden(true)}const sp=[...$("p_tab").querySelectorAll("tr")].slice(1).map(tr=>{const o={};tr.querySelectorAll("input").forEach(i=>o[i.dataset.f]=i.type=="number"&&i.value?+i.value:i.value.trim());return o}).filter(s=>s.name);
  await api("/api/plan",{gateway:+$("p_gw").value||1,gatewayname:$("p_gwname").value,praefix:$("p_pre").value||"SparteNet.de",sparten:sp},"log_p");planLaden(true)}
 async function excelHoch(){const f=$("xls").files[0];if(f){await api("/api/excel",f,"log_p");planLaden(true)}}
 async function planLaden(still){try{PLAN=await api("/api/plan")}catch(e){$("log_p").innerHTML='<span class="fehler">✖ '+esc(e.message)+'</span>';return}
- editor(PLAN.roh);const o=PLAN.sparten.map(s=>`<option value="${esc(s.kz)}">${esc(s.name)} (${esc(s.kz)}, ${PLAN.schema=="standort"?"Parzellen "+s.p_von+"–"+s.p_bis+", VLAN-Block "+s.block:s.n+" Parzellen, Steckplatz "+s.slot})</option>`).join("");
+ editor(PLAN.roh);zgKarte();const o=PLAN.sparten.map(s=>`<option value="${esc(s.kz)}">${esc(s.name)} (${esc(s.kz)}, ${PLAN.schema=="standort"?"Parzellen "+parzText(s)+", VLAN-Block "+s.block:s.n+" Parzellen, Steckplatz "+s.slot})</option>`).join("");
  $("plan_sp").innerHTML='<option value="">Alle Sparten</option>'+o;$("ein_sp").innerHTML=o;$("ab_sp").innerHTML=o+'<option value="">Alle Sparten</option>';$("ue_sp").innerHTML=o;$("st_sp").innerHTML=o;ssid();planZeigen()}
 function ssid(){if(!PLAN)return;const kz=$("ein_sp").value,p=PLAN.praefix;$("ssid1").textContent=p+"-"+kz+"-Pächter";$("ssid2").textContent=p+"-"+kz+"-Gäste";$("ssid3").textContent=p+"-"+kz+"-Vorstand"}
 function planZeigen(){if(!PLAN)return;const f=$("plan_sp").value,g=PLAN.gateway_netz;const z=[{bez:"Gateway (Hauptverteiler)",vlan:1,netz:g.netz,maske:"255.255.255.0",router:g.router,geraete:"Technik",zugang:"untagged",t:"kopf"}];
- PLAN.sparten.filter(s=>!f||s.kz==f).forEach(s=>{z.push({bez:(PLAN.schema=="standort"?"VLAN-Block "+s.block+": "+s.name+" ("+s.kz+", ID "+s.sid+", Parzellen "+s.p_von+"–"+s.p_bis+")":"Sparte "+s.slot+": "+s.name+" ("+s.kz+", ID "+s.sid+", "+s.n+" Parzellen)"),t:"kopf"});
+ PLAN.sparten.filter(s=>!f||s.kz==f).forEach(s=>{z.push({bez:(PLAN.schema=="standort"?"VLAN-Block "+s.block+": "+s.name+" ("+s.kz+", ID "+s.sid+", Parzellen "+parzText(s)+")":"Sparte "+s.slot+": "+s.name+" ("+s.kz+", ID "+s.sid+", "+s.n+" Parzellen)"),t:"kopf"});
  PLAN.netze.filter(n=>n.sparte==s.kz).forEach(n=>z.push({bez:n.art=="parzelle"?n.name+"  (Parzelle "+n.parzelle+")":n.name,vlan:n.vlan,netz:n.netz,maske:n.maske,router:n.router,geraete:n.dhcp_start+" – "+n.dhcp_ende,zugang:(n.ssid?n.ssid+" · ":"")+n.zugang,t:n.art=="parzelle"?"":"dienst"}))});
  PLANZ={spalten:[["bez","Netz"],["vlan","VLAN"],["netz","Subnetz"],["maske","Maske"],["router","Router-IP"],["geraete","Geräte-IPs"],["zugang","WLAN / Zugang"]],zeilen:z};tabelle("tab_p",PLANZ.spalten,z,r=>r.t||"")}
 function kachel(t,v,a){return `<div class="kachel ${a}"><b>${v}</b>${t}</div>`}
@@ -748,39 +833,52 @@ async function kkLaden(){const d=await api("/api/kalkulation?prognose="+($("kk_p
  $("kb_tarif").innerHTML='<option value="">– kein Tarif (nicht gebucht) –</option>'+T.map(t=>`<option value="${esc(t.name)}">${esc(t.name)} · ${eur(t.preis)}/Jahr</option>`).join("");
  kaZeigen(d.annahmen,d.texte);if(!KB&&d.zeilen.length)kbLaden(true)}
 window.addEventListener("unhandledrejection",e=>e.preventDefault());  // Fehler zeigt api() bereits im jeweiligen Protokollfeld
-const ICH=__ICH__;
+// Drucken / PDF je Kasten: jeder Kasten (.karte) bekommt oben links einen Knopf; gedruckt wird nur dieser Kasten
+function druckKnoepfe(){document.querySelectorAll(".karte").forEach(k=>{if(k.querySelector(":scope>.druckknopf")||k.closest(".druckkopf"))return;
+ const b=document.createElement("button");b.type="button";b.className="druckknopf";b.textContent="🖨 Drucken / PDF";b.title="Nur diesen Kasten drucken – im Druckdialog „Als PDF speichern“ wählen für eine PDF-Datei";
+ b.onclick=e=>{e.stopPropagation();kastenDrucken(k)};k.prepend(b)})}
+function kastenDrucken(k){const t=(k.querySelector("h2,h3")||{}).textContent||"SparteNet";const kopf=document.createElement("div");kopf.className="druckkopf";
+ kopf.textContent="SparteNet Manager · "+t.trim()+" · "+new Date().toLocaleString("de-DE")+" · "+ICH.name;k.prepend(kopf);
+ const breit=[...k.querySelectorAll("table")].some(x=>x.scrollWidth>760);const st=document.createElement("style");st.textContent="@page{size:A4 "+(breit?"landscape":"portrait")+";margin:12mm}";document.head.appendChild(st);
+ document.body.classList.add("einzeldruck");k.classList.add("druck-diese");
+ const fertig=()=>{document.body.classList.remove("einzeldruck");k.classList.remove("druck-diese");kopf.remove();st.remove();window.removeEventListener("afterprint",fertig)};
+ window.addEventListener("afterprint",fertig);setTimeout(()=>{window.print();setTimeout(fertig,500)},50)}
+
+const ICH=__ICH__;setTimeout(farbeZeigen,0);
 function reiterErlaubt(id){return ICH.admin||!(id in ICH.reiter)||ICH.reiter[id]!="kein"}
 function startReiter(){const h=location.hash.slice(1);if(TABS.some(t=>t[0]==h)&&reiterErlaubt(h))return h;const t=TABS.find(t=>reiterErlaubt(t[0]));return t?t[0]:"benutzer"}
 function rechteHinweis(id){const e=$("nurlesen");if(!e)return;const st=ICH.admin?"schreiben":ICH.reiter[id];
  if(st=="lesen"){e.textContent="Nur lesen – in diesem Bereich lassen sich mit Ihrem Konto Daten ansehen, aber nichts ändern oder ans Gateway übertragen.";e.hidden=false}else e.hidden=true}
-(function(){const k=$("ich_k");if(k)k.textContent="👤 "+ICH.name+" · "+ICH.recht_text;
+(function(){const k=$("ich_k");if(k)k.textContent="👤 "+ICH.name+" · "+ICH.recht_text+(ICH.sparten&&ICH.sparten.length?" · "+ICH.sparten.join(", "):"");
  TABS.forEach(([id])=>{const b=$("n_"+id);if(b&&!reiterErlaubt(id))b.style.display="none"});
  document.querySelectorAll("[data-bereich]").forEach(e=>{const st=ICH.admin?"schreiben":(ICH.bereiche[e.dataset.bereich]||"kein");if(st=="kein")e.style.display="none";else if(st=="lesen")e.classList.add("nurlesen-karte")});
  document.querySelectorAll(".bn-admin").forEach(e=>e.hidden=!ICH.admin);if(!ICH.admin){const b=$("n_benutzer");if(b)b.textContent="Mein Konto"}})();
 let BN=null;const BNOFFEN=new Set();
 async function bnStart(){const d=await api("/api/benutzer-ich",undefined,"log_bni");$("log_bni").textContent="";
- $("bn_ich").innerHTML=kachel("Benutzername",esc(d.name),"")+kachel("Rechte",esc(d.recht_text),d.admin?"gut":"")+(d.anzeige?kachel("Name",esc(d.anzeige),""):"");
+ $("bn_ich").innerHTML=kachel("Benutzername",esc(d.name),"")+kachel("Rechte",esc(d.recht_text),d.admin?"gut":"")+(d.anzeige?kachel("Name",esc(d.anzeige),""):"")+(d.sparten&&d.sparten.length?kachel("Sparten",esc(d.sparten.join(", ")),"warn"):"");
  $("bn_ich_liste").innerHTML=d.admin?"":"<table><tr><th>Bereich</th><th>Ihr Recht</th></tr>"+d.liste.map(x=>`<tr class="${x.stufe=="kein Zugriff"?"gesperrt":""}"><td>${esc(x.text)}</td><td>${esc(x.stufe)}</td></tr>`).join("")+"</table>";
- $("bn_ich_pw").hidden=!d.eigenes_passwort;$("bn_admin_hint").hidden=d.name!="admin";if(ICH.admin)bnLaden()}
+ zfZeigen(d);$("bn_ich_pw").hidden=!d.eigenes_passwort;$("bn_admin_hint").hidden=d.name!="admin";if(ICH.admin)bnLaden()}
 async function bnEigenesPw(){await api("/api/benutzer-ich",{alt:$("bn_alt").value,passwort:$("bn_neu1").value,passwort2:$("bn_neu2").value},"log_bni");["bn_alt","bn_neu1","bn_neu2"].forEach(i=>$(i).value="")}
 async function bnLaden(){bnZeigen(await api("/api/benutzer",undefined,"log_bn"))}
 async function bnSpeichern(b,logid){bnZeigen(await api("/api/benutzer-speichern",b,logid||"log_bn"))}
-function bnZeigen(d){BN=d;const box=$("bn_tab"),y=box.scrollTop;
+function bnZeigen(d){BN=d;const box=$("bn_tab"),y=box.scrollTop;$("bn_2fa_pflicht").checked=!!d.zwei_faktor_pflicht;
  if(!$("bn_vorlage").options.length)$("bn_vorlage").innerHTML=Object.entries(d.vorlagen).map(([k,v])=>`<option value="${k}">${esc(v.text)}</option>`).join("")+'<option value="#admin">Administrator</option><option value="#gesperrt">Gesperrt (noch nicht freigeschaltet)</option>';
- let h="<table><tr><th>Benutzername</th><th>Name</th><th>Kontoart</th><th>Rechte</th><th>angelegt</th><th>zuletzt angemeldet</th><th>Sitzungen</th><th></th></tr>";
+ let h="<table><tr><th>Benutzername</th><th>Name</th><th>Kontoart</th><th>Rechte</th><th>angelegt</th><th>zuletzt angemeldet</th><th>Sitzungen</th><th>2FA</th><th></th></tr>";
  for(const z of d.zeilen){const n=esc(z.name),offen=BNOFFEN.has(z.name);
   h+=`<tr class="${z.art=="gesperrt"?"recht-gesperrt":""}"><td><b>${n}</b>${z.name==d.ich?" <small>(Sie)</small>":""}</td>
   <td>${z.fest?esc(z.anzeige):`<input class="bn_anz" data-n="${n}" value="${esc(z.anzeige)}" style="min-width:170px">`}</td>
   <td>${z.fest?"Administrator":`<select class="bn_art" data-n="${n}">${Object.entries(d.arten).map(([k,t])=>`<option value="${k}"${k==z.art?" selected":""}>${esc(t)}</option>`).join("")}</select>`}</td>
-  <td>${esc(z.recht_text)}${z.art=="bereiche"?` <button class="k" onclick="bnAuf('${n}')">${offen?"Rechte schließen":"Rechte …"}</button>`:""}</td>
-  <td>${esc(z.angelegt)}${z.von?" <small>von "+esc(z.von)+"</small>":""}</td><td>${esc(z.zuletzt)||"–"}</td><td>${z.sitzungen||"–"}</td>
+  <td>${esc(z.recht_text)}${z.sparten&&z.sparten.length?'<br><small>nur '+esc(z.sparten.join(", "))+'</small>':""}${z.art=="bereiche"?` <button class="k" onclick="bnAuf('${n}')">${offen?"Rechte schließen":"Rechte …"}</button>`:""}</td>
+  <td>${esc(z.angelegt)}${z.von?" <small>von "+esc(z.von)+"</small>":""}</td><td>${esc(z.zuletzt)||"–"}</td><td>${z.sitzungen||"–"}</td><td>${z.zwei_faktor?`✔ <button class="k" onclick="zfReset('${n}')">zurücksetzen</button>`:"–"}</td>
   <td>${z.fest?"":`<button class="k" onclick="bnPw('${n}')">Passwort setzen</button> <button class="k" onclick="bnLoeschen('${n}')">Löschen</button>`}</td></tr>`;
-  if(offen&&z.art=="bereiche")h+=`<tr class="bn_detail"><td colspan="8"><div class="knoepfe" style="margin:4px 0 6px">Vorlage übernehmen: ${Object.entries(d.vorlagen).map(([k,v])=>`<button class="k" onclick="bnVorlage('${n}','${k}')">${esc(v.text.split(":")[0])}</button>`).join(" ")}</div>
+  if(offen&&z.art=="bereiche")h+=`<tr class="bn_detail"><td colspan="9"><div class="knoepfe" style="margin:4px 0 6px">Vorlage übernehmen: ${Object.entries(d.vorlagen).map(([k,v])=>`<button class="k" onclick="bnVorlage('${n}','${k}')">${esc(v.text.split(":")[0])}</button>`).join(" ")}</div>
+   <div class="reihe" style="margin:4px 0 10px;max-width:760px"><div><label>Nur diese Sparten (Kürzel, z. B. „BW, FEIER“ – leer = alle Sparten)</label><input class="bn_sp" data-n="${n}" value="${esc((z.sparten||[]).join(", "))}" placeholder="alle Sparten" style="text-transform:uppercase"></div></div>
    <div class="bn_matrix">${d.bereiche.map(b=>{const st=z.bereiche[b.k]||"kein";return `<label>${esc(b.text)}<select class="bn_ber ${st}" data-n="${n}" data-k="${b.k}">${b.stufen.map(x=>`<option value="${x}"${x==st?" selected":""}>${esc(d.stufen[x])}</option>`).join("")}</select></label>`}).join("")}</div></td></tr>`}
  box.innerHTML=h+"</table>";box.scrollTop=y;
  box.querySelectorAll(".bn_art").forEach(e=>e.onchange=()=>{if(e.value=="bereiche")BNOFFEN.add(e.dataset.n);bnSpeichern({name:e.dataset.n,art:e.value})});
  box.querySelectorAll(".bn_anz").forEach(e=>e.onchange=()=>bnSpeichern({name:e.dataset.n,anzeige:e.value}));
- box.querySelectorAll(".bn_ber").forEach(e=>e.onchange=()=>bnSpeichern({name:e.dataset.n,bereiche:{[e.dataset.k]:e.value}}))}
+ box.querySelectorAll(".bn_ber").forEach(e=>e.onchange=()=>bnSpeichern({name:e.dataset.n,bereiche:{[e.dataset.k]:e.value}}));
+ box.querySelectorAll(".bn_sp").forEach(e=>e.onchange=()=>bnSpeichern({name:e.dataset.n,sparten:e.value}))}
 function bnAuf(n){BNOFFEN.has(n)?BNOFFEN.delete(n):BNOFFEN.add(n);bnZeigen(BN)}
 function bnVorlage(n,k){bnSpeichern({name:n,art:"bereiche",vorlage:k})}
 async function bnAnlegen(){const v=$("bn_vorlage").value,n=$("bn_name").value.trim();const b={neu:true,name:n,anzeige:$("bn_anz").value.trim(),passwort:$("bn_pw1").value,passwort2:$("bn_pw2").value};
@@ -829,6 +927,177 @@ function gvCsv(){if(!GP)return;const st=GP.standorte.find(s=>String(s.nr)==$("gv
  for(const g of st.gateways)for(const t of g.teile){for(let p=t.p_von;p<=t.p_bis;p++)z.push({gw:g.gw,kz:t.kz,sparte:t.name,netz:t.kz+"-Paz."+String(p).padStart(3,"0"),vlan:1000+200*(t.block-1)+p,subnetz:"10."+t.nr+"."+p+".0/24",art:"Parzelle "+p});
   if(t.dienst)[["Vorstand","vorstand",200],["Gäste","gaeste",201],["Technik","technik",250]].forEach(([n,k,x])=>z.push({gw:g.gw,kz:t.kz,sparte:t.name,netz:t.kz+"-"+n,vlan:t.vlan_d[k],subnetz:"10."+t.nr+"."+x+".0/24",art:n}))}
  csvSpeichern({spalten:[["gw","Gateway"],["kz","Kürzel"],["sparte","Sparte"],["netz","Netz"],["vlan","VLAN"],["subnetz","Subnetz"],["art","Art"]],zeilen:z},"VLAN_Plan_"+st.name)}
+
+let AU=null,AUE=null;
+const auDarf=()=>ICH.admin||ICH.bereiche.automationen=="schreiben";
+function auAktText(a){if(a.typ=="email")return"E-Mail an "+(a.an||"")+(a.an_kunde?(a.an?" + ":"")+"Kunde":"")+": „"+a.betreff+"“";if(a.typ=="buchen")return"Tarif buchen: "+a.tarif;if(a.typ=="webhook")return"Webhook "+a.url;if(a.typ=="protokoll")return"Protokoll: "+a.text;return AU.aktionen[a.typ]}
+async function auLaden(){const d=await api("/api/automation",undefined,"log_au");AU=d;document.querySelectorAll(".au-schreib").forEach(e=>{if(e.id!="au_edit")e.hidden=!auDarf()});
+ $("au_st").textContent=d.regeln.filter(r=>r.aktiv).length+" aktiv"+(d.warteschlange?" · "+d.warteschlange+" in Warteschlange":"");
+ $("au_tab").innerHTML=d.regeln.length?"<table><tr><th>Regel</th><th>Wenn</th><th>Nur wenn</th><th>Dann</th><th>zuletzt</th><th></th></tr>"+d.regeln.map(r=>{const b=r.bedingung||{};const bed=[b.sparte&&"Sparte "+b.sparte,b.tarif&&"Tarif "+b.tarif,b.betrag_min!=null&&"Betrag ≥ "+b.betrag_min+" €"].filter(Boolean).join(", ")||"immer";
+  return`<tr${r.aktiv?"":' style="opacity:.55"'}><td><b>${esc(r.name)}</b>${r.aktiv?"":" (aus)"}</td><td>${esc(d.ausloeser[r.ausloeser])}${r.ereignis_name?" „"+esc(r.ereignis_name)+"“":""}</td><td>${esc(bed)}</td><td>${r.aktionen.map(a=>esc(auAktText(a))).join("<br>")}</td><td>${esc(r.zuletzt||"–")}</td>
+  <td style="white-space:nowrap">${auDarf()?`<button class="k" data-id="${esc(r.id)}" onclick="auBearbeiten(this.dataset.id)">Bearbeiten</button> <button class="k" data-id="${esc(r.id)}" onclick="auLoeschen(this.dataset.id)">Löschen</button>`:""}</td></tr>`}).join("")+"</table>":'<p class="hint" style="padding:12px">Noch keine Regel. Beispiel: „Wenn eine Parzelle bucht → E-Mail an den Vorstand“.</p>';
+ $("au_verlauf").innerHTML=d.verlauf.length?"<table><tr><th>Zeit</th><th>Regel</th><th>Aktion</th><th>Ergebnis</th></tr>"+d.verlauf.map(v=>`<tr><td style="white-space:nowrap">${esc(v.zeit)}</td><td>${esc(v.regel)}</td><td>${esc(v.aktion)}</td><td>${v.ok?"✔ ":'<span class="fehler">✖ </span>'}${esc(v.text)}</td></tr>`).join("")+"</table>":'<p class="hint" style="padding:10px">Noch nichts ausgeführt.</p>';
+ if(d.smtp){$("sm_host").value=d.smtp.host;$("sm_port").value=d.smtp.port;$("sm_sich").value=d.smtp.sicherheit;$("sm_ben").value=d.smtp.benutzer;$("sm_abs").value=d.smtp.absender;$("sm_absn").value=d.smtp.absender_name;
+  $("sm_pw").placeholder=d.smtp.passwort_aus_datei?"aus Docker-Secret":(d.smtp.passwort_gesetzt?"gespeichert – leer lassen = unverändert":"");$("sm_pw").disabled=d.smtp.passwort_aus_datei}
+ if(ICH.admin)apiLaden().catch(()=>{})}
+function auSparten(){return[...new Set((GP?GP.zeilen.map(z=>z.kz):[]).concat(PLAN?PLAN.sparten.map(s=>s.kz):[]))].sort()}
+function auNeu(){auBearbeiten(null)}
+function auBearbeiten(id){const r=id?AU.regeln.find(x=>x.id==id):{name:"",ausloeser:"buchung",aktiv:true,bedingung:{},aktionen:[{typ:"email",an:"",an_kunde:false,betreff:"Neue Buchung: {sparte} Parzelle {parzelle}",text:"Hallo,\n\nin der Sparte {sparte_name} hat Parzelle {parzelle} den Tarif {tarif} gebucht ({preis} im Jahr).\n\nSparteNet Manager, {datum} {zeit}"}]};
+ AUE=JSON.parse(JSON.stringify(r));$("au_edit_t").textContent=id?"Regel bearbeiten":"Neue Regel";$("au_name").value=r.name;$("au_aktiv").checked=r.aktiv!==false;
+ $("au_aus").innerHTML=Object.entries(AU.ausloeser).map(([k,t])=>`<option value="${k}">${esc(t)}</option>`).join("");$("au_aus").value=r.ausloeser;$("au_evn").value=r.ereignis_name||"";
+ const b=r.bedingung||{};$("au_b_sp").innerHTML='<option value="">alle Sparten</option>'+auSparten().map(k=>`<option value="${esc(k)}">${esc(k)}</option>`).join("");$("au_b_sp").value=b.sparte||"";
+ $("au_b_tf").innerHTML='<option value="">alle Tarife</option>'+AU.tarife.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join("");$("au_b_tf").value=b.tarif||"";$("au_b_bt").value=b.betrag_min??"";
+ $("au_neu_typ").innerHTML=Object.entries(AU.aktionen).map(([k,t])=>`<option value="${k}">${esc(t)}</option>`).join("");
+ $("au_ph").innerHTML="<table><tr><th>Platzhalter</th><th>wird ersetzt durch</th></tr>"+Object.entries(AU.platzhalter).map(([k,t])=>`<tr><td class="mono">${esc(k)}</td><td>${esc(t)}</td></tr>`).join("")+"</table>";
+ auAusWechsel();auAktZeigen();$("log_aue").textContent="";$("au_edit").hidden=false;$("au_edit").scrollIntoView({behavior:"smooth",block:"start"})}
+function auAusWechsel(){$("au_evn_w").hidden=$("au_aus").value!="api"}
+function auFeld(i,f,wert,label,art){const id="au_a"+i+"_"+f;if(art=="area")return`<div style="grid-column:1/-1"><label for="${id}">${label}</label><textarea id="${id}" data-i="${i}" data-f="${f}" rows="6" class="au_f" style="width:100%;font:inherit">${esc(wert)}</textarea></div>`;
+ if(art=="check")return`<div><label style="display:flex;gap:8px;align-items:center;margin-top:26px"><input type="checkbox" id="${id}" data-i="${i}" data-f="${f}" class="au_f" style="width:auto"${wert?" checked":""}> ${label}</label></div>`;
+ if(art=="tarif")return`<div><label for="${id}">${label}</label><select id="${id}" data-i="${i}" data-f="${f}" class="au_f"><option value="{tarif}"${wert=="{tarif}"?" selected":""}>Tarif aus dem Ereignis</option>${AU.tarife.map(t=>`<option${t==wert?" selected":""}>${esc(t)}</option>`).join("")}</select></div>`;
+ return`<div><label for="${id}">${label}</label><input id="${id}" data-i="${i}" data-f="${f}" class="au_f" value="${esc(wert)}"></div>`}
+function auAktZeigen(){$("au_akt").innerHTML=AUE.aktionen.map((a,i)=>`<div class="karte" style="margin:8px 0;padding:12px;background:var(--bg2,#f7f9f5)"><div style="display:flex;gap:8px;align-items:center"><b style="flex:1">${i+1}. ${esc(AU.aktionen[a.typ])}</b><button class="k" onclick="auAktWeg(${i})">Entfernen</button></div>
+ <div class="reihe">${a.typ=="email"?auFeld(i,"an",a.an||"","Empfänger (Komma-getrennt)")+auFeld(i,"an_kunde",a.an_kunde,"zusätzlich an den Kunden ({email} aus dem Ereignis)","check")+auFeld(i,"betreff",a.betreff||"","Betreff")+auFeld(i,"text",a.text||"","Text","area")
+  :a.typ=="buchen"?auFeld(i,"tarif",a.tarif||"{tarif}","Tarif","tarif")+'<div class="hint" style="grid-column:1/-1">Bucht im Manager (Kalkulation/Tarife). Ans Gateway geht das erst über „Tarife → An das Gateway übertragen“.</div>'
+  :a.typ=="webhook"?auFeld(i,"url",a.url||"","Adresse (https://…)")+'<div class="hint" style="grid-column:1/-1">POST mit JSON: {"ereignis", "daten", "regel", "zeit"} – ohne WLAN-Passwort.</div>'
+  :a.typ=="protokoll"?auFeld(i,"text",a.text||"","Text"):'<div class="hint">Entfernt die Buchung der Parzelle aus dem Ereignis (nur im Manager).</div>'}</div></div>`).join("")||'<p class="hint">Noch keine Aktion.</p>';
+ document.querySelectorAll(".au_f").forEach(e=>e.oninput=e.onchange=()=>{AUE.aktionen[+e.dataset.i][e.dataset.f]=e.type=="checkbox"?e.checked:e.value})}
+function auAktNeu(){}
+function auAktionNeu(){const t=$("au_neu_typ").value;AUE.aktionen.push(t=="email"?{typ:t,an:"",an_kunde:false,betreff:"",text:""}:t=="buchen"?{typ:t,tarif:"{tarif}"}:t=="webhook"?{typ:t,url:""}:t=="protokoll"?{typ:t,text:""}:{typ:t});auAktZeigen()}
+function auAktWeg(i){AUE.aktionen.splice(i,1);auAktZeigen()}
+function auRegel(){return{...AUE,name:$("au_name").value,aktiv:$("au_aktiv").checked,ausloeser:$("au_aus").value,ereignis_name:$("au_evn").value,bedingung:{sparte:$("au_b_sp").value,tarif:$("au_b_tf").value,betrag_min:$("au_b_bt").value}}}
+async function auSpeichern(){const r=auRegel();const d=await api("/api/automation-speichern",{regel:r},"log_aue");$("au_edit").hidden=true;await auLaden();$("log_au").textContent=d.log.join("\n")}
+async function auProbe(){const r=auRegel();const d=await api("/api/automation-probe",{ausloeser:r.ausloeser,ereignis_name:r.ereignis_name,sparte:r.bedingung.sparte||auSparten()[0]||"BW",tarif:r.bedingung.tarif||AU.tarife[0],betrag:r.bedingung.betrag_min||"120"},"log_aue");
+ $("log_aue").textContent=d.log.join("\n")+(d.ergebnisse.length?"\n"+d.ergebnisse.map(e=>(e.ok?"✔ ":"✖ ")+e.regel+" · "+e.aktion+": "+e.text).join("\n"):"")+"\n(Der Probelauf prüft die gespeicherten Regeln – Änderungen vorher speichern.)"}
+async function auLoeschen(id){const r=AU.regeln.find(x=>x.id==id);if(!confirm("Regel „"+(r?r.name:id)+"“ löschen?"))return;await api("/api/automation-loeschen",{id},"log_au");auLaden()}
+async function smSpeichern(){await api("/api/smtp-speichern",{host:$("sm_host").value,port:$("sm_port").value,sicherheit:$("sm_sich").value,benutzer:$("sm_ben").value,passwort:$("sm_pw").value,absender:$("sm_abs").value,absender_name:$("sm_absn").value},"log_sm");$("sm_pw").value="";auLaden()}
+async function smTest(){await api("/api/smtp-test",{an:$("sm_test_an").value},"log_sm")}
+let APIK=null;
+async function apiLaden(){const d=await api("/api/api-schluessel",undefined,"log_api");APIK=d;$("api_min").textContent=d.pro_minute;
+ if(!$("api_rechte").innerHTML)$("api_rechte").innerHTML=Object.entries(d.rechte).map(([k,t])=>`<label style="display:flex;gap:6px;align-items:center;margin:0"><input type="checkbox" class="api_r" value="${k}" style="width:auto"${k=="ereignis"?" checked":""}> ${esc(t)}</label>`).join("");
+ $("api_tab").innerHTML=d.schluessel.length?"<table><tr><th>Name</th><th>Schlüssel</th><th>Rechte</th><th>Sparten</th><th>angelegt</th><th>zuletzt benutzt</th><th></th></tr>"+d.schluessel.map(s=>`<tr${s.aktiv?"":' style="opacity:.55"'}><td><b>${esc(s.name)}</b>${s.aktiv?"":" (deaktiviert)"}</td><td class="mono">sn_${esc(s.id)}_…</td><td>${esc((s.rechte||[]).join(", "))}</td><td>${esc((s.sparten||[]).join(", ")||"alle")}</td>
+  <td>${esc(s.angelegt)}<br><small>${esc(s.von)}</small></td><td>${esc(s.zuletzt||"–")}${s.anfragen?"<br><small>"+s.anfragen+" Anfragen</small>":""}</td><td style="white-space:nowrap"><button class="k" data-id="${esc(s.id)}" data-a="${s.aktiv?0:1}" onclick="apiAendern(this.dataset.id,{aktiv:this.dataset.a=='1'})">${s.aktiv?"Deaktivieren":"Aktivieren"}</button> <button class="k" data-id="${esc(s.id)}" onclick="if(confirm('Schlüssel endgültig löschen? Programme, die ihn benutzen, bekommen dann keinen Zugriff mehr.'))apiAendern(this.dataset.id,{loeschen:true})">Löschen</button></td></tr>`).join("")+"</table>":'<p class="hint" style="padding:10px">Noch kein API-Schlüssel.</p>';
+ const o=location.origin;$("api_bsp").textContent=`# Verbindung testen
+curl -H "Authorization: Bearer sn_…" ${o}/api/v1/status
+
+# Zahlung eingegangen → startet die Automationen mit Auslöser „Zahlung eingegangen“
+curl -X POST -H "Authorization: Bearer sn_…" -H "Content-Type: application/json" \\
+  -d '{"ereignis":"zahlung","sparte":"BW","parzelle":12,"betrag":"120.00","referenz":"RE-2026-0042","email":"paechter@example.de","name":"Max Mustermann","tarif":"Basic"}' \\
+  ${o}/api/v1/ereignis
+
+# Eigenes Ereignis (Auslöser „Eigenes Ereignis über die API“, Name „mahnung“)
+curl -X POST -H "Authorization: Bearer sn_…" -H "Content-Type: application/json" -d '{"ereignis":"mahnung","sparte":"BW","parzelle":12}' ${o}/api/v1/ereignis
+
+# Tarif buchen ("tarif":"" entfernt die Buchung) – löst die Automationen „Buchung“ bzw. „Kündigung“ aus
+curl -X POST -H "Authorization: Bearer sn_…" -H "Content-Type: application/json" -d '{"sparte":"BW","parzelle":12,"tarif":"Basic"}' ${o}/api/v1/buchung
+
+# Buchungen und Tarife lesen
+curl -H "Authorization: Bearer sn_…" "${o}/api/v1/buchungen?sparte=BW"
+curl -H "Authorization: Bearer sn_…" ${o}/api/v1/tarife`}
+async function apiNeu(){const rechte=[...document.querySelectorAll(".api_r:checked")].map(e=>e.value);const sparten=$("api_sp").value.split(/[,;\s]+/).filter(Boolean);
+ const d=await api("/api/api-schluessel-neu",{name:$("api_name").value,rechte,sparten},"log_api");$("api_name").value="";$("api_sp").value="";
+ $("api_neu").hidden=false;$("api_neu").innerHTML='<b>Neuer API-Schlüssel – jetzt kopieren, er wird nicht noch einmal angezeigt:</b><br><span class="mono" id="api_neu_k" style="user-select:all;overflow-wrap:anywhere"></span> <button class="k" onclick="navigator.clipboard&&navigator.clipboard.writeText($(\'api_neu_k\').textContent).then(()=>this.textContent=\'Kopiert ✔\')">Kopieren</button>';
+ $("api_neu_k").textContent=d.neu;await apiLaden();$("log_api").textContent=d.log.join("\n")}
+async function apiAendern(id,x){await api("/api/api-schluessel-aendern",{id,...x},"log_api");$("api_neu").hidden=true;apiLaden()}
+
+function parzText(s){const l=s.parzellen||(s.p_von?Array.from({length:s.p_bis-s.p_von+1},(_,i)=>s.p_von+i):[]);if(!l.length)return"keine";const r=[];let a=l[0],b=l[0];
+ for(const x of l.slice(1).concat([null])){if(x===b+1){b=x;continue}r.push(a==b?String(a):a+"–"+b);a=b=x}return r.join(", ")}
+let ZT=null,ZG=null;
+async function ztLaden(){const d=await api("/api/zuteilung",undefined,"log_zt");ZT=d;$("zt_an").checked=d.an;$("zt_pg").textContent=d.pg;
+ const darf=ICH.admin||(ICH.bereiche.netzplanung=="schreiben"&&!ICH.sparten);document.querySelectorAll(".zt-schreib").forEach(e=>e.hidden=!darf);
+ $("zt_st").textContent=d.an?"eingeschaltet"+(d.seit?" seit "+d.seit:""):"aus";$("zt_st").className="status"+(d.an?" ok":"");
+ const sel=$("zt_stf"),alt=sel.value;sel.innerHTML=d.standorte.map(s=>`<option value="${s.nr}">${esc(s.name)} · ${s.gebucht} zugeteilt · ${s.gw_geplant} Gateway${s.gw_geplant!=1?"s":""} geplant</option>`).join("");if(d.standorte.some(s=>String(s.nr)==alt))sel.value=alt;ztZeigen()}
+function ztZeigen(){const d=ZT;if(!d)return;const st=d.standorte.find(s=>String(s.nr)==$("zt_stf").value);if(!st){$("zt_tab").innerHTML="";return}
+ const darf=ICH.admin||ICH.bereiche.planung=="schreiben",farbe={anlegen:"#b26b00",aktiv:"",entfernen:"#b00020"};
+ $("zt_tab").innerHTML="<table><tr><th>Gateway</th><th>belegt</th><th>VLANs</th><th>Parzellen (VLAN)</th><th></th></tr>"+st.gateways.map(g=>`<tr><td><b>GW ${g.gw}</b>${g.geplant?"":" <small>(nicht geplant)</small>"}</td><td>${g.belegt} / ${d.pg}${g.anlegen?`<br><small style="color:${farbe.anlegen}">${g.anlegen} anzulegen</small>`:""}${g.entfernen?`<br><small style="color:${farbe.entfernen}">${g.entfernen} zu entfernen</small>`:""}</td>
+  <td>${g.vlans}<br><small>${g.belegt} + ${g.dienstnetze} Dienst</small></td><td>${g.sparten.map(s=>`<b class="mono">${esc(s.kz)}</b> ${s.parzellen.map(x=>`<span title="${esc(d.status_text[x.status])} · VLAN ${x.vlan}" style="${farbe[x.status]?"color:"+farbe[x.status]+";font-weight:600":""}${x.status=="entfernen"?";text-decoration:line-through":""}">${x.p}</span>`).join(", ")}`).join("<br>")||'<span class="hint">frei</span>'}</td>
+  <td>${darf&&d.an&&(g.belegt||g.gw==1)?`<button class="k" onclick="ztUebernehmen(${st.nr},${g.gw})">${d.aktiv_gateway.standort==st.nr&&d.aktiv_gateway.gw==g.gw&&d.aktiv_gateway.dynamisch?"✔ aktive Planung":"Als Planung übernehmen"}</button>`:""}</td></tr>`).join("")+"</table>"+
+  '<p class="hint" style="padding:6px 10px">Orange = gebucht, Netz noch anzulegen · rot durchgestrichen = Buchung gelöscht, Netz noch am Gateway · Maus über die Nummer zeigt die VLAN-ID.</p>'}
+async function ztSchalten(){const an=$("zt_an").checked;if(an&&!confirm("Gateway-Zuteilung nach Buchung einschalten?\n\nAlle gebuchten Parzellen werden einem Gateway zugeteilt – vorhandene bevorzugt dort, wo sie laut Netzplanung schon liegen. Neue Buchungen füllen danach immer zuerst das erste Gateway. Am Gateway ändert sich dadurch nichts.")){$("zt_an").checked=false;return}
+ try{ZT=await api("/api/zuteilung-einstellen",{an},"log_zt");ztLaden().then(()=>$("log_zt").textContent=ZT.log.join("\n"));PLAN=null;planLaden(true)}catch(e){$("zt_an").checked=!an}}
+async function ztAbgleichen(){const d=await api("/api/zuteilung-einstellen",{abgleichen:true},"log_zt");await ztLaden();$("log_zt").textContent=d.log.join("\n");PLAN=null;planLaden(true)}
+async function ztUebernehmen(st,gw){const s=ZT.standorte.find(x=>x.nr==st);if(!confirm("Gateway "+gw+" am Standort „"+s.name+"“ als Planung übernehmen? Danach unter „Verbindung“ die Konsole dieses Gateways wählen. Am Gateway ändert sich noch nichts."))return;
+ await api("/api/gwplan-vlan-uebernehmen",{standort:st,gw:gw},"log_zt");PLAN=null;await planLaden(true);ztLaden()}
+function zgKarte(){const k=$("zg_karte");if(!k||!PLAN)return;const r=PLAN.roh||{};k.hidden=!(r.dynamisch);if(r.dynamisch)$("zg_hint").innerHTML=`Aktive Planung: <b>${esc(r.gatewayname||"")}</b>. „Vorschau“ vergleicht die Zuteilung mit den Netzen am Gateway: gebuchte Parzellen ohne Netz werden angelegt (mit Passwort ins Pächter-WLAN, falls schon vorhanden), Netze gelöschter Buchungen werden entfernt – vorher werden ihre Zugänge im WLAN gelöscht (mit Sicherung). Nur ausgewählte Zeilen werden ausgeführt.`}
+async function zgVorschau(){const d=await api("/api/zuteilung-gateway",{},"log_zg");ZG=d;const zeile=(x,art,an)=>`<tr><td><input type="checkbox" class="zg_w" data-art="${art}" value="${esc(x.netz)}" style="width:auto"${an?" checked":""}></td><td>${art=="anlegen"?"anlegen":"entfernen"}</td><td class="mono">${esc(x.netz)}</td><td class="mono">${esc(x.vlan??"")}</td><td>${esc(x.grund||"gebucht")}</td></tr>`;
+ const z=d.anlegen.map(x=>zeile(x,"anlegen",true)).concat(d.entfernen.map(x=>zeile(x,"entfernen",true))).concat(d.ueberzaehlig.map(x=>zeile(x,"entfernen",false)));
+ $("zg_tab").innerHTML=z.length?"<table><tr><th></th><th>Aktion</th><th>Netz</th><th>VLAN</th><th>Grund</th></tr>"+z.join("")+"</table>"+(d.ueberzaehlig.length?'<p class="hint" style="padding:6px 10px">Nicht vorausgewählt: Parzellennetze am Gateway, die diesem Gateway nicht zugeteilt sind (z. B. noch aus der festen Aufteilung). Nur auswählen, wenn sie wirklich weg sollen.</p>':""):'<p class="hint" style="padding:10px">Alles aktuell – nichts zu tun.</p>';
+ $("zg_los").disabled=!z.length}
+async function zgAusfuehren(){const w=[...document.querySelectorAll(".zg_w:checked")];const an=w.filter(e=>e.dataset.art=="anlegen").map(e=>e.value),weg=w.filter(e=>e.dataset.art=="entfernen").map(e=>e.value);
+ if(!an.length&&!weg.length)return $("log_zg").textContent="Nichts ausgewählt.";
+ if(!confirm(`Am Gateway jetzt ausführen?\n\n${an.length} Netz(e) anlegen${an.length?": "+an.slice(0,8).join(", ")+(an.length>8?" …":""):""}\n${weg.length} Netz(e) entfernen${weg.length?": "+weg.slice(0,8).join(", ")+(weg.length>8?" …":""):""}\n\nVorher eine Sicherung der Konsole machen.`))return;
+ await api("/api/zuteilung-gateway",{ausfuehren:true,anlegen:an,entfernen:weg},"log_zg");$("zg_los").disabled=true;$("zg_tab").innerHTML="";if(ZT)ztLaden().catch(()=>{})}
+
+const FARBEN={system:["◐","wie das System"],hell:["☀","hell"],dunkel:["☾","dunkel"]};
+function farbeLesen(){try{return localStorage.getItem("sn_farbe")||"system"}catch(e){return"system"}}
+function farbeSetzen(f){if(!FARBEN[f])f="system";try{localStorage.setItem("sn_farbe",f)}catch(e){}if(f=="system")delete document.documentElement.dataset.farbe;else document.documentElement.dataset.farbe=f;farbeZeigen()}
+function farbeZeigen(){const f=farbeLesen(),k=$("farbe_k");if(k){k.textContent=FARBEN[f][0];k.title="Farbschema: "+FARBEN[f][1]+" (klicken zum Wechseln)"}if($("an_farbe"))$("an_farbe").value=f;
+ const dunkel=f=="dunkel"||(f=="system"&&matchMedia("(prefers-color-scheme: dark)").matches);const m=document.querySelector('meta[name=theme-color]');if(m)m.content=dunkel?"#0b1218":"#1d2f3e"}
+function farbeWechseln(){const r=["system","hell","dunkel"];farbeSetzen(r[(r.indexOf(farbeLesen())+1)%3])}
+try{matchMedia("(prefers-color-scheme: dark)").addEventListener("change",farbeZeigen)}catch(e){}
+
+let UM=null;
+async function umVorschau(){const d=await api("/api/umzug",{},"log_um");UM=d;
+ $("um_tab").innerHTML=d.zeilen.length?'<table><tr><th><input type="checkbox" id="um_alle" checked style="width:auto" onchange="document.querySelectorAll(\'.um_w:not(:disabled)\').forEach(e=>e.checked=this.checked)"></th><th>Netz</th><th>VLAN alt → neu</th><th>Subnetz alt → neu</th><th>Änderung</th></tr>'+d.zeilen.map(z=>`<tr${z.blockiert?' class="falsch"':""}><td><input type="checkbox" class="um_w" value="${esc(z.id)}" style="width:auto"${z.blockiert?"":" checked"}></td><td class="mono">${esc(z.netz)}</td><td class="mono">${esc(z.vlan_alt||"–")} → ${esc(z.vlan_neu)}</td><td class="mono">${esc(z.subnetz_alt)} → ${esc(z.subnetz_neu)}</td><td>${esc(z.text)}${z.blockiert?'<br><small class="fehler" style="color:var(--red)">'+esc(z.blockiert)+"</small>":""}</td></tr>`).join("")+"</table>":'<p class="hint" style="padding:10px">Nichts umzustellen – alle vorhandenen Netze passen zur Planung.</p>';
+ $("um_los").disabled=$("um_eins").disabled=!d.zeilen.length}
+async function umAusfuehren(eins){const w=[...document.querySelectorAll(".um_w:checked")].map(e=>e.value);if(!w.length)return $("log_um").textContent="Nichts ausgewählt.";
+ if(!confirm((eins?"Nur das erste ausgewählte Netz":w.length+" Netz(e)")+" jetzt am Gateway umstellen?\n\nGeräte in diesen Netzen verlieren kurz die Verbindung und bekommen eine neue IP. Vorher eine Sicherung der Konsole machen. Der Manager sichert den alten Stand für „Umzug rückgängig“."))return;
+ await api("/api/umzug",{ausfuehren:true,netze:w,nur_eins:eins},"log_um");$("um_los").disabled=$("um_eins").disabled=true;$("um_tab").innerHTML=""}
+async function umZurueck(){if(!confirm("Letzten Umzug rückgängig machen? Die Netze bekommen VLAN, Subnetz und DHCP-Bereich von vorher zurück."))return;await api("/api/umzug-rueckgaengig",{},"log_um")}
+
+let UL=null;
+async function ulLaden(){const d=await api("/api/unterlagen",undefined,"log_ul");UL=d;
+ const sp=(d.sparten_erlaubt||[...new Set((GP?GP.zeilen.map(z=>z.kz):[]).concat(PLAN?PLAN.sparten.map(s=>s.kz):[]))].sort());
+ $("ul_sparte").innerHTML=(d.sparten_erlaubt?"":'<option value="">Allgemein (alle Sparten)</option>')+sp.map(k=>`<option value="${esc(k)}">${esc(k)}</option>`).join("");
+ $("ul_ordnerliste").innerHTML=d.ordner.map(o=>`<option value="${esc(o)}">`).join("");
+ const fo=$("ul_f_ordner").value,fs=$("ul_f_sparte").value;
+ $("ul_f_ordner").innerHTML='<option value="">alle Ordner</option>'+d.ordner.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join("");$("ul_f_ordner").value=fo;
+ const ds=[...new Set(d.dateien.map(x=>x.sparte||""))].sort();$("ul_f_sparte").innerHTML='<option value="*">alle</option>'+ds.map(k=>`<option value="${esc(k)}">${k?esc(k):"Allgemein"}</option>`).join("");if([...$("ul_f_sparte").options].some(o=>o.value==fs))$("ul_f_sparte").value=fs;
+ $("ul_st").textContent=d.belegt_mb+" / "+d.gesamt_mb+" MB";ulZeigen()}
+const groesse=b=>b>=1e6?(b/1e6).toLocaleString("de-DE",{maximumFractionDigits:1})+" MB":Math.max(1,Math.round(b/1e3))+" KB";
+function ulZeigen(){const d=UL;if(!d)return;const q=$("ul_such").value.trim().toLowerCase(),fo=$("ul_f_ordner").value,fs=$("ul_f_sparte").value;
+ const L=d.dateien.filter(x=>(!q||(x.name+" "+(x.beschreibung||"")).toLowerCase().includes(q))&&(!fo||x.ordner==fo)&&(fs=="*"||!fs&&fs!==""||(x.sparte||"")==fs));
+ const darf=ICH.admin||ICH.bereiche.unterlagen=="schreiben";
+ $("ul_tab").innerHTML=L.length?"<table><tr><th>Name</th><th>Ordner</th><th>Sparte</th><th>Größe</th><th>hochgeladen</th><th>Beschreibung</th><th></th></tr>"+L.map(x=>`<tr><td><b>${esc(x.name)}</b></td>
+  <td>${darf&&x.schreiben?`<input class="ul_in" data-id="${x.id}" data-f="ordner" value="${esc(x.ordner)}" list="ul_ordnerliste" style="min-width:120px">`:esc(x.ordner)}</td><td>${x.sparte?esc(x.sparte):"Allgemein"}</td><td>${groesse(x.groesse)}</td>
+  <td>${esc(x.zeit)}<br><small>${esc(x.von)}</small></td><td>${darf&&x.schreiben?`<input class="ul_in" data-id="${x.id}" data-f="beschreibung" value="${esc(x.beschreibung||"")}" style="min-width:200px">`:esc(x.beschreibung||"")}</td>
+  <td style="white-space:nowrap">${x.ansehen?`<button class="k" onclick="ulDatei('${x.id}',true)">Ansehen</button> `:""}<button class="k" onclick="ulDatei('${x.id}',false)">Herunterladen</button>${darf&&x.schreiben?` <button class="k" onclick="ulLoeschen('${x.id}')">Löschen</button>`:""}</td></tr>`).join("")+"</table>":'<p class="hint" style="padding:12px">Keine Unterlagen'+(q||fo?" für diesen Filter":"")+".</p>";
+ document.querySelectorAll(".ul_in").forEach(e=>e.onchange=async()=>{UL=await api("/api/unterlage-aendern",{id:e.dataset.id,[e.dataset.f]:e.value},"log_ul");ulZeigen()})}
+async function ulHoch(files){const max=UL?UL.max_datei_mb:15;for(const f of files){if(f.size>max*1e6){$("log_ulh").innerHTML='<span class="fehler">✖ '+esc(f.name)+": größer als "+max+" MB</span>";continue}
+  const p=new URLSearchParams({name:f.name,ordner:$("ul_ordner").value||"Allgemein",sparte:$("ul_sparte").value||"",beschreibung:$("ul_beschr").value||""});
+  try{UL=await api("/api/unterlage-hochladen?"+p.toString(),f,"log_ulh")}catch(e){}}
+ $("ul_datei").value="";$("ul_beschr").value="";if(UL)ulLaden()}
+async function ulDatei(id,ansehen){const x=UL.dateien.find(y=>y.id==id);const w=ansehen?window.open("","_blank"):null;
+ try{const r=await fetch("/api/unterlage-datei?id="+encodeURIComponent(id),{headers:{"X-Token":T}});if(!r.ok){let m=r.status;try{m=(await r.json()).fehler}catch(e){}throw new Error(m)}
+  const b=await r.blob();const u=URL.createObjectURL(b);if(ansehen&&w){w.location=u}else{const a=document.createElement("a");a.href=u;a.download=x?x.name:"Datei";document.body.appendChild(a);a.click();a.remove()}setTimeout(()=>URL.revokeObjectURL(u),60000)}
+ catch(e){if(w)w.close();$("log_ul").innerHTML='<span class="fehler">✖ '+esc(e.message)+'</span>'}}
+async function ulLoeschen(id){const x=UL.dateien.find(y=>y.id==id);if(!confirm("„"+(x?x.name:id)+"“ endgültig löschen?"))return;UL=await api("/api/unterlage-loeschen",{id},"log_ul");ulZeigen()}
+(function(){const z=$("ul_zone");if(!z)return;["dragenter","dragover"].forEach(t=>z.addEventListener(t,e=>{e.preventDefault();z.style.borderColor="#3a9a1f"}));["dragleave","drop"].forEach(t=>z.addEventListener(t,e=>{e.preventDefault();z.style.borderColor=""}));z.addEventListener("drop",e=>ulHoch(e.dataTransfer.files))})();
+
+async function siLaden(){const d=await api("/api/sicherung",undefined,"log_si");const e=d.einstellungen;$("si_auto").checked=e.automatisch;$("si_uhr").value=e.uhrzeit;$("si_anz").value=e.anzahl;
+ $("si_liste").innerHTML=d.liste.length?"<table><tr><th>Sicherung auf dem Server</th><th>Zeit</th><th>Größe</th><th></th></tr>"+d.liste.map(x=>`<tr><td class="mono">${esc(x.name)}</td><td>${esc(x.zeit)}</td><td>${groesse(x.groesse)}${x.verschluesselt?" · verschlüsselt":""}</td><td><button class="k" onclick="siServerDatei('${esc(x.name)}')">Herunterladen</button></td></tr>`).join("")+"</table>":'<p class="hint" style="padding:10px">Noch keine Sicherung auf dem Server.</p>';
+ if(!d.krypto)$("log_si").textContent="Hinweis: Verschlüsselung nicht verfügbar (Paket cryptography fehlt) – Sicherungen nur unverschlüsselt."}
+async function siBlob(pfad,body,name){const r=await fetch(pfad,{method:body?"POST":"GET",headers:{"X-Token":T,"Content-Type":"application/json"},body:body?JSON.stringify(body):undefined});
+ if(!r.ok){let m=r.status;try{m=(await r.json()).fehler}catch(e){}throw new Error(m)}const cd=r.headers.get("Content-Disposition")||"";const m=/filename\*=UTF-8''([^;]+)/.exec(cd);
+ const b=await r.blob(),u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=m?decodeURIComponent(m[1]):name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),60000)}
+async function siHerunterladen(){const p=$("si_pw").value;if(p!==$("si_pw2").value)return $("log_si").innerHTML='<span class="fehler">✖ Die Passwörter stimmen nicht überein.</span>';
+ if(!p&&!confirm("Ohne Passwort ist die Sicherung NICHT verschlüsselt (WLAN-Passwörter und Cloud-Key lesbar). Trotzdem herunterladen?"))return;
+ $("log_si").textContent="… Sicherung wird erstellt";try{await siBlob("/api/sicherung-erstellen",{passwort:p},"SparteNet_Datensicherung");$("log_si").textContent="✔ Sicherung heruntergeladen"+(p?" (verschlüsselt).":".");$("si_pw").value=$("si_pw2").value=""}catch(e){$("log_si").innerHTML='<span class="fehler">✖ '+esc(e.message)+'</span>'}}
+async function siServerDatei(n){try{await siBlob("/api/sicherung-datei?name="+encodeURIComponent(n),null,n)}catch(e){$("log_si").innerHTML='<span class="fehler">✖ '+esc(e.message)+'</span>'}}
+async function siJetzt(){await api("/api/sicherung-jetzt",{},"log_si");siLaden()}
+async function siEinstellungen(){await api("/api/sicherung-einstellungen",{automatisch:$("si_auto").checked,uhrzeit:$("si_uhr").value,anzahl:$("si_anz").value},"log_si");siLaden()}
+async function siEinspielen(){const f=$("si_datei").files[0];$("si_datei").value="";if(!f)return;if(!confirm("ALLE Daten des Managers durch „"+f.name+"“ ersetzen? Der jetzige Stand wird vorher auf dem Server gesichert."))return;
+ $("log_si").textContent="… wird eingespielt";try{const r=await fetch("/api/sicherung-einspielen",{method:"POST",headers:{"X-Token":T,"X-Sicherung-Passwort":encodeURIComponent($("si_ein_pw").value)},body:f});const d=await r.json();if(!r.ok)throw new Error(d.fehler||r.status);
+  $("log_si").textContent=d.log.join("\n");$("si_ein_pw").value="";if(d.neu_laden)setTimeout(()=>location.reload(),2500)}catch(e){$("log_si").innerHTML='<span class="fehler">✖ '+esc(e.message)+'</span>'}}
+
+function zfZeigen(d){const an=!!d.zwei_faktor;$("bn_2fa").hidden=d.name=="Handy (PIN)";
+ $("bn_2fa_st").innerHTML=an?"✔ Eingeschaltet seit "+esc(d.zwei_faktor_seit)+" · noch "+d.notfall_rest+" Notfall-Codes":(d.zwei_faktor_pflicht?'<b style="color:var(--red)">Pflicht für Administratoren – bitte jetzt einrichten.</b>':"Aus. Mit Zwei-Faktor braucht die Anmeldung zusätzlich einen 6-stelligen Code aus einer App auf dem Handy.");
+ $("bn_2fa_ein").hidden=an;$("bn_2fa_aus").hidden=!an}
+async function zfStart(){const d=await api("/api/2fa-start",{},"log_bni");$("bn_2fa_qr").innerHTML=d.svg;$("bn_2fa_geheim").textContent=d.geheim;$("bn_2fa_neu").hidden=false;$("bn_2fa_notfall").hidden=true;$("bn_2fa_code").focus()}
+async function zfBestaetigen(){const d=await api("/api/2fa-bestaetigen",{code:$("bn_2fa_code").value.trim()},"log_bni");$("bn_2fa_neu").hidden=true;$("bn_2fa_code").value="";
+ $("bn_2fa_notfall").innerHTML='<p class="hint"><b>Notfall-Codes</b> – jeder funktioniert genau einmal, falls das Handy weg ist. Jetzt ausdrucken oder sicher notieren:</p><pre class="json" style="font-size:16px">'+d.notfall.map(esc).join("\n")+"</pre>";$("bn_2fa_notfall").hidden=false;bnStart()}
+async function zfAus(){const c=prompt("Zum Ausschalten den aktuellen Code aus der App (oder einen Notfall-Code) eingeben:");if(!c)return;await api("/api/2fa-aus",{code:c},"log_bni");bnStart()}
+async function zfReset(n){if(!confirm("Zwei-Faktor-Anmeldung von „"+n+"“ zurücksetzen? Das Konto wird abgemeldet und muss sie neu einrichten."))return;bnZeigen(await api("/api/2fa-zuruecksetzen",{name:n},"log_bn"))}
+async function zfPflicht(an){try{bnZeigen(await api("/api/sicherheit-einstellungen",{"2fa_admin":an},"log_bn"))}catch(e){$("bn_2fa_pflicht").checked=!an}}
 
 let GP=null;
 const gz=(v,n=0)=>v==null||v===""?"–":Number(v).toLocaleString("de-DE",{minimumFractionDigits:n,maximumFractionDigits:n});
@@ -910,7 +1179,7 @@ function kbBereich(txt,max){const s=new Set();for(const teil of txt.split(/[,; ]
 function kbMassen(){if(!KB)return;try{const ps=kbBereich($("kb_bereich").value,KB.n);if(!ps.length)return $("kb_bereich").focus();ps.forEach(p=>kbSetzen(p,$("kb_tarif").value));$("log_kb").textContent=ps.length+" Parzelle(n) auf „"+($("kb_tarif").value||"nicht gebucht")+"“ gesetzt – noch speichern."}catch(e){$("log_kb").innerHTML='<span class="fehler">✖ '+esc(e.message)+"</span>"}}
 async function kbSpeichern(){if(!Object.keys(KBAEND).length)return $("log_kb").textContent="Nichts geändert.";await api("/api/buchungen",{sparte:KB.kz,aenderungen:KBAEND},"log_kb");const l=$("log_kb").textContent;KBAEND={};await kkLaden();await kbLaden(true);$("log_kb").textContent=l}
 async function beenden(){if(confirm("SparteNet Manager beenden?")){await api("/api/beenden",{});document.body.innerHTML="<p style='padding:40px;font-family:Arial'>Beendet. Fenster kann geschlossen werden.</p>"}}
-ansAnwenden();zeige(startReiter());if(ICH.admin)setTimeout(()=>upLaden(true).catch(()=>{}),1500);einst();planLaden(true);regelLaden();["pr_pre","pr_z"].forEach(i=>$(i).addEventListener("input",regelBeispiel));
+ansAnwenden();druckKnoepfe();zeige(startReiter());if(ICH.admin)setTimeout(()=>upLaden(true).catch(()=>{}),1500);einst();planLaden(true);regelLaden();["pr_pre","pr_z"].forEach(i=>$(i).addEventListener("input",regelBeispiel));
 </script></body></html>"""
 
 __all__ = [_n for _n in dict(globals()) if not _n.startswith("__")]  # alle Namen an die folgenden Module weitergeben

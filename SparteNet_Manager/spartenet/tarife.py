@@ -372,6 +372,7 @@ def akt_tarif_zuordnen(d, aenderungen):
     zuord = dict(d.get("tarif_zuordnung") or {})
     netznamen = d.get("tarif_netznamen") or {}
     buch = d.setdefault("buchungen", {})
+    geaendert = []
     for nid, t in aenderungen.items():
         if not re.fullmatch(r"[A-Za-z0-9\-]{1,64}", str(nid)):
             raise Fehler("Ungültige Netz-ID.")
@@ -381,6 +382,8 @@ def akt_tarif_zuordnen(d, aenderungen):
         if zp:  # Parzelle → Buchung (gilt auch für die Kalkulation)
             zuord.pop(nid, None)
             b = buch.setdefault(zp[0], {})
+            if (b.get(str(zp[1])) or "") != (t or ""):
+                geaendert.append({"sparte": zp[0], "parzelle": zp[1], "tarif": t or "", "tarif_alt": b.get(str(zp[1]), "")})
             if t:
                 b[str(zp[1])] = t
             else:
@@ -393,6 +396,8 @@ def akt_tarif_zuordnen(d, aenderungen):
     d["tarif_zuordnung"] = zuord
     speichere(d)
     n_buch = sum(len(b) for b in d["buchungen"].values())
+    for x in geaendert:
+        ereignis("buchung" if x["tarif"] else "kuendigung", x, d)
     return {"log": [f"✔ Zuordnung gespeichert ({len(aenderungen)} Änderung(en)) – {n_buch} Parzellen gebucht, {len(zuord)} weitere Netze mit Tarif. Die Parzellen-Tarife gelten auch in der Kalkulation."]}
 
 
