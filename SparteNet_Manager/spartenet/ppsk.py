@@ -331,6 +331,7 @@ def _ppsk_lage(d, kz):
     if not wlan:
         raise Fehler(f"WLAN „{ssid}“ nicht am Gateway gefunden – unter „Einrichten“ Schritt 2 „WLANs vom Gateway abrufen“ und das richtige Pächter-WLAN wählen (oder in der UniFi-Oberfläche anlegen: WPA2, Private Pre-Shared Keys).")
     soll = {z["Netz"]: z for z in lese_ppsk(kz)}
+    gesperrt = {str(g.get("parzelle")) for g in (d.get("zugang_gesperrt") or {}).values() if isinstance(g, dict) and g.get("sparte") == kz}
     if not soll:
         raise Fehler(f"Noch keine Passwörter für {kz} – erst „Einrichten“ Schritt 3.")
     ist = {}
@@ -340,6 +341,8 @@ def _ppsk_lage(d, kz):
     for n in [x for x in plan["netze"] if x["sparte"] == kz and x["art"] == "parzelle"]:
         z = soll.get(n["name"], {})
         pw_soll, nid_ = z.get("Passwort", ""), nid.get(n["name"])
+        if str(n["parzelle"]) in gesperrt:
+            pw_soll = ""          # Zugang gesperrt (Laufzeit abgelaufen oder von Hand) – soll nicht im WLAN stehen
         pw_ist = ist.get(nid_, []) if nid_ else []
         if not nid_:
             status = "netz_fehlt" if pw_soll else "gleich"

@@ -92,6 +92,17 @@ fun StartSeite(s: Sitzung, erlaubt: List<Bereich>, breit: Boolean, gehe: (Bereic
                             }
                         }
                     }
+                    if (u.has("laufzeiten")) {
+                        val lz = u.o("laufzeiten")
+                        Kachel("Laufzeiten", kw, onClick = if (Bereich.LAUFZEITEN in erlaubt) ({ gehe(Bereich.LAUFZEITEN, null) }) else null) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                                Zahl("${lz.i("aktiv")}", "laufend")
+                                Zahl("${lz.i("bald")}", "enden in 24 h")
+                                Zahl("${lz.i("abgelaufen")}", "abgelaufen")
+                                if (lz.i("offen") > 0) Zahl("${lz.i("offen")}", "am Gateway offen")
+                            }
+                        }
+                    }
                     if (u.has("rechnungen")) {
                         val r = u.o("rechnungen")
                         Kachel("Rechnungen", kw, onClick = { gehe(Bereich.RECHNUNGEN, null) }) {

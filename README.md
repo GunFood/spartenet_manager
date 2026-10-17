@@ -1,4 +1,4 @@
-SparteNet Manager 5.0 (Cloud)
+SparteNet Manager 5.1 (Cloud)
 ===============================
 
 Funktioniert komplett über die UniFi-Cloud (api.ui.com). Kein lokaler Zugriff, kein VPN.
@@ -100,6 +100,27 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
     POST /api/v1/buchung   {"sparte":"BW","parzelle":12,"tarif":"Basic"}   ("" = Buchung entfernen)
   Höchstens 120 Anfragen je Minute und Schlüssel (SPARTENET_API_PRO_MINUTE). Zahlungsanbieter über n8n/Zapier/Make
   anbinden. Von außen nur über HTTPS (Reverse-Proxy, dann SPARTENET_PROXY=1).
+
+### TARIFE MIT LAUFZEIT (Reiter "Tarife") – neu in 5.1
+  Jeder Tarif kann eine Laufzeit haben (Stunden, Tage, Wochen, Monate; 0 = unbegrenzt), z. B. "Tag" = 1 Tag, "Woche" = 7 Tage.
+  Die Laufzeit beginnt mit der Buchung. Karte "Laufzeiten und Zugang": Ende je Parzelle, Verlängern (ab Ende bzw. ab jetzt),
+  Zugang von Hand sperren/freigeben (mit Vorschau). Sperren = PPSK-Eintrag der Parzelle aus dem Pächter-WLAN nehmen; Netz, VLAN und
+  Passwort bleiben, Freigeben trägt dasselbe Passwort wieder ein. "Übertragen" gibt gesperrte Parzellen nicht versehentlich frei.
+  "Am Gateway automatisch sperren und freigeben" (nur Administratoren, ausdrücklich einschalten): der Zeitplan sperrt abgelaufene
+  Parzellen innerhalb einer Minute und gibt sie nach Verlängerung bzw. neuer Buchung wieder frei; von Hand gesperrte bleiben gesperrt.
+  Neue Auslöser für Automationen: laufzeit_erinnerung (einstellbar, z. B. 1 Tag vorher), laufzeit_ende, laufzeit_verlaengert,
+  zugang_gesperrt, zugang_freigegeben; neue Aktion "Laufzeit verlängern" (z. B. nach Zahlungseingang über die API).
+  Platzhalter {laufzeit}, {laufzeit_start}, {laufzeit_ende}. API: GET /api/laufzeiten, POST /api/laufzeit-verlaengern
+  {"sparte","parzelle","anzahl"}, POST /api/zugang {"sparte","parzelle","aktion":"sperren|freigeben","ausfuehren"}.
+
+### ANMELDUNG – neu in 5.1
+  Neue Anmeldeseite (Handy, Tablet, PC; hell/dunkel) mit "Angemeldet bleiben", Passwort anzeigen und Hinweis bei Feststelltaste.
+  Benutzer → "Anmeldung und Sicherheit" (Administratoren):
+  • Browser automatisch abmelden nach 10 Min. bis 8 Std. ohne Aktivität (Standard 30 Min.; eine Minute vorher ein Hinweis,
+    alle offenen Tabs zählen gemeinsam; auch der Server beendet die Sitzung)
+  • Android-App automatisch abmelden (Standard aus)
+  • Zwei-Faktor-Code merken: 8 Stunden bis 30 Tage – danach fragt der Browser bzw. die App den Code erneut ab. "Mein Konto →
+    Gemerkte Geräte vergessen" und Zurücksetzen der Zwei-Faktor-Anmeldung machen gemerkte Geräte sofort ungültig.
 
 ### RECHNUNGEN UND ZAHLUNGSABGLEICH (Reiter "Rechnungen") – neu in 5.0
   Rechnungslauf je Jahr: für jede gebuchte Parzelle mit Mitglied eine Rechnung über den Jahrespreis des Tarifs.

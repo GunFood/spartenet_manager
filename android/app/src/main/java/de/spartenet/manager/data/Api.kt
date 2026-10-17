@@ -60,12 +60,13 @@ class Api(basis: String, @Volatile var token: String?) {
     }
 
     /** Anmeldung – liefert die Antwort mit „token“ oder wirft ApiFehler (zweiterFaktor = true, wenn ein Code fehlt/falsch ist) */
-    suspend fun anmelden(benutzer: String, passwort: String, code: String, geraet: String): JSONObject {
+    suspend fun anmelden(benutzer: String, passwort: String, code: String, geraet: String, merken: String? = null): JSONObject {
         val body = JSONObject()
             .put("benutzer", benutzer)
             .put("passwort", passwort)
             .put("geraet", geraet)
         if (code.isNotBlank()) body.put("code", code.trim())
+        if (!merken.isNullOrEmpty()) body.put("merken", merken)
         val a = anfrage("POST", "/api/v1/app/anmelden", body, mitToken = false)
         if (!a.optBoolean("ok") || a.s("token").isEmpty()) {
             throw ApiFehler(401, a.s("fehler").ifEmpty { "Anmeldung fehlgeschlagen." }, a.optBoolean("zweiter_faktor"))

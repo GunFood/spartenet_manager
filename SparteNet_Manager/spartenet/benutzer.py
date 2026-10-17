@@ -52,7 +52,7 @@ VORLAGEN = {
 }
 
 # Was eine Anfrage braucht: ("immer",) · ("admin",) · (Bereich, Stufe)
-_IMMER = {"/api/app-uebersicht", "/api/app-geraete", "/api/app-geraet-entfernen", "/api/einstellungen", "/api/ansicht", "/api/benutzer-ich", "/api/plan", "/api/pw-regel", "/api/2fa-start", "/api/2fa-bestaetigen", "/api/2fa-aus"}  # nur lesend (GET) bzw. eigene Ansicht
+_IMMER = {"/api/aktiv", "/api/2fa-vergessen", "/api/app-uebersicht", "/api/app-geraete", "/api/app-geraet-entfernen", "/api/einstellungen", "/api/ansicht", "/api/benutzer-ich", "/api/plan", "/api/pw-regel", "/api/2fa-start", "/api/2fa-bestaetigen", "/api/2fa-aus"}  # nur lesend (GET) bzw. eigene Ansicht
 _NUR_ADMIN = {"/api/benutzer", "/api/benutzer-speichern", "/api/benutzer-loeschen", "/api/beenden"}
 _LESEN = {
     "/api/start": "start", "/api/parzelle": "start",
@@ -66,11 +66,12 @@ _LESEN = {
     "/api/tickets": "tickets", "/api/ticket": "tickets",
     "/api/rechnungen": "rechnungen", "/api/rechnung-pdf": "rechnungen",
     "/api/vertraege": "mitglieder", "/api/rundschreiben": "mitglieder", "/api/rundschreiben-empfaenger": "mitglieder", "/api/mitglied-auskunft": "mitglieder",
-    "/api/ueberwachung": "auslesen",
+    "/api/ueberwachung": "auslesen", "/api/laufzeiten": "buchungen",
 }
 _GET_LESEN_SONST_SCHREIBEN = {"/api/voucher-vorlagen": "voucher", "/api/tarife": "tarife", "/api/buchungen": "buchungen", "/api/design": "karten", "/api/fern": "verbindung"}
-_VORSCHAU = {"/api/netze": "netze", "/api/uebertragen": "wlan_pw", "/api/ppsk-hochladen": "wlan_pw", "/api/tarif-uebertragen": "tarife", "/api/voucher": "voucher", "/api/voucher-loeschen": "voucher", "/api/zuteilung-gateway": "netze", "/api/umzug": "netze"}
+_VORSCHAU = {"/api/zugang": "wlan_pw", "/api/netze": "netze", "/api/uebertragen": "wlan_pw", "/api/ppsk-hochladen": "wlan_pw", "/api/tarif-uebertragen": "tarife", "/api/voucher": "voucher", "/api/voucher-loeschen": "voucher", "/api/zuteilung-gateway": "netze", "/api/umzug": "netze"}
 _SCHREIBEN = {
+    "/api/laufzeit-verlaengern": "buchungen", "/api/laufzeit-starten": "buchungen",
     "/api/excel": "planung", "/api/schreibtest": "netze", "/api/umzug-rueckgaengig": "netze",
     "/api/ppsk-speichern": "wlan_pw", "/api/rueckgaengig": "wlan_pw", "/api/wlan-zuordnung": "wlan_pw", "/api/passwort": "wlan_pw",
     "/api/tarif-rueckgaengig": "tarife", "/api/tarif-zuordnung": "buchungen",
@@ -375,6 +376,22 @@ def benutzer_anmelden(d, name, passwort, quelle):
     return name
 
 
+SICHERHEIT_STANDARD = {"2fa_admin": False, "abmelden_minuten": 30, "app_abmelden_minuten": 0, "2fa_merken_stunden": 0}
+
+
+def sicherheit(d):
+    """Sicherheits-Einstellungen mit Standardwerten (Browser nach 30 Min. ohne Aktivität abmelden, App aus, 2FA-Code nicht merken)"""
+    roh = d.get("sicherheit") if isinstance(d.get("sicherheit"), dict) else {}
+    s = dict(SICHERHEIT_STANDARD)
+    for k, std in SICHERHEIT_STANDARD.items():
+        if k in roh:
+            try:
+                s[k] = bool(roh[k]) if isinstance(std, bool) else int(roh[k])
+            except (TypeError, ValueError):
+                pass
+    return s
+
+
 def akt_benutzer(d, ich):
     u = benutzer_liste(d)
     sitz = sitzungen_je_benutzer()
@@ -389,7 +406,7 @@ def akt_benutzer(d, ich):
                        "angelegt": x.get("angelegt", ""), "zuletzt": x.get("zuletzt", ""), "von": x.get("von", ""), "sitzungen": sitz.get(n, 0)})
     return {"zeilen": zeilen, "arten": ARTEN, "stufen": STUFEN, "bereiche": [{"k": k, "text": t, "stufen": list(s)} for k, t, s, _ in BEREICHE],
             "vorlagen": {k: {"text": t, "bereiche": b} for k, (t, b) in VORLAGEN.items()}, "ich": ich,
-            "zwei_faktor_pflicht": bool((d.get("sicherheit") or {}).get("2fa_admin")),
+            "zwei_faktor_pflicht": bool((d.get("sicherheit") or {}).get("2fa_admin")), "sicherheit": sicherheit(d),
             "log": [f"{len(zeilen)} Benutzerkonten (davon {sum(1 for z in zeilen if z['art'] == 'gesperrt')} gesperrt)."]}
 
 

@@ -14,6 +14,9 @@ class Sitzung(
     val snackbar: SnackbarHostState,
     private val beiAbgelaufen: () -> Unit,
 ) {
+    /** automatisch abmelden nach so vielen Minuten ohne Bedienung (Einstellung im Manager, 0 = nie) */
+    var abmeldenMinuten: Int = 0
+
     val name: String = ich.s("name")
     val admin: Boolean = ich.optBoolean("admin")
     val rechtText: String = ich.s("recht_text")

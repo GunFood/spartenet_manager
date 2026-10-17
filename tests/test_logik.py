@@ -14,6 +14,7 @@ import spartenet.umzug as U       # noqa: E402
 import spartenet.voucher as V     # noqa: E402
 import spartenet.ppsk as P        # noqa: E402
 import spartenet.zeitplan as ZP   # noqa: E402
+import spartenet.laufzeit as L    # noqa: E402
 import datetime as dt             # noqa: E402
 
 
@@ -434,3 +435,83 @@ class PdfUndBank(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Laufzeit(unittest.TestCase):
+    """Tarif mit Laufzeit: Ablauf → Zugang (PPSK-Eintrag) sperren, Verlängern → wieder freigeben"""
+    def setUp(self):
+        self.d = frisch()
+        P.Gateway = L.Gateway = FakeGateway
+        FakeGateway.netze = [{"_id": "n1", "name": "BW-Paz.001"}, {"_id": "n2", "name": "BW-Paz.002"}]
+        FakeGateway.wlans = [{"_id": "w1", "name": "SparteNet.de-BW-Pächter", "private_preshared_keys_enabled": True,
+                              "private_preshared_keys": [{"networkconf_id": "n1", "password": "SN1111111111"}, {"networkconf_id": "n2", "password": "SN2222222222"}]}]
+        S.akt_ppsk(self.d, "BW", "gateway")                          # Passwörter vom Gateway übernehmen
+        tarife = S.tarife_pruefen(self.d["tarife"])
+        tarife.append({"name": "Tag", "down": 20, "up": 5, "praefix": 29, "geraete": 5, "preis": 3, "laufzeit": 1, "laufzeit_einheit": "tage"})
+        S.akt_tarife_speichern(self.d, {"tarife": tarife})
+
+    def keys(self):
+        return sorted(k["networkconf_id"] for k in FakeGateway.wlans[0]["private_preshared_keys"])
+
+    def test_monate_kalendergenau(self):
+        t = dt.datetime(2027, 1, 31, 10, 0).timestamp()
+        self.assertEqual(dt.datetime.fromtimestamp(L.plus_laufzeit(t, 1, "monate")).date(), dt.date(2027, 2, 28))
+        self.assertEqual(L.plus_laufzeit(t, 2, "stunden") - t, 7200)
+        with self.assertRaises(S.Fehler):
+            S.tarife_pruefen([{"name": "X", "down": 1, "up": 1, "praefix": 29, "laufzeit": 5, "laufzeit_einheit": "jahre"}])
+
+    def test_ablauf_sperren_und_verlaengern(self):
+        S.akt_buchungen_speichern(self.d, "BW", {"1": "Tag", "2": "Basic"})
+        e = self.d["laufzeiten"]["BW-1"]
+        self.assertAlmostEqual(e["ende"] - e["start"], 86400, delta=1)
+        self.assertNotIn("BW-2", self.d["laufzeiten"])                # Tarif ohne Laufzeit
+        e["ende"] = e["start"] - 1                                    # abgelaufen
+        S.laufzeiten_pruefen(self.d)
+        self.assertEqual(e["status"], "abgelaufen")
+        self.assertEqual(self.keys(), ["n1", "n2"])                   # ohne Einschalten nichts am Gateway
+        self.assertEqual(S.akt_laufzeiten(self.d)["zeilen"][0]["zustand"], "offen_sperren")
+        S.akt_laufzeit_einstellungen(self.d, {"gateway_auto": True}, "admin")
+        S.laufzeiten_pruefen(self.d)
+        self.assertEqual(self.keys(), ["n2"])                         # nur Parzelle 1 gesperrt
+        self.assertIn("BW-1", self.d["zugang_gesperrt"])
+        self.assertTrue(any(z["Parzelle"] == 1 and z["status"] == "gleich" for z in P._ppsk_lage(self.d, "BW")[3]))   # Übertragen gibt sie nicht frei
+        S.akt_laufzeit_verlaengern(self.d, {"sparte": "BW", "parzelle": 1}, "admin")
+        self.assertEqual(self.d["laufzeiten"]["BW-1"]["status"], "aktiv")
+        S.laufzeiten_pruefen(self.d)
+        self.assertEqual(self.keys(), ["n1", "n2"])
+        k1 = next(k for k in FakeGateway.wlans[0]["private_preshared_keys"] if k["networkconf_id"] == "n1")
+        self.assertEqual(k1["password"], "SN1111111111")              # gleiches Passwort wie vorher
+        self.assertNotIn("BW-1", self.d["zugang_gesperrt"])
+
+    def test_von_hand_mit_vorschau(self):
+        S.akt_buchungen_speichern(self.d, "BW", {"2": "Basic"})
+        v = S.akt_zugang(self.d, {"sparte": "BW", "parzelle": 2, "aktion": "sperren"}, "admin")
+        self.assertIn("Vorschau", v["log"][0])
+        self.assertEqual(self.keys(), ["n1", "n2"])
+        S.akt_zugang(self.d, {"sparte": "BW", "parzelle": 2, "aktion": "sperren", "ausfuehren": True}, "admin")
+        self.assertEqual(self.keys(), ["n1"])
+        S.akt_laufzeit_einstellungen(self.d, {"gateway_auto": True}, "admin")
+        S.laufzeiten_pruefen(self.d)
+        self.assertEqual(self.keys(), ["n1"])                         # von Hand gesperrt bleibt gesperrt
+        S.akt_zugang(self.d, {"sparte": "BW", "parzelle": 2, "aktion": "freigeben", "ausfuehren": True}, "admin")
+        self.assertEqual(self.keys(), ["n1", "n2"])
+
+    def test_automation_verlaengert_nach_zahlung(self):
+        S.akt_buchungen_speichern(self.d, "BW", {"1": "Tag"})
+        self.d["laufzeiten"]["BW-1"]["ende"] = 1
+        S.laufzeiten_pruefen(self.d)
+        S.automation_daten(self.d)["regeln"].append({"id": "r1", "name": "Zahlung verlängert", "aktiv": True, "ausloeser": "zahlung",
+                                                       "bedingung": {}, "aktionen": [{"typ": "laufzeit_verlaengern"}]})
+        S.automation_verarbeiten("zahlung", {"sparte": "BW", "parzelle": 1, "betrag": 3}, self.d)
+        self.assertEqual(self.d["laufzeiten"]["BW-1"]["status"], "aktiv")
+
+
+class Leerlauf(unittest.TestCase):
+    def test_leerlauf_beendet_sitzung(self):
+        t = S.auth_sitzung_neu("Test", "admin")
+        self.assertTrue(S.auth_sitzung_info(t, 1800))
+        S._AUTH_SESSIONS[S._sitzung_hash(t)]["zuletzt"] -= 1800 + 120
+        self.assertIsNone(S.auth_sitzung_info(t, 1800))
+        t2 = S.auth_sitzung_neu("Test", "admin")
+        S._AUTH_SESSIONS[S._sitzung_hash(t2)]["zuletzt"] -= 99999
+        self.assertTrue(S.auth_sitzung_info(t2, 0))                    # 0 = nie abmelden

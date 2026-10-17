@@ -55,6 +55,7 @@ fun KontoSeite(s: Sitzung, speicher: Speicher, ansicht: String, onAnsicht: (Stri
                     if (s.rechtText.isNotEmpty()) Zeile("Rechte", s.rechtText)
                     Zeile("Manager", s.api.basis)
                     Zeile("Version", "Manager ${s.version}")
+                    Zeile("Abmelden", if (s.abmeldenMinuten > 0) "automatisch nach ${s.abmeldenMinuten} Min. ohne Bedienung" else "nur von Hand")
                     if (s.api.unverschluesselt) Text("Verbindung über http:// ist unverschlüsselt.", color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall)
                 }

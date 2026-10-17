@@ -198,8 +198,21 @@ def akt_buchungen(d, kz, erlaubt=None):
     b = (d.get("buchungen") or {}).get(kz) or {}
     namen = {t["name"] for t in tarife_pruefen(d["tarife"])}
     return {"sparte": sp["name"], "kz": kz, "n": sp["n"], "tarife": sorted(namen),
-            "zeilen": [{"p": p, "netz": NETZ_PARZELLE.format(kz=kz, p=p), "tarif": b.get(str(p), ""), "unbekannt": bool(b.get(str(p))) and b.get(str(p)) not in namen}
-                       for p in range(1, sp["n"] + 1)], "log": []}
+            "zeilen": [{"p": p, "netz": NETZ_PARZELLE.format(kz=kz, p=p), "tarif": b.get(str(p), ""), "unbekannt": bool(b.get(str(p))) and b.get(str(p)) not in namen,
+                        **_laufzeit_info(d, kz, p)} for p in range(1, sp["n"] + 1)], "log": []}
+
+
+def _laufzeit_info(d, kz, p):
+    """Ende der Laufzeit und Sperre (Modul laufzeit) – für Buchungsliste und App"""
+    e = (d.get("laufzeiten") or {}).get(f"{kz}-{p}")
+    g = (d.get("zugang_gesperrt") or {}).get(f"{kz}-{p}")
+    aus = {}
+    if isinstance(e, dict):
+        aus["ende"] = time.strftime("%d.%m.%Y %H:%M", time.localtime(e.get("ende") or 0))
+        aus["laufzeit_status"] = e.get("status", "")
+    if g:
+        aus["gesperrt"] = True
+    return aus
 
 
 def akt_buchungen_speichern(d, kz, aenderungen):

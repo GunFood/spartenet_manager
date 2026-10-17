@@ -8,6 +8,21 @@ CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 
        "connect-src 'self'; frame-src 'self' blob: data:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'self'")
 
 
+
+def login_seite(d):
+    """Anmeldeseite mit Hinweisen zu automatischem Abmelden und gemerktem Zwei-Faktor-Code"""
+    s = sicherheit(d)
+    ab = s["abmelden_minuten"]
+    merken = s["2fa_merken_stunden"]
+    try:
+        portal = '<a href="/portal" style="color:#cfe9c6">Pächter-Seite</a>' if portal_einstellungen(d)["aktiv"] else "Kleingarten-WLAN"
+    except Exception:
+        portal = "Kleingarten-WLAN"
+    return (LOGIN_HTML.replace("__VERSION__", VERSION).replace("__PORTAL__", portal)
+            .replace("__MERKEN__", f"Dieses Gerät fragt danach {dauer_text_kurz(merken)} lang nicht erneut." if merken else "")
+            .replace("__ABMELDEN_TEXT__", (f"Aus Sicherheitsgründen werden Sie nach {ab} Minuten ohne Aktivität automatisch abgemeldet. " if ab else "")
+                     + "Ohne „Angemeldet bleiben“ endet die Anmeldung beim Schließen des Browsers."))
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -68,6 +83,14 @@ class Handler(BaseHTTPRequestHandler):
             return ""
         return c["sn_sitzung"].value if "sn_sitzung" in c else ""
 
+    def _cookie(self, name):
+        c = SimpleCookie()
+        try:
+            c.load(self.headers.get("Cookie") or "")
+        except CookieError:
+            return ""
+        return c[name].value if name in c else ""
+
     def _auth_sitzung(self):
         c = SimpleCookie()
         try:
@@ -79,7 +102,8 @@ class Handler(BaseHTTPRequestHandler):
     def _wer(self, d):
         """(Kontoname, Recht) der Anfrage oder None, wenn nicht angemeldet; gesperrte oder gelöschte Konten fliegen sofort raus"""
         self._app_zugang = False
-        info = auth_sitzung_info(self._auth_sitzung())
+        info = auth_sitzung_info(self._auth_sitzung(), sicherheit(d)["abmelden_minuten"] * 60,
+                                 aktiv=urllib.parse.urlparse(self.path).path in ("/api/aktiv", "/"))
         if info:
             rechte = konto_rechte(d, info.get("benutzer", ADMIN_NAME))
             if rechte and rechte["art"] != "gesperrt":
@@ -175,7 +199,8 @@ class Handler(BaseHTTPRequestHandler):
             if not wer:
                 return self._send(401, {"ok": False, "fehler": "App-Schlüssel fehlt oder ist ungültig (Authorization: Bearer sna_…)."}, extra={"WWW-Authenticate": "Bearer"})
             if u.path.rstrip("/").endswith("info"):
-                return self._send(200, {"ok": True, "version": VERSION, "ich": ich_daten(*wer), "uebersicht": akt_app_uebersicht(d, *wer)})
+                return self._send(200, {"ok": True, "version": VERSION, "ich": ich_daten(*wer), "uebersicht": akt_app_uebersicht(d, *wer),
+                                        "abmelden_minuten": sicherheit(d)["app_abmelden_minuten"]})
             return self._send(200, {"version": VERSION, "auth": "Authorization: Bearer sna_… (POST /api/v1/app/anmelden)",
                                     "hinweis": "GET-Funktionen mit Parametern in der Adresse, POST mit JSON. Antwort JSON; Fehler mit HTTP 4xx und {\"fehler\": \"…\"}.",
                                     "funktionen": app_funktionen()})
@@ -201,11 +226,12 @@ class Handler(BaseHTTPRequestHandler):
         wer = self._wer(d)
         if u.path == "/":
             if not wer:
-                return self._send(200, LOGIN_HTML.replace("__INHALT__", LOGIN_FORM).encode("utf-8"), "text/html")
+                return self._send(200, login_seite(d).encode("utf-8"), "text/html")
             fern_nur = self._fern() and not auth_sitzung_ok(self._auth_sitzung())
             ich = json.dumps(ich_daten(*wer)).replace("<", "\\u003c")
             return self._send(200, HTML.replace("__TOKEN__", TOKEN).replace("__VERSION__", VERSION).replace("__FERN__", "1" if fern_nur else "0")
-                              .replace("__SITZUNG_TAGE__", str(SITZUNG_TAGE)).replace("__ICH__", ich).encode("utf-8"), "text/html")
+                              .replace("__SITZUNG_TAGE__", str(SITZUNG_TAGE)).replace("__ABMELDEN__", str(0 if fern_nur else sicherheit(d)["abmelden_minuten"]))
+                              .replace("__ICH__", ich).encode("utf-8"), "text/html")
         if not wer:
             return self._send(401, {"fehler": "anmelden"})
         if not self._token_ok():
@@ -232,14 +258,23 @@ class Handler(BaseHTTPRequestHandler):
         name = str(b.get("benutzer") or "").strip().lower()
         try:
             konto = benutzer_anmelden(d, name, geheim, self._quelle())
-            if zweifaktor_aktiv(d, konto):
+            merken_cookie = None
+            if zweifaktor_aktiv(d, konto) and zweifaktor_gemerkt(d, konto, self._cookie(MERKEN_COOKIE)):
+                LOG.info("Zwei-Faktor-Code für „%s“ auf diesem Gerät noch gemerkt", konto)
+            elif zweifaktor_aktiv(d, konto):
                 if not str(b.get("code") or "").strip():
                     return self._send(400, {"fehler": "Bitte den 6-stelligen Code aus der Authenticator-App eingeben (oder einen Notfall-Code).", "zweiter_faktor": True})
                 if not zweifaktor_pruefen(d, konto, b.get("code")):
                     _konto_sperre(konto, False)
                     LOG.warning("Falscher Zwei-Faktor-Code für „%s“", konto)
                     return self._send(400, {"fehler": "Der Code stimmt nicht.", "zweiter_faktor": True})
-            t = auth_sitzung_neu(b.get("geraet"), konto)
+                if b.get("merken", True):
+                    mt, sek = zweifaktor_merken(d, konto, b.get("geraet"))
+                    if mt:
+                        speichere(d)
+                        merken_cookie = f"{MERKEN_COOKIE}={mt}; Path=/login; Max-Age={sek}; HttpOnly; SameSite=Strict"
+            bleiben = bool(b.get("bleiben", True))
+            t = auth_sitzung_neu(b.get("geraet"), konto, bleiben)
             cookie = f"sn_auth={t}"
             LOG.info("Anmeldung erfolgreich: %s", konto)
             if konto != ADMIN_NAME:
@@ -253,10 +288,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(400, {"fehler": str(pin_fehler)})
             t = sitzung_neu(d, b.get("geraet"))
             cookie = f"sn_sitzung={t}"
+            bleiben, merken_cookie = True, None
             LOG.info("Anmeldung vom Handy/Tablet erfolgreich")
             journal("Handy/Tablet angemeldet: " + str(b.get("geraet") or "?")[:80])
         sicher = "; Secure" if (self.headers.get("X-Forwarded-Proto") == "https" or self.headers.get("Tailscale-User-Login")) else ""
-        return self._send(200, {"ok": True}, extra={"Set-Cookie": f"{cookie}; Path=/; Max-Age={SITZUNG_TAGE * 86400}; HttpOnly; SameSite=Strict{sicher}"})
+        kekse = [f"{cookie}; Path=/;{f' Max-Age={SITZUNG_TAGE * 86400};' if bleiben else ''} HttpOnly; SameSite=Strict{sicher}"]
+        if merken_cookie:
+            kekse.append(merken_cookie + sicher)
+        return self._send(200, {"ok": True}, extra={"Set-Cookie": kekse})
 
     def do_POST(self):
         u = urllib.parse.urlparse(self.path)
@@ -496,6 +535,13 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/wochenbericht": lambda: akt_wochenbericht(d, b, ich),
                 "/api/portal-einstellungen": lambda: akt_portal_einstellungen(d, b, ich),
                 "/api/app-uebersicht": lambda: akt_app_uebersicht(d, ich, rechte),
+                "/api/laufzeiten": lambda: akt_laufzeiten(d, sp_erl),
+                "/api/laufzeit-verlaengern": lambda: akt_laufzeit_verlaengern(d, b or {}, ich, sp_erl),
+                "/api/laufzeit-starten": lambda: akt_laufzeit_starten(d, b or {}, ich, sp_erl),
+                "/api/zugang": lambda: akt_zugang(d, b or {}, ich, sp_erl),
+                "/api/laufzeit-einstellungen": lambda: akt_laufzeit_einstellungen(d, b or {}, ich),
+                "/api/aktiv": lambda: {"ok": True, "abmelden_minuten": sicherheit(d)["abmelden_minuten"], "log": []},
+                "/api/2fa-vergessen": lambda: akt_2fa_vergessen(d, ich),
                 "/api/app-geraete": lambda: akt_app_geraete(d, ich, rechte["art"] == "admin" and q.get("alle", ["0"])[0] == "1"),
                 "/api/app-geraet-entfernen": lambda: akt_app_geraet_entfernen(d, b or {}, ich, rechte["art"] == "admin"),
                 "/api/ticket": lambda: akt_ticket(d, q, ich, sp_erl),
