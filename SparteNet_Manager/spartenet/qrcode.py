@@ -208,6 +208,8 @@ def qr_kontrast_ok(farbe, hintergrund):
 
 def wlan_qr_text(ssid, pw):
     esc = lambda s: re.sub(r'([\\;,:"])', r"\\\1", s)
+    if not pw:   # offenes Netz (Gast-WLAN mit Voucher-Anmeldung)
+        return f"WIFI:T:nopass;S:{esc(ssid)};;"
     return f"WIFI:T:WPA;S:{esc(ssid)};P:{esc(pw)};;"
 
 __all__ = [_n for _n in dict(globals()) if not _n.startswith("__")]  # alle Namen an die folgenden Module weitergeben

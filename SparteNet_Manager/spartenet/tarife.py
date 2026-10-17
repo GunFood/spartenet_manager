@@ -1,5 +1,5 @@
 """SparteNet Manager – Tarife: Bandbreite per QoS-Regel, Netzgröße per Subnetz/DHCP"""
-from .karten import *  # noqa: F401,F403 – alle Namen der vorherigen Module
+from .voucher import *  # noqa: F401,F403 – alle Namen der vorherigen Module
 
 
 QOS_TARIF, QOS_NETZ = "SparteNet-Tarif-", "SparteNet-Netz-"
