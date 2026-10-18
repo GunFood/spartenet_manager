@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import de.spartenet.mitglied.data.Api
 import de.spartenet.mitglied.data.Speicher
 import de.spartenet.mitglied.data.s
+import de.spartenet.mitglied.data.liste
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -66,6 +67,26 @@ fun Anmeldung(speicher: Speicher, onAngemeldet: (String) -> Unit) {
     var laedt by remember { mutableStateOf(false) }
     val titel = speicher.titel.ifEmpty { "Mitgliederbereich" }
     var vereinslogo by remember { mutableStateOf("") }
+    var stoerungen by remember { mutableStateOf<List<String>>(emptyList()) }
+    var stoerungText by remember { mutableStateOf("") }
+    var stoerungFarbe by remember { mutableStateOf("") }
+    fun stoerungUebernehmen(a: JSONObject) {
+        stoerungen = a.liste("stoerungen").map { it.s("text") }
+        stoerungText = a.s("stoerung_text")
+        stoerungFarbe = a.s("stoerung_farbe")
+    }
+
+    // Störungen, die alle Sparten betreffen – sofort, sobald die Adresse des Vereins bekannt ist
+    LaunchedEffect(server) {
+        if (server.isBlank()) return@LaunchedEffect
+        delay(800)
+        try {
+            stoerungUebernehmen(Api(server, null).post("/mein/stoerung"))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+        }
+    }
     var vereinsname by remember { mutableStateOf("") }
 
     // Vereinslogo der Sparte zeigen, sobald eine passende E-Mail-Adresse eingegeben ist
@@ -77,6 +98,7 @@ fun Anmeldung(speicher: Speicher, onAngemeldet: (String) -> Unit) {
             val a = Api(server, null).post("/mein/logo", JSONObject().put("email", email.trim()))
             vereinslogo = a.s("logo")
             vereinsname = a.s("name")
+            stoerungUebernehmen(a)                    // Störungen passend zur Sparte dieser E-Mail-Adresse
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
@@ -151,6 +173,7 @@ fun Anmeldung(speicher: Speicher, onAngemeldet: (String) -> Unit) {
             if (vereinsname.isNotEmpty() && vereinslogo.isNotEmpty()) Text(vereinsname, color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.bodyMedium)
             Text("SparteNet", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
             Text(titel, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimary)
+            if (stoerungen.isNotEmpty()) Box(Modifier.padding(top = 8.dp)) { StoerungsBanner(stoerungen, stoerungText, stoerungFarbe) }
             Card(Modifier.fillMaxWidth().padding(top = 12.dp)) {
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("Anmelden", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)

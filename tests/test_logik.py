@@ -616,6 +616,26 @@ class Spartenlogos(unittest.TestCase):
         self.assertIn('src="cid:b"', h)
 
 
+class StoerungImMitgliederbereich(unittest.TestCase):
+    def test_meldung_je_sparte(self):
+        d = frisch()
+        jetzt = time.time()
+        S.stand_schreiben({"geraete": {"aa": {"name": "AP Festwiese", "model": "U6", "offline_seit": jetzt - 3600, "gemeldet": jetzt - 2000},
+                                       "bb": {"name": "AP Vereinsheim", "offline_seit": jetzt - 60}}})        # bb noch nicht gemeldet
+        e = S.mb_einstellungen(d)
+        m = S.mb_stoerungen(d, e, "BW")
+        self.assertEqual(len(m), 1)
+        self.assertIn("AP Festwiese", m[0]["text"])
+        self.assertTrue(m[0]["text"].startswith("Achtung"))
+        d["geraete_sparten"] = {"aa": "RG"}
+        self.assertEqual(S.mb_stoerungen(d, e, "BW"), [])                      # Gerät gehört zu einer anderen Sparte
+        self.assertEqual(len(S.mb_stoerungen(d, e, "RG")), 1)
+        self.assertEqual(S.mb_stoerungen(d, e, None, nur_alle=True), [])       # Anmeldeseite ohne E-Mail: nur „alle Sparten“
+        d["mitgliederbereich"] = {"stoerung_zeigen": False}
+        self.assertEqual(S.mb_stoerungen(d, S.mb_einstellungen(d), "RG"), [])
+        S.stand_schreiben({})
+
+
 class Modulkette(unittest.TestCase):
     def test_keine_doppelten_namen(self):
         """jede Datei übernimmt alle Namen der vorherigen – gleiche öffentliche Namen würden frühere Funktionen überdecken"""

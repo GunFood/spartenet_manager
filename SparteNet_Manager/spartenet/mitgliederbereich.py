@@ -17,7 +17,9 @@ import urllib.request as _ur
 MB_STANDARD = {"aktiv": False, "tarifwechsel": True, "downgrade": True, "neubuchung": True, "verlaengern": True, "geraete": True, "modus": "anfrage",
                "link_api": "", "checkout_vorlage": "", "hinweis": "", "minuten": 30, "adresse": "",
                "titel": "Mitgliederbereich", "text_anmeldung": "", "zeige_rechnungen": True, "zeige_anfragen": True, "neue_anfrage": True,
-               "zugangskarte": True, "tarife": []}
+               "zugangskarte": True, "tarife": [], "stoerung_zeigen": True, "stoerung_farbe": "#b42318",
+               "stoerung_meldung": "Achtung: {geraet} ist aktuell ausgefallen (seit {seit}). Ein Störungsticket {ticket} ist erstellt und an den Verein verschickt – wir kümmern uns darum.",
+               "stoerung_text": ""}
 _MB_SITZ, _MB_CODES = {}, {}
 _MB_LOCK = threading.Lock()
 _GRENZEN.update({"mb_logo": (60, 3600), "mb_code": (5, 3600), "mb_code_mail": (3, 900), "mb_anmelden": (10, 900), "mb_aktion": (30, 3600)})
@@ -67,6 +69,12 @@ def akt_mitgliederbereich(d, b=None, ich=""):
                 roh[k] = [str(x) for x in v]
             elif k == "titel":
                 roh[k] = text_einzeilig(v or "", 80) or "Mitgliederbereich"
+            elif k == "stoerung_farbe":
+                if not re.fullmatch(r"#[0-9a-fA-F]{6}", str(v or "")):
+                    raise Fehler("Farbe der Störungsmeldung: Form #RRGGBB.")
+                roh[k] = str(v).lower()
+            elif k in ("stoerung_meldung", "stoerung_text"):
+                roh[k] = str(v or "").replace("\r", "").strip()[:800]
             elif k == "modus":
                 if v not in ("anfrage", "bezahldienst"):
                     raise Fehler("Modus: anfrage oder bezahldienst.")
@@ -175,11 +183,21 @@ def mb_code_anfordern(d, b, quelle):
 def mb_logo_zur_email(d, email, quelle):
     """Vereinslogo (Spartenlogo) zur eingegebenen E-Mail-Adresse – damit das Mitglied gleich „seinen“ Verein sieht"""
     _grenze("mb_logo", quelle)
-    if not seiten_design(d, "mein").get("vereinslogo", True):
-        return {"logo": ""}
     kz = sparte_aus_email(d, email)
+    e = mb_einstellungen(d)
+    st = {"stoerungen": mb_stoerungen(d, e, kz) if kz else mb_stoerungen(d, e, None, nur_alle=True),
+          "stoerung_text": e["stoerung_text"], "stoerung_farbe": e["stoerung_farbe"]}      # Störungen passend zur Sparte
+    if not seiten_design(d, "mein").get("vereinslogo", True):
+        return {"logo": "", **st}
     i = sparten_logo_id(d, kz) if kz else ""
-    return {"logo": f"/spartenlogo/{urllib.parse.quote(kz)}?v={i[:6]}", "name": _sparten_kz(d).get(kz, kz)} if i else {"logo": ""}
+    return ({"logo": f"/spartenlogo/{urllib.parse.quote(kz)}?v={i[:6]}", "name": _sparten_kz(d).get(kz, kz)} if i else {"logo": ""}) | st
+
+
+def mb_stoerung_oeffentlich(d, quelle):
+    """Anmeldeseite ohne E-Mail: nur Störungen, die alle Sparten betreffen"""
+    _grenze("mb_logo", quelle)
+    e = mb_einstellungen(d)
+    return {"stoerungen": mb_stoerungen(d, e, None, nur_alle=True), "stoerung_text": e["stoerung_text"], "stoerung_farbe": e["stoerung_farbe"]}
 
 
 def mb_anmelden(d, b, quelle):
@@ -365,6 +383,19 @@ def tarif_antraege(d, kz=None, p=None, offen=True):
             and (not offen or t["antrag"].get("status") == "offen")]
 
 
+def mb_stoerungen(d, e, kz, nur_alle=False):
+    """Meldungen für die Störungsanzeige im Mitgliederbereich (nur_alle: nur Geräte ohne Spartenzuordnung – für die Anmeldeseite)"""
+    if not e["stoerung_zeigen"]:
+        return []
+    aus = []
+    for s in aktuelle_stoerungen(d, kz, nur_alle):
+        t = (e["stoerung_meldung"] or MB_STANDARD["stoerung_meldung"])
+        for k, v in (("geraet", s["geraet"]), ("modell", s["modell"]), ("seit", s["seit"]), ("ticket", s["ticket"])):
+            t = t.replace("{" + k + "}", v)
+        aus.append({**s, "text": re.sub(r"\s{2,}", " ", t.replace("()", "")).strip()})
+    return aus
+
+
 def mb_daten(d, email):
     e = mb_einstellungen(d)
     tarife = [{**_tarif_info(t), "rang": list(tarif_rang(t))} for t in mb_buchbar(d)]
@@ -391,12 +422,13 @@ def mb_daten(d, email):
                      "tarif": tarif, "laufzeit": ({"start": time.strftime("%d.%m.%Y %H:%M", time.localtime(lz["start"])), "ende": time.strftime("%d.%m.%Y %H:%M", time.localtime(lz["ende"])),
                                                    "aktiv": lz.get("status") == "aktiv", "rest_tage": max(0, int((lz["ende"] - time.time()) // 86400))} if lz else None),
                      "gesperrt": bool(gesp), "rechnungen": rechn, "offen": round(sum(float(x["brutto"] or 0) - float(x["bezahlt"] or 0) for x in rechn), 2),
-                     "tickets": tk, "auftrag": offen_auftrag, "antraege": antr, "rang": list(tarif_rang(akt_t)) if akt_t else None,
+                     "tickets": tk, "auftrag": offen_auftrag, "stoerungen": mb_stoerungen(d, e, kz), "antraege": antr, "rang": list(tarif_rang(akt_t)) if akt_t else None,
                      **({"tarif_laufzeit": laufzeit_text(akt_t.get("laufzeit", 0), akt_t.get("laufzeit_einheit", "tage")) if akt_t.get("laufzeit") else "unbegrenzt",
                          "tarif_preis": akt_t.get("preis", 0), "tarif_down": akt_t["down"], "tarif_up": akt_t["up"], "tarif_geraete": akt_t.get("geraete", 0)} if akt_t else {})})
     return {"mitglied": parz[0]["name"] if parz else "", "parzellen": parz, "tarife": tarife,
             "erlaubt": {k: e[k] for k in ("tarifwechsel", "downgrade", "neubuchung", "verlaengern", "geraete", "zeige_rechnungen", "zeige_anfragen", "neue_anfrage", "zugangskarte")},
             "modus": e["modus"], "hinweis": e["hinweis"], "titel": e["titel"], "kategorien": list(ticket_kategorien(d)),
+            "stoerung_text": e["stoerung_text"] if e["stoerung_zeigen"] else "", "stoerung_farbe": e["stoerung_farbe"],
             "logo_verein": "/seitenbild/portal/logo" if seitenbild(d, "portal", "logo") else ""}
 
 
@@ -699,7 +731,9 @@ def _mb_beispiel(d, g):
                                         "tarif": t[0]["name"] if t else "", "rang": t[0]["rang"] if t else None, "tarif_laufzeit": "unbegrenzt",
                                         "laufzeit": None, "gesperrt": False, "offen": 0, "rechnungen": [{"id": "r", "nr": "RE-2026-0001", "datum": "2026-03-01", "brutto": 120, "status": "bezahlt"}],
                                         "tickets": [{"nr": "T-0001", "betreff": "WLAN langsam", "status": "geschlossen", "erstellt": "2026-05-02 18:10", "loesung": "Access Point neu gestartet"}],
-                                        "auftrag": None, "antraege": []}]}
+                                        "auftrag": None, "antraege": [],
+                                        "stoerungen": [{"geraet": "Access Point Festwiese", "text": MB_STANDARD["stoerung_meldung"].replace("{geraet}", "Access Point Festwiese").replace("{seit}", "18.10.2026 19:40").replace("{ticket}", "T-0042").replace("{modell}", "")}]}],
+            "stoerung_text": mb_einstellungen(d)["stoerung_text"], "stoerung_farbe": mb_einstellungen(d)["stoerung_farbe"]}
 
 
 MEIN_HTML = r"""__KOPF__<main>
@@ -708,12 +742,12 @@ MEIN_HTML = r"""__KOPF__<main>
 .k2{border:1px solid var(--l);background:var(--c);color:var(--t);border-radius:calc(var(--ecken) * .7);padding:10px 14px;cursor:pointer;font:inherit}.k2:hover{border-color:var(--a)}
 .tarife{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-top:10px}.tarif{border:1.5px solid var(--l);border-radius:var(--ecken);padding:12px;cursor:pointer;background:var(--c)}
 .tarif.akt{border-color:var(--a);box-shadow:0 0 0 2px var(--a) inset}.tarif b{font-size:17px}.gesperrt{background:#fde8e6;color:#b42318;border-radius:8px;padding:8px 10px;margin-top:8px}</style>
-<section id="v_login" class="karte" style="display:none"><h2 style="margin-top:0">Anmelden</h2><p class="hint">__ANMELDETEXT__</p>
+<div id="l_stoerung"></div><section id="v_login" class="karte" style="display:none"><h2 style="margin-top:0">Anmelden</h2><p class="hint">__ANMELDETEXT__</p>
 <label for="l_email">E-Mail-Adresse</label><input id="l_email" type="email" autocomplete="email" oninput="logoNachEmail()" onchange="logoNachEmail()" onkeydown="if(event.key=='Enter')codeAnfordern()"><button class="los" id="l_b1" onclick="codeAnfordern()">Code per E-Mail senden</button>
 <div id="l_code_box" style="display:none"><label for="l_code">Einmalcode aus der E-Mail</label><input id="l_code" onkeydown="if(event.key=='Enter')anmelden()" inputmode="numeric" autocomplete="one-time-code" maxlength="6" style="font-size:22px;letter-spacing:6px;text-align:center"><button class="los" onclick="anmelden()">Anmelden</button></div>
 <div class="msg" id="m_login"></div></section>
 <div id="v_daten" style="display:none"><div class="zeile" style="margin-bottom:10px"><p class="hint" id="d_hallo" style="margin:0"></p><div style="flex:none"><select id="d_parz" onchange="zeigen()" style="min-width:200px"></select></div><button class="k2" style="flex:none" onclick="abmelden()">Abmelden</button></div>
-<p class="hint" id="d_hinweis"></p><div class="msg" id="m_daten"></div>
+<div id="d_stoerung"></div><p class="hint" id="d_hinweis"></p><div class="msg" id="m_daten"></div>
 <section class="karte" style="display:block"><h2 style="margin-top:0">Mein Tarif</h2><div id="d_tarif"></div><div id="d_wechsel"></div></section>
 <section class="karte" style="display:block" id="s_geraete"><h2 style="margin-top:0">Meine Geräte im WLAN</h2><p class="hint">Geräte, die gerade im Netz Ihrer Parzelle angemeldet sind. Erkennbar an der IP-Adresse: <span id="d_netz"></span> – die letzte Zahl ist das Gerät.</p><div id="d_geraete">…</div><div class="knoepfe"><button class="k2" onclick="geraete()">Aktualisieren</button><button class="k2" id="b_karte" onclick="karte()">Zugangskarte per E-Mail</button></div></section>
 <section class="karte" style="display:block" id="s_rechnungen"><h2 style="margin-top:0">Meine Rechnungen</h2><div id="d_rechnungen"></div></section>
@@ -723,18 +757,22 @@ MEIN_HTML = r"""__KOPF__<main>
 const eur=x=>Number(x||0).toLocaleString("de-DE",{style:"currency",currency:"EUR"});
 function msg(id,t,ok){const m=$(id);m.className="msg "+(t?(ok?"ok":"f"):"");m.textContent=t||""}
 async function post(p,b){const r=await fetch(p,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})});const d=await r.json().catch(()=>({}));if(r.status==401&&d.anmelden){ansicht(false);throw new Error("Bitte erneut anmelden.")}if(!r.ok)throw new Error(d.fehler||r.status);return d}
-function ansicht(an){$("v_login").style.display=an?"none":"block";$("v_daten").style.display=an?"block":"none"}
+function ansicht(an){$("v_login").style.display=an?"none":"block";$("v_daten").style.display=an?"block":"none";$("l_stoerung").style.display=an?"none":"";if(!an&&!$("l_stoerung").innerHTML)stoerungAllgemein()}
 async function codeAnfordern(){try{const d=await post("/mein/code",{email:$("l_email").value.trim()});msg("m_login",d.text,true);$("l_code_box").style.display="block";$("l_code").focus()}catch(e){msg("m_login",e.message)}}
 async function anmelden(){try{await post("/mein/anmelden",{email:$("l_email").value.trim(),code:$("l_code").value});msg("m_login","");laden()}catch(e){msg("m_login",e.message)}}
 async function abmelden(){await post("/mein/abmelden").catch(()=>{});location.replace("/mein")}
 async function laden(){try{D=await post("/mein/daten");ansicht(true)}catch(e){ansicht(false);return}
  datenZeigen()}
-function vorschau(x){D=x;ansicht(true);$("v_login").style.display="block";datenZeigen();document.querySelectorAll("button").forEach(b=>b.onclick=null)}
+function vorschau(x){D=x;ansicht(true);$("v_login").style.display="block";datenZeigen();$("l_stoerung").style.display="";stoerungZeigen("l_stoerung",(x.parzellen[0]||{}).stoerungen,x.stoerung_text,x.stoerung_farbe);document.querySelectorAll("button").forEach(b=>b.onclick=null)}
 const VL="__VEREINSLOGO__";
 function kopfLogo(src,titel){const mk=document.querySelector("header .mk");let sl=document.getElementById("sp_logo");
  if(VL&&src&&mk){if(!sl){sl=document.createElement("img");sl.id="sp_logo";sl.alt="";sl.style.cssText="height:42px;width:auto;margin:0 8px";mk.insertBefore(sl,mk.querySelector("b"))}sl.src=src;sl.title=titel||""}else if(sl)sl.remove()}
-let LT=null;function logoNachEmail(){clearTimeout(LT);const e=$("l_email").value.trim();if(!VL||!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(e)){kopfLogo("");return}
- LT=setTimeout(async()=>{try{const d=await post("/mein/logo",{email:e});kopfLogo(d.logo,d.name)}catch(x){}},500)}
+function stoerungZeigen(id,liste,text,farbe){const sf=farbe||"#b42318";$(id).innerHTML=(liste||[]).length?`<div role="alert" style="border:2px solid ${sf};background:${sf}1a;color:${sf};border-radius:var(--ecken);padding:14px 16px;margin:0 0 12px;font-weight:600">`
+  +liste.map(s=>`<div style="display:flex;gap:10px;align-items:flex-start;margin:4px 0"><span style="font-size:22px;line-height:1">⚠</span><span>${esc(s.text)}</span></div>`).join("")
+  +(text?`<div style="font-weight:400;margin-top:8px;color:var(--t);white-space:pre-wrap">${esc(text)}</div>`:"")+"</div>":""}
+async function stoerungAllgemein(){try{const d=await post("/mein/stoerung",{});stoerungZeigen("l_stoerung",d.stoerungen,d.stoerung_text,d.stoerung_farbe)}catch(x){}}
+let LT=null;function logoNachEmail(){clearTimeout(LT);const e=$("l_email").value.trim();if(!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(e)){kopfLogo("");return}
+ LT=setTimeout(async()=>{try{const d=await post("/mein/logo",{email:e});if(VL)kopfLogo(d.logo,d.name);stoerungZeigen("l_stoerung",d.stoerungen,d.stoerung_text,d.stoerung_farbe)}catch(x){}},500)}
 function datenZeigen(){
  $("d_hallo").textContent="Hallo "+D.mitglied;$("d_hinweis").textContent=D.hinweis||"";$("d_parz").innerHTML=D.parzellen.map(p=>`<option value="${esc(p.id)}">${esc(p.sparte_name)} · Parzelle ${esc(p.parzelle)}</option>`).join("");
  $("d_parz").style.display=D.parzellen.length>1?"":"none";if(WAHL&&D.parzellen.some(p=>p.id==WAHL))$("d_parz").value=WAHL;$("t_kat").innerHTML=D.kategorien.map(k=>`<option>${esc(k)}</option>`).join("");
@@ -743,6 +781,7 @@ function datenZeigen(){
 function P(){return D.parzellen.find(p=>p.id==$("d_parz").value)||D.parzellen[0]}
 function zeigen(){const p=P();if(!p)return;WAHL=p.id;const lz=p.laufzeit;
  kopfLogo(p.sparte_logo,p.sparte_name);
+ stoerungZeigen("d_stoerung",p.stoerungen,D.stoerung_text,D.stoerung_farbe);
  $("d_tarif").innerHTML=p.tarif?`<div class="zeile"><div><div class="klein">Tarif</div><div class="wert">${esc(p.tarif)}</div></div>${lz?`<div><div class="klein">Laufzeit</div><div><b>${lz.aktiv?"bis "+esc(lz.ende):"abgelaufen am "+esc(lz.ende)}</b>${lz.aktiv?`<br><span class="klein">noch ${lz.rest_tage} Tag(e)</span>`:""}</div></div>`:`<div><div class="klein">Laufzeit</div><div><b>unbegrenzt</b></div></div>`}<div><div class="klein">Offen</div><div class="wert" style="font-size:18px">${eur(p.offen)}</div></div></div>${p.gesperrt?'<div class="gesperrt">Der WLAN-Zugang ist gerade gesperrt (Laufzeit abgelaufen) – mit einer Verlängerung wird er wieder freigegeben.</div>':""}`:'<p class="hint">Für diese Parzelle ist noch kein Tarif gebucht.</p>';
  const e=D.erlaubt,R=t=>t.rang.join(","),hoeher=(t)=>p.rang&&(t.rang[0]>p.rang[0]||t.rang[0]==p.rang[0]&&(t.rang[1]>p.rang[1]||t.rang[1]==p.rang[1]&&t.rang[2]>p.rang[2]));
  const ups=D.tarife.filter(t=>t.name!=p.tarif&&hoeher(t)),downs=D.tarife.filter(t=>t.name!=p.tarif&&!hoeher(t));let akt=[];

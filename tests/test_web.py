@@ -750,6 +750,11 @@ class Version50(unittest.TestCase):
         code, x = api(SRV.basis, "POST", "/mein/logo", {"email": "Paul@example.org"})        # Vereinslogo nach Eingabe der E-Mail
         self.assertTrue(code == 200 and x["logo"].startswith("/spartenlogo/BW"), x)
         self.assertEqual(api(SRV.basis, "POST", "/mein/logo", {"email": "niemand@example.org"})[1]["logo"], "")
+        code, x = api(SRV.basis, "POST", "/mein/stoerung", {})
+        self.assertEqual((code, x["stoerungen"]), (200, []), x)                       # keine Störung gemeldet
+        code, x = a.req("/api/mitgliederbereich", {"stoerung_farbe": "#aa0000", "stoerung_text": "Ansprechpartner: Vorstand"})
+        self.assertEqual((code, x["einstellungen"]["stoerung_farbe"]), (200, "#aa0000"), x)
+        self.assertEqual(a.req("/api/mitgliederbereich", {"stoerung_farbe": "rot"})[0], 400)
         code, x = a.req("/api/seiten-design", {"art": "mein", "design": {"titel": "Gartenfreunde online", "farbe_kopf": "#224466"}})
         self.assertEqual((code, x["mein"]["titel"]), (200, "Gartenfreunde online"), x)
         self.assertIn(b"Gartenfreunde online", Sitzung(SRV.basis).roh("/mein")[2])

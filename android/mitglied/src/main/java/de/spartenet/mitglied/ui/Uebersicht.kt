@@ -201,6 +201,7 @@ fun Uebersicht(speicher: Speicher, token: String, onAbgemeldet: () -> Unit) {
                                         }
                                     }
                                 }
+                                StoerungsBanner(p.liste("stoerungen").map { it.s("text") }, d.s("stoerung_text"), d.s("stoerung_farbe"))
                                 if (d.s("hinweis").isNotEmpty()) Text(d.s("hinweis"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 fehler?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                                 val erlaubt = d.o("erlaubt") ?: JSONObject()
@@ -557,6 +558,31 @@ private fun AnfrageDialog(kategorien: List<String>, onAbbrechen: () -> Unit, onS
 }
 
 // ---- Hilfen ----------------------------------------------------------------------------------------------------
+
+/** hervorgehobene Störungsmeldung (Ausfall eines Geräts) – Farbe aus dem Manager */
+@Composable
+fun StoerungsBanner(meldungen: List<String>, zusatz: String, farbe: String) {
+    if (meldungen.isEmpty()) return
+    val f = try {
+        androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(farbe.ifEmpty { "#b42318" }))
+    } catch (_: IllegalArgumentException) {
+        MaterialTheme.colorScheme.error
+    }
+    Surface(
+        color = f.copy(alpha = 0.12f), shape = MaterialTheme.shapes.medium,
+        border = BorderStroke(2.dp, f), modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            meldungen.forEach { m ->
+                Row(verticalAlignment = Alignment.Top) {
+                    Text("⚠", color = f, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(end = 8.dp))
+                    Text(m, color = f, fontWeight = FontWeight.SemiBold)
+                }
+            }
+            if (zusatz.isNotEmpty()) Text(zusatz, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
 
 /** Logo vom Manager laden (Vereins- oder Spartenlogo, öffentlich) und klein anzeigen */
 @Composable

@@ -126,7 +126,43 @@ def stoerungen_pruefen(d, jetzt=None):
     return log
 
 
+def geraete_sparten(d):
+    """Zuordnung überwachter Geräte zu Sparten {Geräteschlüssel: Kürzel} – ohne Eintrag betrifft ein Ausfall alle Sparten"""
+    g = d.get("geraete_sparten")
+    return g if isinstance(g, dict) else {}
+
+
+def aktuelle_stoerungen(d, kz=None, nur_alle=False):
+    """gemeldete, noch andauernde Störungen (für Mitgliederbereich und App) – nur Geräte dieser Sparte oder ohne Zuordnung"""
+    st = stand_lesen()
+    zuo = geraete_sparten(d)
+    aus = []
+    for k, g in (st.get("geraete") or {}).items():
+        if not g.get("offline_seit") or not g.get("gemeldet"):
+            continue
+        sp = zuo.get(k, "")
+        if (kz and sp and sp != kz) or (nur_alle and sp):
+            continue
+        t = tickets_daten(d)["liste"].get(g.get("ticket") or "")
+        aus.append({"geraet": g.get("name") or k, "modell": g.get("model", ""), "sparte": sp,
+                    "seit": time.strftime("%d.%m.%Y %H:%M", time.localtime(g["offline_seit"])), "ticket": (t or {}).get("nr", "")})
+    aus.sort(key=lambda x: x["seit"])
+    return aus
+
+
 def akt_ueberwachung(d, b=None, ich=""):
+    if b is not None and isinstance(b.get("geraet_sparte"), dict):      # Gerät einer Sparte zuordnen (leer = alle Sparten)
+        k, kz = str(b["geraet_sparte"].get("geraet") or ""), str(b["geraet_sparte"].get("sparte") or "").upper()
+        if kz and kz not in kalk_sparten(d):
+            raise Fehler("Sparte unbekannt.")
+        zuo = geraete_sparten(d)
+        if kz:
+            zuo[k] = kz
+        else:
+            zuo.pop(k, None)
+        d["geraete_sparten"] = zuo
+        speichere(d)
+        b = None
     if b is not None:
         e = _einst(d, "ueberwachung", UEB_STANDARD)
         for k, s in UEB_STANDARD.items():
@@ -144,13 +180,14 @@ def akt_ueberwachung(d, b=None, ich=""):
     if b is not None and b.get("jetzt"):
         log = stoerungen_pruefen(d) or ["✔ Geprüft – keine neue Störung."]
     st = stand_lesen()
-    g = [{"name": x.get("name"), "modell": x.get("model", ""), "ip": x.get("ip", ""), "status": x.get("state", ""),
+    zuo = geraete_sparten(d)
+    g = [{"key": k, "name": x.get("name"), "modell": x.get("model", ""), "ip": x.get("ip", ""), "status": x.get("state", ""), "sparte": zuo.get(k, ""),
           "offline_seit": time.strftime("%d.%m. %H:%M", time.localtime(x["offline_seit"])) if x.get("offline_seit") else "", "gemeldet": bool(x.get("gemeldet"))}
-         for x in (st.get("geraete") or {}).values()]
+         for k, x in (st.get("geraete") or {}).items()]
     g.sort(key=lambda x: (not x["offline_seit"], x["name"] or ""))
     return {"einstellungen": _einst(d, "ueberwachung", UEB_STANDARD), "geraete": g, "verlauf": list(reversed((st.get("verlauf") or [])[-50:])),
             "letzte": time.strftime("%d.%m.%Y %H:%M", time.localtime(st["letzte_pruefung"])) if st.get("letzte_pruefung") else "", "fehler": st.get("fehler", ""),
-            "konten": _konten(d), "log": log or ([f"✔ Gespeichert."] if b is not None else [])}
+            "konten": _konten(d), "sparten": _sparten_kz(d), "log": log or ([f"✔ Gespeichert."] if b is not None else [])}
 
 
 # ---- Wochenbericht ---------------------------------------------------------------------------------------------------

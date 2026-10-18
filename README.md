@@ -112,6 +112,14 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   Umstieg: Der bisherige gemeinsame Token aus 5.3/5.4 gilt weiter für alle Konten ("alle Konten (alt)" in der Liste),
   bis der Administrator ihn entfernt – am besten, sobald jeder seinen eigenen Token eingetragen hat.
 
+### STÖRUNGEN IM MITGLIEDERBEREICH – neu in 5.5
+  Meldet die Störungsüberwachung einen Ausfall (Ticket erstellt), sehen Mitglieder eine hervorgehobene Meldung – im Mitgliederbereich
+  oben auf der Hauptseite, schon auf seiner Anmeldeseite und in der Mitglieder-App, z. B. "Achtung: Access Point Festwiese ist aktuell
+  ausgefallen (seit …). Ein Störungsticket T-0042 ist erstellt und an den Verein verschickt …". Nach "wieder online" verschwindet sie.
+  - Karte "Mitgliederbereich": ein-/ausschalten, Farbe, Meldung je Gerät ({geraet} {seit} {ticket} {modell}) und ein eigener Zusatztext.
+  - System → Störungsüberwachung: je Gerät "betrifft Sparte" (Standard: alle Sparten). Mitglieder sehen nur Ausfälle ihrer Sparte;
+    die Anmeldeseite zeigt ohne E-Mail nur Ausfälle aller Sparten, nach Eingabe der E-Mail die passenden zur Sparte.
+
 ### LOGOS: MANAGER-LOGO UND VEREINSLOGOS GETRENNT – neu in 5.5
   ☰ → System & Konto → Oberfläche gestalten → Karte "Logos":
   - Manager-Logo: anzeigen und wählen (Bild aus den Unterlagen, SparteNet-Symbol oder keins). Erscheint in der Kopfzeile neben

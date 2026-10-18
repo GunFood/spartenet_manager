@@ -196,6 +196,8 @@ class Handler(BaseHTTPRequestHandler):
             if pfad == "/mein/code":
                 with SCHREIB_SPERRE:
                     return self._send(200, mb_code_anfordern(lade(), b, self._quelle()))
+            if pfad == "/mein/stoerung":             # Anmeldeseite: Störungen, die alle Sparten betreffen
+                return self._send(200, mb_stoerung_oeffentlich(d, self._quelle()))
             if pfad == "/mein/logo":                 # Vereinslogo zur eingegebenen E-Mail-Adresse (Anmeldeseite und App)
                 return self._send(200, mb_logo_zur_email(d, b.get("email"), self._quelle()))
             if pfad == "/mein/info":                 # für die Mitglieder-App: ist der Bereich erreichbar?
