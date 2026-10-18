@@ -1,4 +1,4 @@
-SparteNet Manager 4.8.3 (Cloud)
+SparteNet Manager 4.8.4 (Cloud)
 ===============================
 
 Funktioniert komplett über die UniFi-Cloud (api.ui.com). Kein lokaler Zugriff, kein VPN.
@@ -100,6 +100,11 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
     POST /api/v1/buchung   {"sparte":"BW","parzelle":12,"tarif":"Basic"}   ("" = Buchung entfernen)
   Höchstens 120 Anfragen je Minute und Schlüssel (SPARTENET_API_PRO_MINUTE). Zahlungsanbieter über n8n/Zapier/Make
   anbinden. Von außen nur über HTTPS (Reverse-Proxy, dann SPARTENET_PROXY=1).
+
+### UNTERLAGEN: ORDNER WÄHLEN UND ANLEGEN – neu in 4.8.4
+  Beim Hochladen "In Ordner hochladen" als Auswahl (mit Anzahl Dateien); "+ Neuer Ordner …" legt beim Hochladen
+  einen neuen an. "Ordner verwalten": Ordner anlegen (auch leer), Ordner anklicken = filtern, leere eigene Ordner
+  entfernen. In der Liste lässt sich der Ordner jeder Datei per Auswahl ändern.
 
 ### WLAN-NAMEN VOM GATEWAY (Reiter "Einrichten", Schritt 2) – neu in 4.8.3
   Heißen die WLANs am Gateway anders als nach Schema ("SparteNet.de-BW-Pächter" …): "WLANs vom Gateway abrufen",

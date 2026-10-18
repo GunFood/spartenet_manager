@@ -186,6 +186,27 @@ class Unterlagen(unittest.TestCase):
         self.assertIn("sandbox", kopf["Content-Security-Policy"])
 
 
+class UnterlagenOrdner(unittest.TestCase):
+    def test_ordner_anlegen_hochladen_entfernen(self):
+        a = admin()
+        code, x = a.req("/api/unterlage-ordner", {"neu": "Wartung"})
+        self.assertEqual(code, 200, x)
+        self.assertIn("Wartung", x["ordner"])
+        self.assertEqual(a.req("/api/unterlage-ordner", {"neu": "wartung"})[0], 400)          # gibt es schon
+        code, _, roh = a.roh("/api/unterlage-hochladen?" + urllib.parse.urlencode({"name": "w.pdf", "ordner": "Wartung"}), b"%PDF-1.4\n%w\n")
+        x = json.loads(roh)
+        self.assertEqual(next(f for f in x["dateien"] if f["name"] == "w.pdf")["ordner"], "Wartung")
+        self.assertEqual(x["anzahl"]["Wartung"], 1)
+        self.assertEqual(a.req("/api/unterlage-ordner", {"loeschen": "Wartung"})[0], 400)     # nicht leer
+        self.assertEqual(a.req("/api/unterlage-ordner", {"loeschen": "Verträge"})[0], 400)    # Standard bleibt
+        i = next(f for f in x["dateien"] if f["name"] == "w.pdf")["id"]
+        code, x = a.req("/api/unterlage-aendern", {"id": i, "ordner": "Pläne"})
+        self.assertEqual(next(f for f in x["dateien"] if f["id"] == i)["ordner"], "Pläne")
+        code, x = a.req("/api/unterlage-ordner", {"loeschen": "Wartung"})
+        self.assertEqual(code, 200, x)
+        self.assertNotIn("Wartung", x["ordner"])
+
+
 class Datensicherung(unittest.TestCase):
     def test_verschluesselt_hin_und_zurueck(self):
         a = admin()

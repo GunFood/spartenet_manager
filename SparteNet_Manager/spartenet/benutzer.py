@@ -69,7 +69,7 @@ _SCHREIBEN = {
     "/api/kalk-annahmen": "kalkulation", "/api/kalk-sparte": "kalkulation", "/api/kalk-import": "kalkulation",
     "/api/gwplan-vlan-uebernehmen": "planung", "/api/gwplan-sparte": "netzplanung", "/api/gwplan-annahmen": "netzplanung", "/api/gwplan-zuruecksetzen": "netzplanung", "/api/gwplan-import": "netzplanung", "/api/zuteilung-einstellen": "netzplanung", "/api/zuteilung-setzen": "netzplanung", "/api/zuteilung-verdichten": "netzplanung",
     "/api/logo": "karten", "/api/logo-loeschen": "karten",
-    "/api/unterlage-hochladen": "unterlagen", "/api/unterlage-aendern": "unterlagen", "/api/unterlage-loeschen": "unterlagen",
+    "/api/unterlage-hochladen": "unterlagen", "/api/unterlage-aendern": "unterlagen", "/api/unterlage-loeschen": "unterlagen", "/api/unterlage-ordner": "unterlagen",
     "/api/automation-speichern": "automationen", "/api/automation-loeschen": "automationen", "/api/automation-probe": "automationen",
     "/api/konsolen": "verbindung", "/api/log-loeschen": "verbindung", "/api/tailscale": "verbindung", "/api/diagnose": "verbindung",
 }
