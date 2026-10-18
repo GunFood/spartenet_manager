@@ -219,6 +219,80 @@ def akt_logos(d, erlaubt=None):
     return {"logos": logo_unterlagen(d, erlaubt), "karte": q.get("karte", ""), "ordner": LOGO_ORDNER, "log": []}
 
 
+# ---- Spartenlogos: jede Sparte kann ein eigenes Logo haben (neben dem Logo des Vereins) -----------------------------
+def sparten_logo_id(d, kz):
+    """Unterlage des Spartenlogos: in den Einstellungen gewählt – sonst automatisch ein Bild im Ordner „Logos“, das dieser Sparte zugeordnet ist"""
+    if not kz:
+        return ""
+    wahl = (d.get("sparten_logos") or {}).get(kz) if isinstance(d.get("sparten_logos"), dict) else None
+    if wahl == "-":
+        return ""                                         # ausdrücklich „kein Spartenlogo“
+    dateien = unterlagen_daten(d)["dateien"]
+    if wahl and wahl in dateien:
+        return wahl
+    return next((x["id"] for x in logo_unterlagen(d) if x["sparte"] == kz and x["ordner"] == LOGO_ORDNER), "")
+
+
+def sparten_logo(d, kz):
+    """(Bytes, MIME) des Spartenlogos oder None"""
+    i = sparten_logo_id(d, kz)
+    if not i:
+        return None
+    try:
+        return logo_bild(d, i)
+    except Fehler:
+        return None
+
+
+def sparten_logo_uri(d, kz):
+    x = sparten_logo(d, kz)
+    return f"data:{x[1]};base64," + base64.b64encode(x[0]).decode() if x else ""
+
+
+def sparte_aus_email(d, adresse):
+    """Sparte eines Mitglieds anhand der E-Mail-Adresse – nur wenn eindeutig (alle Parzellen mit dieser Adresse in derselben Sparte)"""
+    e = str(adresse or "").strip().lower()
+    if not e:
+        return ""
+    roh = d.get("mitglieder")
+    liste = roh if isinstance(roh, dict) else {}
+    sp = {str(m.get("sparte") or "") for m in liste.values() if isinstance(m, dict) and str(m.get("email") or "").strip().lower() == e}
+    return sp.pop() if len(sp) == 1 else ""
+
+
+def akt_sparten_logos(d, b=None, wer="", erlaubt=None):
+    """Spartenlogos anzeigen; {"sparte", "logo": id | "" (automatisch) | "-" (keins)} speichert die Wahl"""
+    roh = d.get("sparten_logos") if isinstance(d.get("sparten_logos"), dict) else {}
+    sparten = kalk_sparten(d)
+    log = []
+    if b:
+        kz = str(b.get("sparte") or "")
+        if kz not in sparten:
+            raise Fehler("Sparte unbekannt.")
+        if erlaubt is not None and kz not in erlaubt:
+            raise Fehler("Für diese Sparte fehlt Ihnen das Recht.")
+        w = str(b.get("logo") or "")
+        if w and w != "-":
+            logo_bild(d, w, erlaubt)                       # prüft: Bild bis 2 MB
+        if w:
+            roh[kz] = w
+        else:
+            roh.pop(kz, None)
+        d["sparten_logos"] = roh
+        speichere(d)
+        journal(f"Spartenlogo {kz} geändert durch {wer}")
+        log = [f"✔ Spartenlogo für {kz} gespeichert."]
+    zeilen = []
+    for kz, sp in sparten.items():
+        if erlaubt is not None and kz not in erlaubt:
+            continue
+        i = sparten_logo_id(d, kz)
+        x = unterlagen_daten(d)["dateien"].get(i) or {}
+        zeilen.append({"sparte": kz, "name": sp.get("name", kz), "logo": i, "logo_name": x.get("name", ""),
+                       "wahl": roh.get(kz, ""), "automatisch": bool(i) and roh.get(kz, "") in ("", None)})
+    return {"sparten": zeilen, "log": log}
+
+
 def akt_logo_bild(d, q, erlaubt=None):
     roh, typ = logo_bild(d, q.get("id", [""])[0], erlaubt)
     return {"_datei": roh, "typ": typ, "name": "logo"}

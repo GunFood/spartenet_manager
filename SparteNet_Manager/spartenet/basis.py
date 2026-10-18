@@ -116,7 +116,7 @@ DESIGN_STANDARD = {
     "t_fuss": "Bitte vertraulich behandeln und nicht weitergeben. Bei Fragen: SparteNet.de",
     "zeige_kopf": True, "zeige_unter": True, "zeige_scan": True, "zeige_zugang": True, "zeige_fuss": True, "fuss_unten": True,
     "rahmen": False, "farbe_rahmen": "#3a9a1f", "rahmen_mm": 0.8, "rahmen_radius": 4,
-    "logo": "", "logo_ort": "oben", "logo_pos": "center", "logo_mm": 40,
+    "logo": "", "logo_ort": "oben", "logo_pos": "center", "logo_mm": 40, "sparten_logo": True,
 }
 
 

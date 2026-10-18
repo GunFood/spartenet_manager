@@ -577,6 +577,35 @@ class Version50(unittest.TestCase):
             code, x = s.req("/portal/zugang", paul)
         self.assertEqual(code, 400)                                  # Grenze
 
+    def test_y_spartenlogos(self):
+        """Logo je Sparte erzeugen, öffentlich abrufbar, in E-Mail (zwei Logos) und Rechnungs-PDF"""
+        import email as em
+        a = self.a
+        code, x = a.req("/api/sparten-logo-erzeugen", {"alle": True})
+        self.assertEqual(code, 200, x)
+        bw = next(z for z in x["sparten"] if z["sparte"] == "BW")
+        self.assertTrue(bw["logo"] and bw["logo_name"].startswith("Vereinslogo"), bw)
+        code, kopf, png = Sitzung(SRV.basis).roh("/spartenlogo/BW")
+        self.assertEqual((code, png[:8]), (200, b"\x89PNG\r\n\x1a\n"))
+        self.assertEqual(Sitzung(SRV.basis).roh("/spartenlogo/XX")[0], 404)
+        a.req("/api/email-layout", {"layout": {"aktiv": True, "logo": True, "spartenlogo": True}})
+        code, l = a.req("/api/rechnungslauf", {"jahr": 2032, "ausfuehren": True})
+        self.assertEqual(code, 200, l)
+        r41 = next(z for z in l["zeilen"] if z["parzelle"] == 41)
+        _, _, pdf = a.roh("/api/rechnung-pdf?id=" + r41["id"])
+        self.assertIn(b"/XObject", pdf)
+        n = len(SMTP.mails)
+        a.req("/api/rechnung-senden", {"ids": [r41["id"]]})
+        m = em.message_from_string(self._mails_seit(n)[0]["text"])
+        bilder = [t for t in m.walk() if t.get_content_type() == "image/png"]
+        self.assertGreaterEqual(len(bilder), 1)                       # Spartenlogo (Vereinslogo nur, wenn eines gewählt ist)
+        self.assertIn("cid:", next(t for t in m.walk() if t.get_content_type() == "text/html").get_payload(decode=True).decode())
+        code, x = a.req("/api/sparten-logos", {"sparte": "BW", "logo": "-"})
+        self.assertFalse(next(z for z in x["sparten"] if z["sparte"] == "BW")["logo"])
+        self.assertEqual(Sitzung(SRV.basis).roh("/spartenlogo/BW")[0], 404)
+        a.req("/api/sparten-logos", {"sparte": "BW", "logo": ""})                      # zurück auf automatisch
+        self.assertEqual(Sitzung(SRV.basis).roh("/spartenlogo/BW")[0], 200)
+
     def test_zz_mitgliederbereich(self):
         """/mein: Anmeldung per E-Mail-Code, eigene Daten, Wechsel als Anfrage, Bezahldienst mit signiertem Webhook (läuft als letzter der Klasse)"""
         import email as em, hashlib, hmac, re

@@ -19,7 +19,7 @@ _FARBE_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 _ID_RE_SEITE = re.compile(r"^[0-9a-f]{16}$")
 
 LOGIN_STANDARD = {
-    "layout": "geteilt", "marke": "SparteNet Manager", "marke_hervor": "Net",
+    "layout": "geteilt", "marke": "SparteNet Manager", "marke_hervor": "Net", "spartenlogos": False,
     "ueberschrift": "WLAN für die Kleingarten-Sparte – übersichtlich verwaltet.",
     "untertitel": "Parzellen, Tarife, Pächter und das Gateway an einem Ort.",
     "punkte": ["Eigenes WLAN-Passwort je Parzelle, Zugangskarten mit QR-Code",
@@ -34,7 +34,7 @@ LOGIN_STANDARD = {
     "schrift": "system", "ecken": 20, "dunkel": True,
 }
 PORTAL_DESIGN_STANDARD = {
-    "marke": "SparteNet", "marke_hervor": "Net", "logo": "", "hintergrund": "", "abdunkeln": 30,
+    "marke": "SparteNet", "marke_hervor": "Net", "logo": "", "hintergrund": "", "abdunkeln": 30, "spartenlogos": False,
     "farbe_kopf": "#1d2f3e", "farbe_kopf_text": "#ffffff", "farbe_knopf": "#3a9a1f", "farbe_grund": "#f5f7f4", "farbe_karte": "#ffffff", "farbe_text": "#1d2f3e",
     "schrift": "system", "ecken": 12, "dunkel": True, "breite": 640,
     "reihenfolge": ["ticket", "status", "zugang"],
@@ -175,6 +175,17 @@ _DUNKEL = ("--grund:#0c1410;--karte:#16211b;--text:#e3ebe5;--leise:#9db0a4;--ran
            "--info:#12283a;--infot:#9fd0f5;--schatten:0 18px 50px rgba(0,0,0,.5)")
 
 
+def sparten_logo_leiste(d, inline=False, hell=False):
+    """Logos aller Sparten nebeneinander (für Anmelde- und Pächter-Seite)"""
+    bilder = []
+    for kz, sp in kalk_sparten(d).items():
+        i = sparten_logo_id(d, kz)
+        if i:
+            src = sparten_logo_uri(d, kz) if inline else f"/spartenlogo/{urllib.parse.quote(kz)}?v={i[:6]}"
+            bilder.append(f'<img src="{_e(src)}" alt="{_e(sp.get("name", kz))}" title="{_e(sp.get("name", kz))}" style="height:44px;width:auto;margin:4px 6px">')
+    return f'<span style="display:flex;flex-wrap:wrap;justify-content:center;align-items:center;margin:6px 0">{"".join(bilder)}</span>' if bilder else ""
+
+
 def login_seite(d, design=None, inline=False):
     """Anmeldeseite aus dem gespeicherten (oder übergebenen) Design"""
     g = design or seiten_design(d, "login")
@@ -191,6 +202,8 @@ def login_seite(d, design=None, inline=False):
     if g["portal_link"] and portal_an:
         fuss.insert(0, '<a href="/portal" style="color:#cfe9c6">Pächter-Seite</a>')
     klein = []
+    if g["spartenlogos"]:
+        klein.append(sparten_logo_leiste(d, inline))
     if g["fuss"]:
         klein.append(_absaetze(g["fuss"]))
     klein.append((f"Aus Sicherheitsgründen werden Sie nach {ab} Minuten ohne Aktivität automatisch abgemeldet. " if ab else "")
@@ -222,6 +235,8 @@ def portal_seite(d, design=None, inline=False):
     hg = _bild_src(d, "portal", "hintergrund", g["hintergrund"], inline)
     logo = _bild_src(d, "portal", "logo", g["logo"], inline)
     fuss = []
+    if g["spartenlogos"]:
+        fuss.append(sparten_logo_leiste(d, inline))
     if g["kontakt"]:
         fuss.append("Kontakt: " + _e(g["kontakt"]))
     if g["fuss"]:

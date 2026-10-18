@@ -224,7 +224,7 @@ def portal_anfrage(pfad, b, quelle):
                 try:
                     email_senden(d, t["kontakt"]["email"], f"[{t['nr']}] Ihre Anfrage: {t['betreff']}", None,
                                  f"<p>Hallo {html_mod.escape(vorname)} {html_mod.escape(nachname)},</p><p>vielen Dank – Ihre Anfrage ist bei uns eingegangen und hat die Nummer <b>{t['nr']}</b>. "
-                                 f"Wir melden uns so bald wie möglich.</p><p>Den Stand können Sie jederzeit auf der Pächter-Seite mit Ticket-Nummer, Name und E-Mail-Adresse abfragen.</p>")
+                                 f"Wir melden uns so bald wie möglich.</p><p>Den Stand können Sie jederzeit auf der Pächter-Seite mit Ticket-Nummer, Name und E-Mail-Adresse abfragen.</p>", sparte=t.get("sparte") or None)
                 except Exception as f:
                     LOG.warning("Bestätigung zu %s nicht gesendet: %s", t["nr"], f)
             return 200, {"ok": True, "ticket": t["nr"], "text": ds["danke"].replace("{nr}", t["nr"])}
@@ -281,7 +281,7 @@ def portal_anfrage(pfad, b, quelle):
                          f"<p>Hallo {html_mod.escape(m.get('vorname') or '')},</p><p>anbei Ihre WLAN-Zugangskarte für Parzelle {p} ({html_mod.escape(name)}).</p>"
                          f"<p>WLAN: <b>{html_mod.escape(zeile['WLAN'])}</b><br>Den QR-Code auf der Karte mit der Handy-Kamera scannen – das Handy verbindet sich automatisch.</p>"
                          "<p>Bitte vertraulich behandeln. Haben Sie die Karte nicht angefordert, melden Sie sich bitte bei uns.</p>",
-                         anhaenge=[(f"Zugangskarte_Parzelle_{p}.pdf", karte, "application/pdf")])
+                         anhaenge=[(f"Zugangskarte_Parzelle_{p}.pdf", karte, "application/pdf")], sparte=kz)
             journal(f"Pächter-Seite: Zugangskarte {kz} Parzelle {p} an hinterlegte E-Mail gesendet")
             return 200, antwort
         return 404, {"fehler": "Diese Funktion ist nicht eingeschaltet."}

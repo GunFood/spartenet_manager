@@ -69,11 +69,11 @@ _LESEN = {
     "/api/vertraege": "mitglieder", "/api/rundschreiben": "mitglieder", "/api/rundschreiben-empfaenger": "mitglieder", "/api/mitglied-auskunft": "mitglieder", "/api/mitglied-akte": "mitglieder", "/api/ticket-mitglieder": "tickets",
     "/api/ueberwachung": "auslesen", "/api/laufzeiten": "buchungen", "/api/gestaltung": "gestaltung", "/api/logos": "karten", "/api/logo-bild": "karten",
 }
-_GET_LESEN_SONST_SCHREIBEN = {"/api/voucher-vorlagen": "voucher", "/api/tarife": "tarife", "/api/buchungen": "buchungen", "/api/design": "karten", "/api/fern": "verbindung"}
+_GET_LESEN_SONST_SCHREIBEN = {"/api/sparten-logos": "gestaltung", "/api/voucher-vorlagen": "voucher", "/api/tarife": "tarife", "/api/buchungen": "buchungen", "/api/design": "karten", "/api/fern": "verbindung"}
 _VORSCHAU = {"/api/zugang": "wlan_pw", "/api/netze": "netze", "/api/uebertragen": "wlan_pw", "/api/ppsk-hochladen": "wlan_pw", "/api/tarif-uebertragen": "tarife", "/api/voucher": "voucher", "/api/voucher-loeschen": "voucher", "/api/zuteilung-gateway": "netze", "/api/umzug": "netze"}
 _SCHREIBEN = {
     "/api/laufzeit-verlaengern": "buchungen", "/api/tarif-antrag": "buchungen", "/api/laufzeit-starten": "buchungen", "/api/ticket-schliessen": "tickets", "/api/ticket-zuordnen": "tickets",
-    "/api/seiten-design": "gestaltung", "/api/seiten-vorschau": "gestaltung", "/api/ansicht-profile": "gestaltung",
+    "/api/seiten-design": "gestaltung", "/api/sparten-logo-erzeugen": "gestaltung", "/api/seiten-vorschau": "gestaltung", "/api/ansicht-profile": "gestaltung",
     "/api/excel": "planung", "/api/schreibtest": "netze", "/api/umzug-rueckgaengig": "netze",
     "/api/ppsk-speichern": "wlan_pw", "/api/rueckgaengig": "wlan_pw", "/api/wlan-zuordnung": "wlan_pw", "/api/passwort": "wlan_pw",
     "/api/tarif-rueckgaengig": "tarife", "/api/tarif-zuordnung": "buchungen",

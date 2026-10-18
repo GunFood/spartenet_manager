@@ -261,7 +261,8 @@ def akt_voucher_druck(d, b):
         zeilen.append({"Parzelle": "Gast", "WLAN": ssid, "Passwort": "", "Titel": "Gast-WLAN", "Unter": v.get("text") or f"Ihr Gast-Zugang für {laufzeit}",
                        "Scan": "Handy-Kamera auf den Code richten, mit dem WLAN verbinden und im Browser den Voucher-Code eingeben",
                        "Fuss": "Die Laufzeit beginnt mit der ersten Anmeldung. Bei Fragen: SparteNet.de", "Zugang": zugang})
-    html = karten_html(d["design"], sp["name"], sp["kz"], zeilen)
+    from .unterlagen import sparten_logo_uri
+    html = karten_html(d["design"], sp["name"], sp["kz"], zeilen, sparte_logo=sparten_logo_uri(d, sp["kz"]))
     journal(f"Voucher gedruckt: {len(zeilen)} ({ssid})")
     return {"html": html, "log": [f"✔ {len(zeilen)} Voucher im Kartendesign zum Drucken geöffnet (WLAN „{ssid}“)."]
             + ([f"⚠ {abgelaufen} davon sind abgelaufen."] if abgelaufen else [])}

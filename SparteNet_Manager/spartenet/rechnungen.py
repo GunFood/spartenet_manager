@@ -163,6 +163,12 @@ def rechnung_pdf(d, x):
     akz = (d.get("email_layout") or {}).get("farbe_akzent") or "#3a9a1f"
     p = PDF(titel=f"Rechnung {x['nr']}")
     L, R = 22 * MM, p.b - 20 * MM
+    verein, sparte = pdf_logos(d, x.get("sparte"))
+    rechts = R
+    for logo in (sparte, verein):                 # oben rechts: Vereinslogo, daneben das Spartenlogo
+        if logo:
+            w = p.bild(rechts, 12 * MM, 42 * MM, 18 * MM, logo, "r")
+            rechts -= w + 5 * MM if w else 0
     p.text(L, 24 * MM, e["firma"], 18, True, akz)
     y = 30 * MM
     for z in [z for z in e["adresse"].splitlines() if z.strip()] + [t for t in (e["email"], e["telefon"]) if t]:
@@ -277,7 +283,7 @@ def akt_rechnung_senden(d, b, ich, erlaubt=None):
         w = _werte(d, x)
         try:
             email_senden(d, x["email"], _ersetzen(e["email_betreff"], w), None, _ersetzen(e["email_text"], w, html=True),
-                         anhaenge=[(f"Rechnung_{x['nr']}.pdf", rechnung_pdf(d, x), "application/pdf")])
+                         anhaenge=[(f"Rechnung_{x['nr']}.pdf", rechnung_pdf(d, x), "application/pdf")], sparte=x.get("sparte") or None)
             x["versendet"] = time.strftime("%Y-%m-%d %H:%M")
             ok += 1
         except Fehler as f:

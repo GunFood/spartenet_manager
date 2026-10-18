@@ -297,7 +297,7 @@ def akt_ticket_schliessen(d, b, ich, erlaubt=None):
         email_senden(d, an, f"[{t['nr']}] Ihre Anfrage ist abgeschlossen: {t.get('betreff', '')}", None,
                      f"<p>Hallo {html_mod.escape(k.get('vorname') or k.get('name') or '')},</p><p>Ihre Anfrage <b>{html_mod.escape(t['nr'])}</b> "
                      f"(„{html_mod.escape(t.get('betreff', ''))}“) ist abgeschlossen.</p>{text_zu_html(loesung)}"
-                     "<p>Wenn noch etwas offen ist, antworten Sie einfach oder stellen Sie auf der Pächter-Seite eine neue Anfrage.</p>")
+                     "<p>Wenn noch etwas offen ist, antworten Sie einfach oder stellen Sie auf der Pächter-Seite eine neue Anfrage.</p>", sparte=t.get("sparte") or None)
         log.append(f"✔ Abschluss per E-Mail an {an} gesendet.")
     war_offen = ticket_offen(t)
     t["status"], t["loesung"], t["geschlossen"] = "geschlossen", loesung, time.strftime("%Y-%m-%d %H:%M")
@@ -429,7 +429,7 @@ def akt_ticket_kommentar(d, b, ich, erlaubt=None):
             raise Fehler("Beim Ticket ist keine E-Mail-Adresse des Kontakts hinterlegt.")
         werte = _platzhalter_werte(_ereignis_daten(t), d)
         betreff = f"[{t['nr']}] {t.get('betreff', '')}"
-        email_senden(d, an, betreff, None, _ersetzen(html, werte, html=True))
+        email_senden(d, an, betreff, None, _ersetzen(html, werte, html=True), sparte=t.get("sparte") or None)
         _verlauf(t, ich, "antwort", f"E-Mail an {an}:\n" + html_zu_text(_ersetzen(html, werte, html=True)))
         log.append(f"✔ Antwort per E-Mail an {an} gesendet.")
         if t.get("status") == "neu":

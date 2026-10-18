@@ -1,6 +1,7 @@
 package de.spartenet.mitglied.ui
 
 import android.content.ActivityNotFoundException
+import android.graphics.BitmapFactory
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -58,6 +59,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -144,6 +150,13 @@ fun Uebersicht(speicher: Speicher, token: String, onAbgemeldet: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
+                navigationIcon = {
+                    val p0 = d?.liste("parzellen")?.let { l -> l.firstOrNull { it.s("id") == wahl } ?: l.firstOrNull() }
+                    Row(Modifier.padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        d?.s("logo_verein")?.takeIf { it.isNotEmpty() }?.let { NetzBild(api, it, "Vereinslogo") }
+                        p0?.s("sparte_logo")?.takeIf { it.isNotEmpty() }?.let { NetzBild(api, it, p0.s("sparte_name")) }
+                    }
+                },
                 title = {
                     Column {
                         Text(speicher.titel.ifEmpty { "Mitgliederbereich" }, fontWeight = FontWeight.SemiBold)
@@ -544,6 +557,23 @@ private fun AnfrageDialog(kategorien: List<String>, onAbbrechen: () -> Unit, onS
 }
 
 // ---- Hilfen ----------------------------------------------------------------------------------------------------
+
+/** Logo vom Manager laden (Vereins- oder Spartenlogo, öffentlich) und klein anzeigen */
+@Composable
+private fun NetzBild(api: Api, pfad: String, beschreibung: String) {
+    var bild by remember(pfad) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(pfad) {
+        bild = try {
+            val roh = api.datei(pfad).daten
+            withContext(Dispatchers.Default) { BitmapFactory.decodeByteArray(roh, 0, roh.size)?.asImageBitmap() }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
+    }
+    bild?.let { Image(it, beschreibung, Modifier.padding(end = 6.dp).size(40.dp), contentScale = ContentScale.Fit) }
+}
 
 fun oeffnen(ctx: Context, uri: String) {
     try {

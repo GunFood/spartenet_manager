@@ -112,6 +112,18 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   Umstieg: Der bisherige gemeinsame Token aus 5.3/5.4 gilt weiter für alle Konten ("alle Konten (alt)" in der Liste),
   bis der Administrator ihn entfernt – am besten, sobald jeder seinen eigenen Token eingetragen hat.
 
+### SPARTENLOGOS UND VEREINSLOGOS – neu in 5.5
+  ☰ → System & Konto → Oberfläche gestalten → Karte "Spartenlogos": jede Sparte kann neben dem Vereinslogo ein eigenes Logo haben.
+  - Wählen aus den Unterlagen – oder automatisch: ein Bild im Unterlagen-Ordner "Logos", das der Sparte zugeordnet ist.
+  - "Erzeugen" / "Für alle Sparten ohne Logo erzeugen": der Manager zeichnet aus dem Spartennamen ein rundes Vereinsabzeichen
+    (Farbe aus dem Namen; Motiv passend: Baum bei Buche/Eiche/Linde/…, Blüte bei Rose/Blume/Garten/…, Wellen bei See/Teich/Bach/…,
+    Sonne, Berg, sonst Blatt; darunter das Kürzel) und legt es als PNG unter Unterlagen → Logos ab.
+  - Das Spartenlogo erscheint neben dem Vereinslogo: in E-Mails (die Sparte wird an der E-Mail-Adresse des Mitglieds erkannt;
+    Schalter "Spartenlogo daneben" im E-Mail-Layout), auf Rechnungen und Zugangskarten als PDF, auf gedruckten Zugangskarten und
+    Gast-Vouchern (Kartendesign → Logo → "Spartenlogo daneben"), im Mitgliederbereich und in der Mitglieder-App; auf Wunsch als
+    Leiste aller Sparten auf Anmelde- und Pächter-Seite ("Logos aller Sparten unten zeigen").
+  - Öffentlich abrufbar unter /spartenlogo/<Kürzel> (für Seiten und App).
+
 ### ZWEI ANDROID-APPS: MANAGER UND MITGLIED – neu in 5.5
   Ordner android/: "SparteNet Manager" (grün, für Vorstand und Mitarbeiter, wie bisher) und neu "SparteNet Mitglied" (blau,
   nur für Pächter). Die Mitglieder-App meldet sich mit Adresse des Vereins, E-Mail-Adresse und Code per E-Mail an und zeigt

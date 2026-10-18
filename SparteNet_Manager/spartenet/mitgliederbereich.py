@@ -144,7 +144,7 @@ def mb_code_anfordern(d, b, quelle):
                      f"<p>Hallo {html_mod.escape(m.get('vorname') or '')},</p><p>Ihr Einmalcode zum Anmelden {html_mod.escape(wo)} lautet:</p>"
                      f"<p style='font-size:28px;letter-spacing:6px;font-weight:bold'>{code}</p>"
                      "<p>Er gilt 10 Minuten und nur für eine Anmeldung. Geben Sie ihn nicht weiter – der Verein fragt nie danach.<br>"
-                     "Haben Sie keinen Code angefordert, können Sie diese E-Mail ignorieren.</p>")
+                     "Haben Sie keinen Code angefordert, können Sie diese E-Mail ignorieren.</p>", sparte=m.get("sparte") or None)
     except Fehler as f:
         with _MB_LOCK:
             _MB_CODES.pop(name_norm(email), None)
@@ -353,7 +353,9 @@ def mb_daten(d, email):
                "loesung": t.get("loesung", "")} for _i, t in mb_tickets(d, mid, m)][:20] if e["zeige_anfragen"] else []
         offen_auftrag = next(({"referenz": r, "tarif": a.get("tarif"), "art": a.get("art"), "betrag": a.get("betrag")} for r, a in zahlungsauftraege(d).items()
                               if a.get("mitglied") == mid and a.get("status") == "offen" and a.get("erstellt", "") > time.strftime("%Y-%m-%d %H:%M", time.localtime(time.time() - 86400))), None)
-        parz.append({"id": mid, "sparte": kz, "sparte_name": _sparten_kz(d).get(kz, kz), "parzelle": p, "name": f"{m.get('vorname', '')} {m.get('nachname', '')}".strip(),
+        sl = sparten_logo_id(d, kz)
+        parz.append({"id": mid, "sparte": kz, "sparte_name": _sparten_kz(d).get(kz, kz), "parzelle": p,
+                     "sparte_logo": f"/spartenlogo/{urllib.parse.quote(kz)}?v={sl[:6]}" if sl else "", "name": f"{m.get('vorname', '')} {m.get('nachname', '')}".strip(),
                      "tarif": tarif, "laufzeit": ({"start": time.strftime("%d.%m.%Y %H:%M", time.localtime(lz["start"])), "ende": time.strftime("%d.%m.%Y %H:%M", time.localtime(lz["ende"])),
                                                    "aktiv": lz.get("status") == "aktiv", "rest_tage": max(0, int((lz["ende"] - time.time()) // 86400))} if lz else None),
                      "gesperrt": bool(gesp), "rechnungen": rechn, "offen": round(sum(float(x["brutto"] or 0) - float(x["bezahlt"] or 0) for x in rechn), 2),
@@ -362,7 +364,8 @@ def mb_daten(d, email):
                          "tarif_preis": akt_t.get("preis", 0), "tarif_down": akt_t["down"], "tarif_up": akt_t["up"], "tarif_geraete": akt_t.get("geraete", 0)} if akt_t else {})})
     return {"mitglied": parz[0]["name"] if parz else "", "parzellen": parz, "tarife": tarife,
             "erlaubt": {k: e[k] for k in ("tarifwechsel", "downgrade", "neubuchung", "verlaengern", "geraete", "zeige_rechnungen", "zeige_anfragen", "neue_anfrage", "zugangskarte")},
-            "modus": e["modus"], "hinweis": e["hinweis"], "titel": e["titel"], "kategorien": list(ticket_kategorien(d))}
+            "modus": e["modus"], "hinweis": e["hinweis"], "titel": e["titel"], "kategorien": list(ticket_kategorien(d)),
+            "logo_verein": "/seitenbild/portal/logo" if seitenbild(d, "portal", "logo") else ""}
 
 
 def _mb_parzelle(d, email, mid):
@@ -481,7 +484,7 @@ def _mb_mail(d, m, betreff, inhalt):
     if not m.get("email"):
         return
     try:
-        email_senden(d, m["email"], betreff, None, f"<p>Hallo {html_mod.escape(m.get('vorname') or '')},</p>{inhalt}")
+        email_senden(d, m["email"], betreff, None, f"<p>Hallo {html_mod.escape(m.get('vorname') or '')},</p>{inhalt}", sparte=m.get("sparte") or None)
     except Exception as x:
         LOG.warning("Mitgliederbereich: E-Mail nicht gesendet: %s", x)
 
@@ -545,7 +548,7 @@ def zahlungsauftrag_bezahlt(d, ref, betrag=None, quelle=""):
     try:
         email_senden(d, a["email"], f"Zahlung erhalten: {a['beschreibung']}", None,
                      f"<p>Hallo {html_mod.escape(a.get('name') or '')},</p><p>vielen Dank – Ihre Zahlung über {geld(a['betrag'])} ist eingegangen.</p>"
-                     f"<p><b>{html_mod.escape(a['beschreibung'])}</b> ist gebucht (Referenz {ref}). Die Änderung am WLAN wird vom Verein übernommen.</p>")
+                     f"<p><b>{html_mod.escape(a['beschreibung'])}</b> ist gebucht (Referenz {ref}). Die Änderung am WLAN wird vom Verein übernommen.</p>", sparte=a.get("sparte"))
     except Exception as x:
         LOG.warning("Bestätigung zu %s nicht gesendet: %s", ref, x)
     return f"{ref}: {a['beschreibung']} gebucht."
@@ -599,7 +602,7 @@ def mb_anfrage(pfad, b, email, quelle, basis):
             karte = zugangskarte_pdf(d, kz, zeile, _sparten_kz(d).get(kz, kz))
             email_senden(d, m["email"], f"Ihre WLAN-Zugangskarte für Parzelle {p}", None,
                          f"<p>Hallo {html_mod.escape(m.get('vorname') or '')},</p><p>anbei Ihre WLAN-Zugangskarte für Parzelle {p}.</p>",
-                         anhaenge=[(f"Zugangskarte_Parzelle_{p}.pdf", karte, "application/pdf")])
+                         anhaenge=[(f"Zugangskarte_Parzelle_{p}.pdf", karte, "application/pdf")], sparte=kz)
             journal(f"Mitgliederbereich: Zugangskarte {kz} Parzelle {p} gesendet")
             return 200, {"ok": True, "text": "Die Zugangskarte ist per E-Mail unterwegs."}
         if pfad == "/mein/ticket":
@@ -680,6 +683,7 @@ async function laden(){try{D=await post("/mein/daten");ansicht(true)}catch(e){an
  if(q.has("zahlung"))history.replaceState(null,"","/mein");zeigen()}
 function P(){return D.parzellen.find(p=>p.id==$("d_parz").value)||D.parzellen[0]}
 function zeigen(){const p=P();if(!p)return;WAHL=p.id;const lz=p.laufzeit;
+ const mk=document.querySelector("header .mk");let sl=document.getElementById("sp_logo");if(p.sparte_logo&&mk){if(!sl){sl=document.createElement("img");sl.id="sp_logo";sl.alt="";sl.style.cssText="height:42px;width:auto;margin:0 8px";const b=mk.querySelector("b");mk.insertBefore(sl,b)}sl.src=p.sparte_logo;sl.title=p.sparte_name}else if(sl)sl.remove();
  $("d_tarif").innerHTML=p.tarif?`<div class="zeile"><div><div class="klein">Tarif</div><div class="wert">${esc(p.tarif)}</div></div>${lz?`<div><div class="klein">Laufzeit</div><div><b>${lz.aktiv?"bis "+esc(lz.ende):"abgelaufen am "+esc(lz.ende)}</b>${lz.aktiv?`<br><span class="klein">noch ${lz.rest_tage} Tag(e)</span>`:""}</div></div>`:`<div><div class="klein">Laufzeit</div><div><b>unbegrenzt</b></div></div>`}<div><div class="klein">Offen</div><div class="wert" style="font-size:18px">${eur(p.offen)}</div></div></div>${p.gesperrt?'<div class="gesperrt">Der WLAN-Zugang ist gerade gesperrt (Laufzeit abgelaufen) – mit einer Verlängerung wird er wieder freigegeben.</div>':""}`:'<p class="hint">Für diese Parzelle ist noch kein Tarif gebucht.</p>';
  const e=D.erlaubt,R=t=>t.rang.join(","),hoeher=(t)=>p.rang&&(t.rang[0]>p.rang[0]||t.rang[0]==p.rang[0]&&(t.rang[1]>p.rang[1]||t.rang[1]==p.rang[1]&&t.rang[2]>p.rang[2]));
  const ups=D.tarife.filter(t=>t.name!=p.tarif&&hoeher(t)),downs=D.tarife.filter(t=>t.name!=p.tarif&&!hoeher(t));let akt=[];

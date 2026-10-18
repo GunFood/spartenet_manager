@@ -305,6 +305,14 @@ class Handler(BaseHTTPRequestHandler):
             if not bild:
                 return self._send(404, {"fehler": "nicht gefunden"})
             return self._send(200, bild[0], bild[1])
+        if u.path.startswith("/spartenlogo/"):    # öffentlich: Logo einer Sparte (für Seiten, Mitgliederbereich und App)
+            d = self._lade()
+            if d is None:
+                return
+            bild = sparten_logo(d, urllib.parse.unquote(u.path.split("/", 2)[2]).upper()[:10])
+            if not bild:
+                return self._send(404, {"fehler": "nicht gefunden"})
+            return self._send(200, bild[0], bild[1])
         d = self._lade()
         if d is None:
             return
@@ -641,6 +649,8 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/logos": lambda: akt_logos(d, sp_erl),
                 "/api/logo-bild": lambda: akt_logo_bild(d, q, sp_erl),
                 "/api/logo-waehlen": lambda: akt_logo_waehlen(d, b or {}, ich, sp_erl),
+                "/api/sparten-logos": lambda: akt_sparten_logos(d, b if isinstance(b, dict) and b else None, ich, sp_erl),
+                "/api/sparten-logo-erzeugen": lambda: akt_sparten_logo_erzeugen(d, b or {}, ich, sp_erl),
                 "/api/laufzeiten": lambda: akt_laufzeiten(d, sp_erl),
                 "/api/laufzeit-verlaengern": lambda: akt_laufzeit_verlaengern(d, b or {}, ich, sp_erl),
                 "/api/laufzeit-starten": lambda: akt_laufzeit_starten(d, b or {}, ich, sp_erl),

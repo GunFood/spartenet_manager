@@ -591,6 +591,31 @@ class MitgliederEinmalcode(unittest.TestCase):
         self.assertFalse(S.mb_versand_bereit(d))
 
 
+class Spartenlogos(unittest.TestCase):
+    def test_erzeugen_erkennen_pdf(self):
+        d = frisch()
+        png = S.vereinslogo_png("Buchenweg", "BW")
+        b = S.bild_fuer_pdf(png)
+        self.assertEqual((b["breite"], b["hoehe"], b["farben"]), (256, 256, 3))
+        self.assertTrue(any(v == 0 for v in b["alpha"]) and any(v == 255 for v in b["alpha"]))     # rund: außen durchsichtig
+        self.assertEqual([S.logo_motiv(n) for n in ("Buchenweg", "Rosengarten", "Am Mühlenteich", "Sonnenhang", "Eintracht")],
+                         ["baum", "bluete", "wellen", "sonne", "blatt"])
+        self.assertEqual(S.logo_farbe("Buchenweg"), S.logo_farbe("Buchenweg"))
+        d["mitglieder"] = {"a": {"email": "x@example.org", "sparte": "BW"}, "b": {"email": "y@example.org", "sparte": "BW"},
+                           "c": {"email": "y@example.org", "sparte": "RG"}}
+        self.assertEqual(S.sparte_aus_email(d, "X@example.org"), "BW")
+        self.assertEqual(S.sparte_aus_email(d, "y@example.org"), "")          # zwei Sparten → nicht eindeutig
+        p = S.PDF()
+        self.assertGreater(p.bild(10, 10, 50, 50, png), 0)
+        self.assertEqual(p.bild(10, 10, 50, 50, b"kein Bild"), 0)
+        roh = p.ausgabe()
+        self.assertIn(b"/XObject", roh)
+        self.assertIn(b"/SMask", roh)
+        h = S.email_html(d, "<p>x</p>", "t", "cid:a", "cid:b")
+        self.assertIn('src="cid:a"', h)
+        self.assertIn('src="cid:b"', h)
+
+
 class Modulkette(unittest.TestCase):
     def test_keine_doppelten_namen(self):
         """jede Datei übernimmt alle Namen der vorherigen – gleiche öffentliche Namen würden frühere Funktionen überdecken"""
@@ -615,6 +640,16 @@ class Modulkette(unittest.TestCase):
         from collections import Counter as C
         f = C(rx.findall(r"(?<![\w.])function\s+([A-Za-z_$][\w$]*)\s*\(", S.HTML))
         i = C(rx.findall(r'\sid="([^"$`{]+)"', S.HTML))
+        g = C(rx.findall(r"^(?:let|const|var)\s+([A-Za-z_$][\w$]*)", S.HTML, rx.M))
+        self.assertEqual({k: v for k, v in g.items() if v > 1}, {}, "globale JS-Variable doppelt")
+        import shutil, subprocess, tempfile
+        if shutil.which("node"):                     # vollständige Syntaxprüfung aller Skripte (doppelte let/const sind Syntaxfehler)
+            for skript in rx.findall(r"<script>(.*?)</script>", S.HTML + S.MEIN_HTML + S.PORTAL_HTML + S.LOGIN_HTML, rx.S):
+                with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as datei:
+                    datei.write(skript)
+                r = subprocess.run(["node", "--check", datei.name], capture_output=True, text=True)
+                os.unlink(datei.name)
+                self.assertEqual(r.returncode, 0, r.stderr[:800])
         self.assertEqual({k: v for k, v in f.items() if v > 1}, {})
         self.assertEqual({k: v for k, v in i.items() if v > 1}, {})
 
