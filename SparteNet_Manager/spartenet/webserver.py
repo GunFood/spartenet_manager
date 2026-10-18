@@ -132,6 +132,77 @@ class Handler(BaseHTTPRequestHandler):
         code, antwort = portal_anfrage(u.path.rstrip("/"), b, self._quelle())
         return self._send(code, antwort)
 
+    def _basis(self, d):
+        a = mb_einstellungen(d).get("adresse", "")
+        if a:
+            return a.rstrip("/")
+        proto = "https" if (PROXY_VERTRAUEN and (self.headers.get("X-Forwarded-Proto") or "").lower() == "https") or self._fern() else "http"
+        host = re.sub(r"[^A-Za-z0-9.:\[\]-]", "", self.headers.get("Host") or f"127.0.0.1:{PORT}")[:200]
+        return f"{proto}://{host}"
+
+    def _mein(self, methode, u):
+        """Mitgliederbereich – öffentlich erreichbar, eigene Anmeldung mit E-Mail-Code (Cookie sn_mitglied)"""
+        d = self._lade()
+        if d is None:
+            return
+        an = mb_einstellungen(d)["aktiv"]
+        pfad = u.path.rstrip("/") or "/mein"
+        if methode == "GET":
+            if not an:
+                return self._send(404, b"<!doctype html><meta charset='utf-8'><title>Nicht gefunden</title><p style='font-family:sans-serif;padding:24px'>Diese Seite ist nicht eingeschaltet.</p>", "text/html")
+            if pfad == "/mein":
+                return self._send(200, mein_seite(d).encode("utf-8"), "text/html")
+            if pfad == "/mein/rechnung":
+                email = mb_sitzung(d, self._cookie("sn_mitglied"))
+                if not email:
+                    return self._send(401, {"fehler": "Bitte anmelden."})
+                try:
+                    pdf, name = mb_rechnung_pdf(d, email, urllib.parse.parse_qs(u.query).get("id", [""])[0])
+                except Fehler as f:
+                    return self._send(404, {"fehler": str(f)})
+                return self._send(200, pdf, "application/pdf", extra={"Content-Disposition": f'inline; filename="{name}"'})
+            return self._send(404, {"fehler": "nicht gefunden"})
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            n = -1
+        if n < 0 or n > 20000:
+            return self._send(413, {"fehler": "Anfrage zu groß."})
+        roh = self.rfile.read(n)
+        if pfad == "/mein/zahlung-webhook":          # Bezahldienst meldet: bezahlt (HMAC-signiert)
+            try:
+                _grenze("mb_aktion", "webhook:" + self._quelle())
+                with SCHREIB_SPERRE:
+                    return self._send(200, mb_webhook(lade(), roh, self.headers.get("X-SparteNet-Signatur") or self.headers.get("X-Signature")))
+            except Fehler as f:
+                LOG.warning("Zahlungs-Webhook abgelehnt: %s", f)
+                return self._send(400, {"fehler": str(f)})
+            except (ValueError, UnicodeDecodeError):
+                return self._send(400, {"fehler": "Ungültige Anfrage."})
+        if not an:
+            return self._send(404, {"fehler": "Der Mitgliederbereich ist nicht eingeschaltet."})
+        try:
+            b = json.loads(roh or b"{}")
+            if not isinstance(b, dict):
+                raise ValueError
+        except (ValueError, UnicodeDecodeError):
+            return self._send(400, {"fehler": "Ungültige Anfrage."})
+        sicher = "; Secure" if self._fern() else ""
+        try:
+            if pfad == "/mein/code":
+                with SCHREIB_SPERRE:
+                    return self._send(200, mb_code_anfordern(lade(), b, self._quelle()))
+            if pfad == "/mein/anmelden":
+                t = mb_anmelden(d, b, self._quelle())
+                return self._send(200, {"ok": True}, extra={"Set-Cookie": f"sn_mitglied={t}; Path=/mein; Max-Age=43200; HttpOnly; SameSite=Strict{sicher}"})
+            if pfad == "/mein/abmelden":
+                mb_abmelden(self._cookie("sn_mitglied"))
+                return self._send(200, {"ok": True}, extra={"Set-Cookie": "sn_mitglied=; Path=/mein; Max-Age=0; HttpOnly; SameSite=Strict"})
+        except Fehler as f:
+            return self._send(400, {"fehler": str(f)})
+        code, antwort = mb_anfrage(pfad, b, mb_sitzung(d, self._cookie("sn_mitglied")), self._quelle(), self._basis(d))
+        return self._send(code, antwort)
+
     def _erlaubt(self, d):
         return self._wer(d) is not None
 
@@ -207,6 +278,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._api_v1("GET", u)
         if u.path == "/portal" or u.path.startswith("/portal/"):
             return self._portal("GET", u)
+        if u.path == "/mein" or u.path.startswith("/mein/"):
+            return self._mein("GET", u)
         if u.path.startswith("/seitenbild/"):     # öffentlich: nur die für Anmelde-/Pächter-Seite gewählten Bilder
             d = self._lade()
             if d is None:
@@ -303,6 +376,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._api_v1("POST", u)
         if u.path.startswith("/portal/"):
             return self._portal("POST", u)
+        if u.path.startswith("/mein/"):
+            return self._mein("POST", u)
         d = self._lade()
         if d is None:
             return
@@ -335,7 +410,7 @@ class Handler(BaseHTTPRequestHandler):
         ich, rechte = wer
         if pfad in ("/api/ppsk-speichern", "/api/fern", "/api/benutzer-speichern", "/api/benutzer-ich", "/api/mitglied-speichern", "/api/mitglieder-import",
                     "/api/ticket-speichern", "/api/ticket-kommentar", "/api/email-test", "/api/email-vorschau", "/api/email-vorlage-speichern",
-                    "/api/rechnung-einstellungen", "/api/zahlungen-uebernehmen", "/api/rundschreiben-senden", "/api/mitglied-dsgvo-loeschen", "/api/portal-einstellungen"):
+                    "/api/rechnung-einstellungen", "/api/zahlungen-uebernehmen", "/api/rundschreiben-senden", "/api/mitglied-dsgvo-loeschen", "/api/portal-einstellungen", "/api/mitgliederbereich"):
             LOG.info("Aktion %s von %s (Inhalt nicht protokolliert)", pfad, ich)
         elif pfad not in ("/api/log", "/api/karten-vorschau"):
             LOG.info("Aktion %s von %s %s", pfad, ich, json.dumps(_maskiere(b), ensure_ascii=False)[:500] if isinstance(b, (dict, list)) else (urllib.parse.urlencode(q, doseq=True) if q else ""))
@@ -541,6 +616,7 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/ueberwachung-speichern": lambda: akt_ueberwachung(d, b or {}, ich),
                 "/api/wochenbericht": lambda: akt_wochenbericht(d, b, ich),
                 "/api/portal-einstellungen": lambda: akt_portal_einstellungen(d, b, ich),
+                "/api/mitgliederbereich": lambda: akt_mitgliederbereich(d, b if isinstance(b, dict) and b else None, ich),
                 "/api/app-uebersicht": lambda: akt_app_uebersicht(d, ich, rechte),
                 "/api/gestaltung": lambda: akt_gestaltung(d, ich),
                 "/api/seiten-design": lambda: akt_seiten_design(d, b or {}, ich),
@@ -563,6 +639,10 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/ticket-speichern": lambda: akt_ticket_speichern(d, b or {}, ich, sp_erl),
                 "/api/ticket-kommentar": lambda: akt_ticket_kommentar(d, b or {}, ich, sp_erl),
                 "/api/ticket-loeschen": lambda: akt_ticket_loeschen(d, b or {}, ich),
+                "/api/ticket-schliessen": lambda: akt_ticket_schliessen(d, b or {}, ich, sp_erl),
+                "/api/ticket-zuordnen": lambda: akt_ticket_zuordnen(d, b or {}, ich, sp_erl),
+                "/api/ticket-mitglieder": lambda: akt_ticket_mitglieder(d, q, sp_erl),
+                "/api/mitglied-akte": lambda: akt_mitglied_akte(d, q, ich, rechte, sp_erl),
                 "/api/ticket-einstellungen": lambda: akt_ticket_einstellungen(d, b or {}, ich),
                 "/api/smtp-test": lambda: akt_smtp_test(d, b or {}),
                 "/api/api-schluessel": lambda: akt_api(d),

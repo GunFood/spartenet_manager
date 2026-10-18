@@ -11,7 +11,7 @@ Zugang mit API-Schlüssel (legt ein Administrator an, wird nur einmal angezeigt,
 
 Rechte je Schlüssel: ereignis · buchen · lesen; optional nur bestimmte Sparten. Am Gateway ändert die API nichts.
 """
-from .app import *  # noqa: F401,F403 – alle Namen der vorherigen Module
+from .mitgliederbereich import *  # noqa: F401,F403 – alle Namen der vorherigen Module
 
 API_RECHTE = {"ereignis": "Ereignisse melden (startet Automationen, z. B. Zahlung eingegangen)",
               "buchen": "Tarif buchen / Buchung entfernen (im Manager)",
@@ -212,7 +212,14 @@ def api_anfrage(methode, pfad, q, roh, kopf):
                 if art == "zahlung" and daten.get("referenz") and daten.get("betrag"):
                     rg = next((x for x in rechnungen_daten(d)["liste"].values() if x.get("nr", "").upper() == str(daten["referenz"]).upper()
                                and x.get("status") in ("offen", "teilweise")), None)
-                if rg:          # Rechnung bezahlen – das löst die Zahlungs-Automationen selbst aus
+                za = (str(daten.get("referenz") or "").upper() in zahlungsauftraege(d)) if art == "zahlung" else False
+                if za:          # Zahlungsauftrag aus dem Mitgliederbereich → Buchung ausführen
+                    try:
+                        txt = zahlungsauftrag_bezahlt(d, daten["referenz"], daten.get("betrag") or None, daten["quelle"])
+                        ergebnisse = [{"regel": "Mitgliederbereich", "aktion": "Zahlungsauftrag", "ok": True, "text": txt}]
+                    except Fehler as f:
+                        ergebnisse = [{"regel": "Mitgliederbereich", "aktion": "Zahlungsauftrag", "ok": False, "text": str(f)}]
+                elif rg:          # Rechnung bezahlen – das löst die Zahlungs-Automationen selbst aus
                     zahlung_buchen(d, rg, float(daten["betrag"]), time.strftime("%Y-%m-%d"), f"API {s.get('name') or i}", daten["quelle"])
                     speichere(d)
                     ergebnisse = [{"regel": "Rechnung", "aktion": "Zahlung gebucht", "ok": True, "text": f"{rg['nr']}: {R_STATUS[rg['status']]}"}]

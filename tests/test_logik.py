@@ -1,5 +1,5 @@
 """Tests ohne Webserver: VLAN-Schema, Zuteilung nach Buchung, Umzugshilfe, TOTP, Prüfungen – mit nachgebautem Gateway"""
-import os, sys, tempfile, unittest
+import os, sys, tempfile, time, unittest
 from collections import Counter
 
 _ORDNER = tempfile.mkdtemp(prefix="spartenet_logik_")
@@ -535,3 +535,53 @@ class Spamschutz(unittest.TestCase):
     def test_namensvergleich(self):
         self.assertEqual(S.name_norm(" Müller-Lüdenscheidt "), S.name_norm("mueller luedenscheidt"))
         self.assertEqual(S.name_norm("Straß"), S.name_norm("STRASS"))
+
+
+class Mitgliederbereich(unittest.TestCase):
+    def test_geraete_nach_ip(self):
+        """Geräte gehören zur Parzelle, wenn die IP im Netz 10.<Sparte>.<Parzelle>.0/24 liegt; MAC nur gekürzt"""
+        d = frisch()
+        plan = S.plan_aktiv(d)
+        sp = plan["sparten"][0]
+        sid, kz = sp["sid"], sp["kz"]
+        S._GERAETE_CACHE.update(zeit=time.time(), fehler="", liste=[
+            {"name": "Handy", "ipAddress": f"10.{sid}.12.121", "macAddress": "aa:bb:cc:dd:ee:ff", "type": "WIRELESS"},
+            {"name": "Nachbar", "ipAddress": f"10.{sid}.13.20", "macAddress": "11:22:33:44:55:66"},
+            {"name": "Laptop", "ipAddress": f"10.{sid}.12.15", "macAddress": "aa:bb:cc:00:11:22", "type": "WIRED"}])
+        g = S.mb_geraete(d, kz, "12")
+        self.assertEqual([x["name"] for x in g["geraete"]], ["Laptop", "Handy"])
+        self.assertEqual((g["geraete"][1]["geraet"], g["geraete"][1]["art"], g["geraete"][1]["mac"]), ("121", "WLAN", "…dd:ee:ff"))
+        S._GERAETE_CACHE.update(zeit=0, liste=[])
+
+    def test_webhook_signatur(self):
+        import hashlib, hmac
+        d = frisch()
+        d["mitgliederbereich"] = {"geheim": "g"}
+        with self.assertRaises(S.Fehler):
+            S.mb_webhook(d, b'{"referenz":"SN-X"}', "sha256=00")
+        roh = b'{"referenz":"SN-X"}'
+        with self.assertRaises(S.Fehler):                     # Signatur stimmt, Auftrag gibt es nicht
+            S.mb_webhook(d, roh, "sha256=" + hmac.new(b"g", roh, hashlib.sha256).hexdigest())
+
+
+class Modulkette(unittest.TestCase):
+    def test_keine_doppelten_namen(self):
+        """jede Datei übernimmt alle Namen der vorherigen – gleiche öffentliche Namen würden frühere Funktionen überdecken"""
+        import ast, re as rx
+        ordner = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "SparteNet_Manager", "spartenet")
+        kette = rx.search(r"basis →(.*?)\n\n", open(os.path.join(ordner, "__init__.py"), encoding="utf-8").read(), rx.S).group(1)
+        module = ["basis"] + [x.strip() for x in kette.replace("\n", " ").split("→") if x.strip()]
+        erlaubt = {"_schluessel", "_sichtbar", "_zeile", "_holen", "_ereignis", "_hash"}   # nur modulintern benutzt
+        gesehen, doppelt = {}, []
+        for m in module:
+            for n in ast.parse(open(os.path.join(ordner, m + ".py"), encoding="utf-8").read()).body:
+                namen = [n.name] if isinstance(n, (ast.FunctionDef, ast.ClassDef)) else [x.id for x in n.targets if isinstance(x, ast.Name)] if isinstance(n, ast.Assign) else []
+                for x in namen:
+                    if x in gesehen and gesehen[x] != m and x not in erlaubt and x != "__all__":
+                        doppelt.append(f"{x}: {gesehen[x]} / {m}")
+                    gesehen.setdefault(x, m)
+        self.assertEqual(doppelt, [])
+
+    def test_kartendesign_speichern(self):
+        d = frisch()
+        self.assertTrue(S.design_pruefen({**d["design"], "farbe_akzent": "#123456"})["farbe_akzent"] == "#123456")

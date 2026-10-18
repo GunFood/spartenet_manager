@@ -101,6 +101,20 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   Höchstens 120 Anfragen je Minute und Schlüssel (SPARTENET_API_PRO_MINUTE). Zahlungsanbieter über n8n/Zapier/Make
   anbinden. Von außen nur über HTTPS (Reverse-Proxy, dann SPARTENET_PROXY=1).
 
+### MITGLIEDERBEREICH /mein – neu in 5.4
+Eigene Seite für Mitglieder (Reiter "Tickets" → Karte "Mitgliederbereich" einschalten, nur Administrator):
+- Anmeldung mit der beim Mitglied hinterlegten E-Mail-Adresse und einem 6-stelligen Code per E-Mail (10 Minuten gültig, kein Passwort). Abmelden nach einstellbarer Zeit ohne Aktivität.
+- Je Parzelle: Tarif mit Laufzeit (Ende, Resttage, Sperre), Rechnungen als PDF, offene Beträge, eigene Anfragen, neue Anfrage, Zugangskarte per E-Mail.
+- Geräte im WLAN: alle gerade angemeldeten Geräte im Netz der Parzelle, erkennbar an der IP 10.<Sparte>.<Parzelle>.<Gerät> (z. B. 10.20.56.121 = Sparte 20, Parzelle 56, Gerät 121). Quelle: Client-Liste des Gateways, MAC nur gekürzt.
+- Tarif wechseln, neu buchen, Laufzeit verlängern – einzeln abschaltbar. Modus "Anfrage" (Wunsch geht als geprüfte Anfrage an den Vorstand) oder "Bezahldienst":
+  - Zahlungsauftrag mit Referenz SN-…, Weiterleitung über eine Link-Vorlage ({referenz} {betrag} {betrag_cent} {email} {beschreibung} {rueckkehr} {abbruch}) oder eine eigene Schnittstelle (POST JSON, signiert mit X-SparteNet-Signatur, Antwort {"url": "https://…"}).
+  - Gebucht wird erst nach Bestätigung: POST /mein/zahlung-webhook {"referenz","betrag","status":"bezahlt"} mit Kopf X-SparteNet-Signatur: sha256=<HMAC-SHA256 des Inhalts> (Geheimnis wird einmal angezeigt) – oder über die API POST /api/v1/ereignis {"ereignis":"zahlung","referenz":"SN-…","betrag":…}. Betrag muss stimmen, jede Zahlung bucht nur einmal. Auslöser für Automationen: "zahlung_mitglied".
+- Von außen: /mein über den Reverse-Proxy mit HTTPS freigeben; "Öffentliche Adresse" für den Rücksprung vom Bezahldienst eintragen.
+
+### TICKETS ABSCHLIESSEN UND MITGLIEDER-AKTE – neu in 5.4
+- Tickets können mit Lösung abgeschlossen (optional Nachricht an den Kontakt) und wieder geöffnet werden; abgeschlossene sind schreibgeschützt. Erledigte Tickets werden nach X Tagen automatisch geschlossen.
+- Jedes Ticket gehört zu einem Mitglied (fest zugeordnet oder über die E-Mail-Adresse); im Ticket stehen die früheren Anfragen des Mitglieds, die Mitglieder-Akte zeigt alles als Zeitleiste (Tickets, Rechnungen, Tarif).
+
 ### OBERFLÄCHE GESTALTEN (☰ → System & Konto → Oberfläche gestalten) – neu in 5.3
   • Anmeldeseite gestalten: Aufbau (zweigeteilt oder mittig), Schrift, Ecken, Farben, Logo und Hintergrundbild aus den
     Unterlagen (mit Abdunkeln), alle Texte, bis zu 6 Punkte, Kontakt, Impressum/Datenschutz – mit Live-Vorschau PC/Handy.

@@ -266,11 +266,44 @@ class Logos(unittest.TestCase):
         a.req("/api/email-layout", {"logo_unterlage": ""})
 
 
+class TicketsAkte(unittest.TestCase):
+    def test_schliessen_frueher_und_akte(self):
+        a = admin()
+        _, m = a.req("/api/mitglied-speichern", {"mitglied": {"vorname": "Tina", "nachname": "Timeline", "email": "tina@example.org", "sparte": "BW", "parzelle": "61"}})
+        mid = m["id"]
+        _, t1 = a.req("/api/ticket-speichern", {"ticket": {"betreff": "WLAN langsam", "email": "tina@example.org", "name": "Tina Timeline"}})
+        t1 = t1["ticket"]["id"]
+        self.assertEqual(a.req("/api/ticket-schliessen", {"id": t1})[0], 400)            # ohne Lösung
+        code, x = a.req("/api/ticket-schliessen", {"id": t1, "loesung": "Kanal am Access Point gewechselt."})
+        self.assertEqual((code, x["ticket"]["status"]), (200, "geschlossen"), x)
+        self.assertEqual(a.req("/api/ticket-kommentar", {"id": t1, "text": "noch was"})[0], 400)   # geschlossen = nur lesen
+        self.assertEqual(a.req("/api/ticket-speichern", {"ticket": {"id": t1, "prioritaet": "hoch"}})[0], 400)
+        _, t2 = a.req("/api/ticket-speichern", {"ticket": {"betreff": "Wieder langsam", "sparte": "BW", "parzelle": "61"}})
+        code, x = a.req("/api/ticket?id=" + t2["ticket"]["id"])
+        self.assertEqual(x["mitglied"]["id"], mid)
+        self.assertEqual([f["id"] for f in x["frueher"]], [t1])                           # frühere Anfrage sichtbar
+        self.assertIn("Kanal", x["frueher"][0]["loesung"])
+        _, o = a.req("/api/tickets?status=offen")
+        self.assertNotIn(t1, [z["id"] for z in o["zeilen"]])
+        code, x = a.req("/api/ticket-schliessen", {"id": t1, "wieder_oeffnen": True})
+        self.assertEqual(x["ticket"]["status"], "bearbeitung")
+        code, ak = a.req("/api/mitglied-akte?id=" + mid)
+        self.assertEqual(code, 200, ak)
+        self.assertEqual(sum(1 for e in ak["zeitleiste"] if e["art"] == "ticket"), 2)
+        _, lst = a.req("/api/ticket-mitglieder?q=timeline")
+        self.assertEqual(lst["mitglieder"][0]["id"], mid)
+        code, x = a.req("/api/ticket-zuordnen", {"id": t2["ticket"]["id"], "mitglied": ""})
+        self.assertIsNone(x["mitglied"])
+
+
 class Gestaltung(unittest.TestCase):
     def test_seiten_und_profile(self):
         a = admin()
         code, g = a.req("/api/gestaltung")
         self.assertEqual(code, 200, g)
+        _, kd = a.req("/api/design")
+        code, x = a.req("/api/design", {"design": {**kd["design"], "farbe_akzent": "#224466"}})   # Kartendesign weiter speicherbar
+        self.assertEqual(code, 200, x)
         code, x = a.req("/api/seiten-design", {"art": "login", "design": {"ueberschrift": "Willkommen <b>KGV</b>", "farbe_knopf": "#123456", "layout": "mittig",
                                                                            "impressum": "https://verein.example/impressum"}})
         self.assertEqual(code, 200, x)
@@ -525,6 +558,8 @@ class Version50(unittest.TestCase):
         self.assertEqual(s.req("/portal/status", {"nr": nr, "email": "paul@example.org", "vorname": "Paul", "nachname": "Portal"})[0], 400)  # Mitglied: Sparte/Parzelle fehlen
         code, x = s.req("/portal/status", {"nr": nr, **paul})
         self.assertEqual((code, x["status"]), (200, "neu"))
+        code, x = s.req("/portal/status", {**paul})                                       # ohne Nummer: alle eigenen Anfragen
+        self.assertEqual((code, x["liste"][0]["ticket"]), (200, nr), x)
         code, x = s.req("/portal/zugang", {**paul, "email": "falsch@example.org"})
         self.assertEqual(code, 200)
         code, x = s.req("/portal/zugang", paul)
@@ -538,6 +573,74 @@ class Version50(unittest.TestCase):
         for _ in range(6):
             code, x = s.req("/portal/zugang", paul)
         self.assertEqual(code, 400)                                  # Grenze
+
+    def test_zz_mitgliederbereich(self):
+        """/mein: Anmeldung per E-Mail-Code, eigene Daten, Wechsel als Anfrage, Bezahldienst mit signiertem Webhook (läuft als letzter der Klasse)"""
+        import email as em, hashlib, hmac, re
+        a = self.a
+        s = Sitzung(SRV.basis)
+        self.assertEqual(s.roh("/mein")[0], 404)
+        code, x = a.req("/api/mitgliederbereich", {"aktiv": True, "modus": "anfrage"})
+        self.assertEqual(code, 200, x)
+        code, _, html = s.roh("/mein")
+        self.assertEqual(code, 200)
+        self.assertIn(b"Mitgliederbereich", html)
+        self.assertEqual(s.req("/mein/daten", {})[0], 401)
+        n = len(SMTP.mails)
+        self.assertEqual(s.req("/mein/code", {"email": "unbekannt@example.org"})[0], 200)       # verrät nicht, ob es die Adresse gibt
+        code, x = s.req("/mein/code", {"email": "Paul@Example.org"})
+        self.assertEqual(code, 200, x)
+        mails = self._mails_seit(n)
+        self.assertEqual(len(mails), 1, mails)
+        self.assertIn("paul@example.org", mails[0]["an"])
+        teile = [p.get_payload(decode=True).decode("utf-8", "replace") for p in em.message_from_string(mails[0]["text"]).walk() if not p.is_multipart()]
+        anmeldecode = re.search(r">(\d{6})<", " ".join(teile)).group(1)
+        self.assertEqual(s.req("/mein/anmelden", {"email": "paul@example.org", "code": "000000" if anmeldecode != "000000" else "111111"})[0], 400)
+        code, x = s.req("/mein/anmelden", {"email": "paul@example.org", "code": anmeldecode})
+        self.assertEqual(code, 200, x)
+        self.assertEqual(s.req("/mein/anmelden", {"email": "paul@example.org", "code": anmeldecode})[0], 400)    # nur einmal
+        code, x = s.req("/mein/daten", {})
+        self.assertEqual(code, 200, x)
+        p = x["parzellen"][0]
+        self.assertEqual((p["parzelle"], p["tarif"], x["mitglied"]), ("42", "Basic", "Paul Portal"))
+        code, g = s.req("/mein/geraete", {"id": p["id"]})
+        self.assertEqual(code, 200, g)
+        self.assertRegex(g["netz"], r"^10\.\d+\.42\.0/24$")                          # Parzellen-Netz 10.<Sparte>.<Parzelle>.x
+        # fremde Rechnung (Rita) nicht abrufbar
+        _, rl = a.req("/api/rechnungen")
+        rita = next((r for r in (rl.get("zeilen") or []) if r.get("parzelle") == 41), None)
+        if rita:
+            self.assertEqual(s.roh("/mein/rechnung?id=" + rita["id"])[0], 404)
+        code, x = s.req("/mein/buchen", {"id": p["id"], "art": "wechsel", "tarif": "Max"})
+        self.assertEqual(code, 200, x)
+        self.assertIn("Anfrage", x["text"])
+        _, tl = a.req("/api/tickets?status=alle")
+        self.assertTrue(any("Tarifwechsel Basic → Max" in z["betreff"] for z in tl["zeilen"]))
+        # Bezahldienst
+        self.assertEqual(a.req("/api/mitgliederbereich", {"modus": "bezahldienst"})[0], 400)       # ohne Link/Schnittstelle
+        code, x = a.req("/api/mitgliederbereich", {"modus": "bezahldienst", "checkout_vorlage": "https://bezahlen.example/pay?ref={referenz}&cent={betrag_cent}&zurueck={rueckkehr}", "geheim_neu": True})
+        self.assertEqual(code, 200, x)
+        geheim = x["geheim"]
+        self.assertNotIn("geheim", a.req("/api/mitgliederbereich")[1])                            # nur einmal sichtbar
+        code, x = s.req("/mein/buchen", {"id": p["id"], "art": "wechsel", "tarif": "Max"})
+        self.assertEqual(code, 200, x)
+        self.assertTrue(x["url"].startswith("https://bezahlen.example/pay?ref=SN-") and "cent=24000" in x["url"], x)
+        ref = x["referenz"]
+        roh = json.dumps({"referenz": ref, "betrag": 240, "status": "paid"}).encode()
+        code, _, y = s.roh("/mein/zahlung-webhook", roh, {"Content-Type": "application/json", "X-SparteNet-Signatur": "sha256=falsch"})
+        self.assertEqual(code, 400)
+        self.assertEqual(s.req("/mein/daten", {})[1]["parzellen"][0]["tarif"], "Basic")            # nichts gebucht
+        sig = "sha256=" + hmac.new(geheim.encode(), roh, hashlib.sha256).hexdigest()
+        code, _, y = s.roh("/mein/zahlung-webhook", roh, {"Content-Type": "application/json", "X-SparteNet-Signatur": sig})
+        self.assertEqual(code, 200, y)
+        self.assertEqual(s.req("/mein/daten", {})[1]["parzellen"][0]["tarif"], "Max")
+        code, _, y = s.roh("/mein/zahlung-webhook", roh, {"Content-Type": "application/json", "X-SparteNet-Signatur": sig})
+        self.assertIn(b"schon bezahlt", y)                                                          # nicht doppelt
+        _, x = a.req("/api/mitgliederbereich")
+        self.assertEqual(next(z for z in x["auftraege"] if z["referenz"] == ref)["status"], "bezahlt")
+        s.req("/mein/abmelden", {})
+        self.assertEqual(s.req("/mein/daten", {})[0], 401)
+        a.req("/api/mitgliederbereich", {"aktiv": False, "modus": "anfrage"})
 
     def test_app_zugang(self):
         a = self.a

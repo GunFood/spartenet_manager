@@ -43,7 +43,8 @@ _LOG_LOCK = threading.Lock()
 
 
 def _protokoll(typ, daten, d):
-    if typ not in ("buchung", "kuendigung", "zahlung", "mitglied_neu", "ticket_neu", "ticket_erledigt", "stoerung", "stoerung_behoben", "vertrag_gekuendigt"):
+    if typ not in ("buchung", "kuendigung", "zahlung", "mitglied_neu", "ticket_neu", "ticket_erledigt", "ticket_geschlossen", "stoerung", "stoerung_behoben",
+                   "vertrag_gekuendigt", "laufzeit_ende", "laufzeit_verlaengert", "zugang_gesperrt", "zugang_freigegeben"):
         return
     with _LOG_LOCK:
         try:
@@ -108,7 +109,7 @@ def stoerungen_pruefen(d, jetzt=None):
                     t = tickets_daten(d)["liste"].get(tid) if tid else None
                     if t:
                         _verlauf(t, "Überwachung", "kommentar", f"{g['name']} ist wieder online (nach {dauer} Min.).")
-                        if e["auto_erledigen"] and t.get("status") != "erledigt":
+                        if e["auto_erledigen"] and ticket_offen(t):
                             t["status"] = "erledigt"
                             _verlauf(t, "Überwachung", "aenderung", "Status: erledigt (automatisch)")
                         daten["ticket"] = t.get("nr")
@@ -166,7 +167,7 @@ def wochenbericht_html(d, tage=7):
     gebucht = sum(1 for b in buch.values() for t in b.values() if t)
     umsatz = sum(preise.get(t, 0) for b in buch.values() for t in b.values() if t)
     tk = tickets_daten(d)["liste"].values()
-    offen = [t for t in tk if t.get("status") != "erledigt"]
+    offen = [t for t in tk if ticket_offen(t)]
     neu_t = sum(1 for t in tk if t.get("erstellt", "") >= grenze)
     erl_t = n("ticket_erledigt")
     r = rechnungen_daten(d)["liste"].values()
@@ -250,6 +251,8 @@ def zeitplan_lauf(jetzt=None):
     if lt.tm_hour >= 6 and st.get("vertraege_geprueft") != heute:
         with SCHREIB_SPERRE:
             vertraege_pruefen(lade())
+        with SCHREIB_SPERRE:
+            tickets_auto_schliessen(lade())
         with _STAND_LOCK:
             s2 = stand_lesen(); s2["vertraege_geprueft"] = heute; stand_schreiben(s2)
     wb = _einst(d, "wochenbericht", BER_STANDARD)

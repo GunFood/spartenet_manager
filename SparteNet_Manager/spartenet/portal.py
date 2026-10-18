@@ -62,6 +62,73 @@ def mitglied_passt(d, vorname, nachname, email, kz, p):
     return None, None
 
 
+# ---- Akte eines Mitglieds: alles zeitlich geordnet (Anfragen, Rechnungen, Vertrag, Buchungen, Laufzeit, Zugang) -------------
+_AKTE_TEXT = {"buchung": "Tarif gebucht", "kuendigung": "Buchung beendet", "zahlung": "Zahlung eingegangen", "vertrag_gekuendigt": "Vertrag gekündigt",
+              "laufzeit_ende": "Laufzeit abgelaufen", "laufzeit_verlaengert": "Laufzeit verlängert", "zugang_gesperrt": "Zugang am Gateway gesperrt",
+              "zugang_freigegeben": "Zugang am Gateway freigegeben"}
+
+
+def mitglied_akte(d, mid, tickets=True, rechnungen=True, ich="", erlaubt=None):
+    """Zeitleiste eines Mitglieds, neueste zuerst. tickets/rechnungen: nur, wenn das Konto diese Bereiche sehen darf."""
+    m = mitglieder(d).get(mid)
+    if not m or (erlaubt is not None and m.get("sparte") not in erlaubt):
+        raise Fehler("Mitglied nicht gefunden.")
+    kz, p = m.get("sparte", ""), str(m.get("parzelle") or "")
+    seit = m.get("angelegt") or ""
+    ev = [{"zeit": seit, "art": "mitglied", "titel": "Als Mitglied erfasst", "text": m.get("quelle", "")}] if seit else []
+    if tickets:
+        for i, t in mitglied_tickets(d, mid):
+            if erlaubt is not None and not (t.get("sparte") in erlaubt or t.get("zustaendig") == ich):
+                continue
+            antw = sum(1 for v in t.get("verlauf") or [] if v.get("art") == "antwort")
+            ev.append({"zeit": t.get("erstellt", ""), "art": "ticket", "id": i, "status": t.get("status"),
+                       "titel": f"Anfrage {t.get('nr')}: {t.get('betreff', '')}",
+                       "text": " · ".join(x for x in [T_STATUS.get(t.get("status"), ""), t.get("kategorie", ""), f"{antw} Antwort(en)" if antw else "",
+                                                      ("Lösung: " + t["loesung"]) if t.get("loesung") else ""] if x)})
+    if rechnungen:
+        for i, x in rechnungen_daten(d)["liste"].items():
+            if x.get("mitglied") != mid and not (x.get("sparte") == kz and str(x.get("parzelle")) == p and (x.get("datum") or "") >= seit[:10]):
+                continue
+            ev.append({"zeit": x.get("datum", ""), "art": "rechnung", "id": i, "titel": f"Rechnung {x.get('nr')} über {geld(float(x.get('brutto') or 0))}",
+                       "text": R_STATUS.get(x.get("status"), x.get("status", ""))})
+            for z in x.get("zahlungen") or []:
+                ev.append({"zeit": str(z.get("datum", "")), "art": "zahlung", "titel": f"Zahlung {geld(float(z.get('betrag') or 0))} zu {x.get('nr')}", "text": z.get("text", "")})
+    v = vertraege(d).get(f"{kz}-{p}") if kz and p.isdigit() else None
+    if v:
+        ev.append({"zeit": v.get("beginn", ""), "art": "vertrag", "titel": "Vertrag begonnen", "text": f"Laufzeit {v.get('laufzeit', '')} Monate" if v.get("laufzeit") else ""})
+        if v.get("gekuendigt"):
+            ev.append({"zeit": v["gekuendigt"], "art": "vertrag", "titel": "Vertrag gekündigt", "text": f"Ende zum {v.get('ende_zum', '')}"})
+    lz = laufzeiten(d).get(f"{kz}-{p}") if kz and p.isdigit() else None
+    if lz:
+        ev.append({"zeit": time.strftime("%Y-%m-%d %H:%M", time.localtime(lz["start"])), "art": "laufzeit", "titel": f"Laufzeit {lz.get('tarif', '')}",
+                   "text": f"bis {time.strftime('%d.%m.%Y %H:%M', time.localtime(lz['ende']))}" + (" (abgelaufen)" if lz.get("status") != "aktiv" else "")})
+    try:
+        roh = ablage_lesen(EREIGNIS_LOG)
+        log = json.loads(roh.decode("utf-8")) if roh else []
+    except (ValueError, Fehler):
+        log = []
+    for e in log:
+        if e.get("typ") in _AKTE_TEXT and e.get("sparte") == kz and str(e.get("parzelle")) == p and e.get("zeit", "") >= seit:
+            if e["typ"] == "zahlung" and rechnungen is False:
+                continue
+            ev.append({"zeit": e["zeit"], "art": e["typ"], "titel": _AKTE_TEXT[e["typ"]],
+                       "text": " · ".join(x for x in [e.get("tarif", ""), ("vorher " + e["tarif_alt"]) if e.get("tarif_alt") else "",
+                                                      geld(float(e["betrag"])) if e.get("betrag") not in (None, "") and str(e.get("betrag")).replace(".", "", 1).isdigit() else ""] if x)})
+    ev.sort(key=lambda x: str(x.get("zeit") or ""), reverse=True)
+    offen = sum(1 for x in ev if x["art"] == "ticket" and x.get("status") not in T_ZU)
+    return {"mitglied": {"id": mid, "name": f"{m.get('vorname', '')} {m.get('nachname', '')}".strip(), "sparte": kz, "parzelle": p, "email": m.get("email", ""),
+                         "telefon": m.get("telefon", ""), "tarif": ((d.get("buchungen") or {}).get(kz) or {}).get(p, ""), "seit": seit},
+            "zeitleiste": ev[:300], "offen": offen,
+            "log": [f"{sum(1 for x in ev if x['art'] == 'ticket')} Anfrage(n), davon {offen} offen · {len(ev)} Einträge"]}
+
+
+def akt_mitglied_akte(d, q, ich, rechte, erlaubt=None):
+    b = rechte["bereiche"]
+    adm = rechte["art"] == "admin"
+    sieht = lambda k: adm or STUFE_RANG.get(b.get(k, "kein"), 0) >= 1
+    return mitglied_akte(d, q.get("id", [""])[0], tickets=sieht("tickets"), rechnungen=sieht("rechnungen"), ich=ich, erlaubt=erlaubt)
+
+
 def _fehlversuch(kz, p, quelle):
     """nach 5 falschen Versuchen je Parzelle bzw. Absender und Stunde gesperrt (gegen Ausprobieren)"""
     _grenze("fehlversuch", f"{kz}-{p}")
@@ -165,6 +232,19 @@ def portal_anfrage(pfad, b, quelle):
             _grenze("status", quelle)
             nr = str(b.get("nr") or "").strip().upper()
             em, vn, nn = name_norm(b.get("email")), name_norm(b.get("vorname")), name_norm(b.get("nachname"))
+            if not nr:            # ohne Nummer: alle Anfragen des Mitglieds (nur mit allen fünf Angaben)
+                kz, p = str(b.get("sparte") or "").upper(), str(b.get("parzelle") or "").strip()
+                if not (kz and p.isdigit()):
+                    raise Fehler("Bitte die Ticket-Nummer angeben – oder als Mitglied Sparte und Parzelle, dann sehen Sie alle Ihre Anfragen.")
+                if _fehlversuche_voll(kz, p, quelle):
+                    raise Fehler("Zu viele Versuche – bitte später erneut versuchen.")
+                mid, _m = mitglied_passt(d, b.get("vorname"), b.get("nachname"), b.get("email"), kz, p)
+                if not mid:
+                    _fehlversuch(kz, p, quelle)
+                    raise Fehler("Die Angaben passen nicht zu unseren Mitgliedsdaten.")
+                liste = [{"ticket": t["nr"], "betreff": t.get("betreff", ""), "status": T_STATUS.get(t.get("status"), ""), "erstellt": t.get("erstellt", ""),
+                          "geaendert": t.get("geaendert", ""), "loesung": t.get("loesung", "")} for _i, t in mitglied_tickets(d, mid)][:30]
+                return 200, {"liste": liste, "anzahl": len(liste)}
             t = next((t for t in tickets_daten(d)["liste"].values() if t.get("nr") == nr), None)
             k = (t or {}).get("kontakt") or {}
             name_t = name_norm(f"{k.get('vorname', '')} {k.get('nachname', '')}") if k.get("nachname") else name_norm(k.get("name"))
@@ -175,7 +255,7 @@ def portal_anfrage(pfad, b, quelle):
                 raise Fehler("Kein Ticket mit diesen Angaben gefunden. Bitte Ticket-Nummer, Vorname, Nachname und E-Mail-Adresse prüfen"
                              " (bei Anfragen als Mitglied auch Sparte und Parzelle).")
             antworten = [{"zeit": v["zeit"], "text": v["text"].split("\n", 1)[-1]} for v in t.get("verlauf") or [] if v["art"] == "antwort"]
-            return 200, {"ticket": t["nr"], "betreff": t.get("betreff", ""), "status": T_STATUS.get(t.get("status"), ""), "erstellt": t.get("erstellt"),
+            return 200, {"ticket": t["nr"], "betreff": t.get("betreff", ""), "status": T_STATUS.get(t.get("status"), ""), "erstellt": t.get("erstellt"), "loesung": t.get("loesung", ""),
                          "geaendert": t.get("geaendert"), "antworten": antworten[-10:]}
         if pfad == "/portal/zugang" and e["zugang"]:
             _grenze("zugang", quelle)
@@ -246,9 +326,9 @@ body.mitbild footer{color:#eee}</style></head>
 <div id="t_spam"><label for="t_antwort" class="pflicht" id="l_frage">Kurze Rechenaufgabe</label><input id="t_antwort" inputmode="numeric" autocomplete="off" style="max-width:160px"></div>
 <input class="versteckt" id="t_web" tabindex="-1" autocomplete="off" aria-hidden="true"><button class="los" onclick="senden('ticket')">Anfrage senden</button><div class="msg" id="m_ticket"></div></section>
 <section id="s_status" class="karte"><h2 style="margin-top:0" id="h_status"></h2><p class="hint" id="x_status"></p>
-<div class="r"><div><label for="s_nr" class="pflicht">Ticket-Nummer</label><input id="s_nr" placeholder="T-0001"></div><div><label for="s_email" class="pflicht">E-Mail aus der Anfrage</label><input id="s_email" type="email"></div></div>
+<div class="r"><div><label for="s_nr">Ticket-Nummer (leer = alle meine Anfragen)</label><input id="s_nr" placeholder="T-0001"></div><div><label for="s_email" class="pflicht">E-Mail aus der Anfrage</label><input id="s_email" type="email"></div></div>
 <div class="r"><div><label for="s_vorname" class="pflicht">Vorname</label><input id="s_vorname"></div><div><label for="s_nachname" class="pflicht">Nachname</label><input id="s_nachname"></div></div>
-<div class="r"><div><label for="s_sparte">Sparte (bei Anfrage als Mitglied)</label><select id="s_sparte"></select></div><div><label for="s_parzelle">Parzelle (bei Anfrage als Mitglied)</label><input id="s_parzelle" inputmode="numeric"></div></div>
+<div class="r"><div><label for="s_sparte">Sparte (als Mitglied)</label><select id="s_sparte"></select></div><div><label for="s_parzelle">Parzelle (als Mitglied)</label><input id="s_parzelle" inputmode="numeric"></div></div>
 <button class="los" onclick="senden('status')">Abfragen</button><div class="msg" id="m_status"></div><div id="s_aus"></div></section>
 <section id="s_zugang" class="karte"><h2 style="margin-top:0" id="h_zugang"></h2><p class="hint" id="x_zugang"></p>
 <div class="r"><div><label for="z_vorname" class="pflicht">Vorname</label><input id="z_vorname" autocomplete="given-name"></div><div><label for="z_nachname" class="pflicht">Nachname</label><input id="z_nachname" autocomplete="family-name"></div></div>
@@ -274,7 +354,8 @@ async function senden(a){const m=$("m_"+a);m.className="msg";const b={ticket:{ar
  status:{nr:$("s_nr").value,email:$("s_email").value,vorname:$("s_vorname").value,nachname:$("s_nachname").value,sparte:$("s_sparte").value,parzelle:$("s_parzelle").value},
  zugang:{vorname:$("z_vorname").value,nachname:$("z_nachname").value,sparte:$("z_sparte").value,parzelle:$("z_parzelle").value,email:$("z_email").value}}[a];
  const k=document.querySelector("#s_"+a+" button.los");k.disabled=true;try{const r=await fetch("/portal/"+a,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b)});const d=await r.json();
- if(!r.ok)throw new Error(d.fehler||r.status);if(a=="status"){m.className="msg ok";m.textContent="Ticket "+d.ticket+": "+d.status+" (zuletzt geändert "+(d.geaendert||d.erstellt)+")";$("s_aus").innerHTML=d.antworten.map(x=>`<div class="antwort"><small>${esc(x.zeit)}</small><br>${esc(x.text)}</div>`).join("")}
+ if(!r.ok)throw new Error(d.fehler||r.status);if(a=="status"&&d.liste){m.className="msg ok";m.textContent=d.anzahl?d.anzahl+" Anfrage(n):":"Noch keine Anfragen.";$("s_aus").innerHTML=d.liste.map(x=>`<div class="antwort"><b>${esc(x.ticket)}</b> · ${esc(x.status)} · ${esc(x.erstellt)}<br>${esc(x.betreff)}${x.loesung?"<br><small>Lösung: "+esc(x.loesung)+"</small>":""}</div>`).join("")}
+ else if(a=="status"){m.className="msg ok";m.textContent="Ticket "+d.ticket+": "+d.status+" (zuletzt geändert "+(d.geaendert||d.erstellt)+")";$("s_aus").innerHTML=d.antworten.map(x=>`<div class="antwort"><small>${esc(x.zeit)}</small><br>${esc(x.text)}</div>`).join("")}
  else{m.className="msg ok";m.textContent=d.text;if(a=="ticket"){$("t_betreff").value="";$("t_text").value=""}}}catch(e){m.className="msg f";m.textContent=e.message}
  finally{k.disabled=false;if(a=="ticket"&&INFO&&INFO.spamschutz)fetch("/portal/info").then(r=>r.json()).then(frage).catch(()=>{})}}</script></body></html>"""
 
