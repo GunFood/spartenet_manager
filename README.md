@@ -112,6 +112,18 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   Umstieg: Der bisherige gemeinsame Token aus 5.3/5.4 gilt weiter für alle Konten ("alle Konten (alt)" in der Liste),
   bis der Administrator ihn entfernt – am besten, sobald jeder seinen eigenen Token eingetragen hat.
 
+### KONTAKT-SEITE, MITGLIEDERBEREICH GESTALTEN, VEREINSLOGO – neu in 5.5
+  - Die bisherige "Pächter-Seite" heißt jetzt Kontakt-Seite (erreichbar unter /portal und /kontakt).
+  - Oberfläche gestalten → "Mitgliederbereich gestalten": eigenes Aussehen für /mein (Farben, Schrift, Logo, Hintergrund, Titel,
+    Text auf der Anmeldung, Hinweis, Kontakt, Impressum/Datenschutz) mit Vorschau (Anmeldung + Beispieldaten). Ohne eigene
+    Gestaltung sieht er aus wie die Kontakt-Seite; Titel und Texte stehen nicht mehr in der Karte "Mitgliederbereich".
+  - Vereinslogo zur E-Mail: Auf der Anmeldung des Mitgliederbereichs und in der Mitglieder-App erscheint das Logo der Sparte, sobald
+    eine passende E-Mail-Adresse eingegeben ist (abschaltbar: "Vereinslogo der Sparte daneben"; Abfrage begrenzt auf 60 je Stunde).
+    Auf der Kontakt-Seite erscheint das Vereinslogo, sobald eine Sparte gewählt ist.
+  - Vereinslogo neben dem Manager-Logo: in der Kopfzeile des Managers (Logos der Sparten, die das Konto sehen darf) und auf der
+    Anmeldeseite ("Vereinslogos der Sparten neben dem Manager-Logo zeigen").
+  - Android: Ordner android/manager (Manager-App, vorher android/app) und android/mitglied (Mitglieder-App).
+
 ### SPARTENLOGOS UND VEREINSLOGOS – neu in 5.5
   ☰ → System & Konto → Oberfläche gestalten → Karte "Spartenlogos": jede Sparte kann neben dem Vereinslogo ein eigenes Logo haben.
   - Wählen aus den Unterlagen – oder automatisch: ein Bild im Unterlagen-Ordner "Logos", das der Sparte zugeordnet ist.
@@ -121,11 +133,11 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   - Das Spartenlogo erscheint neben dem Vereinslogo: in E-Mails (die Sparte wird an der E-Mail-Adresse des Mitglieds erkannt;
     Schalter "Spartenlogo daneben" im E-Mail-Layout), auf Rechnungen und Zugangskarten als PDF, auf gedruckten Zugangskarten und
     Gast-Vouchern (Kartendesign → Logo → "Spartenlogo daneben"), im Mitgliederbereich und in der Mitglieder-App; auf Wunsch als
-    Leiste aller Sparten auf Anmelde- und Pächter-Seite ("Logos aller Sparten unten zeigen").
+    Leiste aller Sparten unten auf der Kontakt-Seite ("Logos aller Sparten unten zeigen").
   - Öffentlich abrufbar unter /spartenlogo/<Kürzel> (für Seiten und App).
 
 ### ZWEI ANDROID-APPS: MANAGER UND MITGLIED – neu in 5.5
-  Ordner android/: "SparteNet Manager" (grün, für Vorstand und Mitarbeiter, wie bisher) und neu "SparteNet Mitglied" (blau,
+  Ordner android/manager: "SparteNet Manager" (grün, für Vorstand und Mitarbeiter, wie bisher) und android/mitglied: neu "SparteNet Mitglied" (blau,
   nur für Pächter). Die Mitglieder-App meldet sich mit Adresse des Vereins, E-Mail-Adresse und Code per E-Mail an und zeigt
   den Mitgliederbereich: Tarif mit Laufzeit, Upgrade/kleinerer Tarif/Verlängern, Geräte im WLAN, Zugangskarte, Rechnungen (PDF),
   Anfragen. Sie bekommt einen eigenen Schlüssel (snm_…, 180 Tage, nur als Prüfsumme gespeichert) und hat keinen Zugang zum
@@ -133,9 +145,8 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
 
 ### MITGLIEDERBEREICH: ANPASSEN, TARIFE, ANTRÄGE – neu in 5.5
   Reiter "Tickets" → Karte "Mitgliederbereich":
-  - Anpassen: Titel, Text auf der Anmeldeseite, Hinweis; sichtbare Bereiche (Geräte, Rechnungen, Anfragen, neue Anfrage,
-    Zugangskarte) einzeln ein-/ausschalten. Aussehen (Farben, Logo, Hintergrund, Schrift, Fußzeile) kommt von der Pächter-Seite
-    (☰ → System & Konto → Oberfläche gestalten → Pächter-Seite).
+  - Anpassen: sichtbare Bereiche (Geräte, Rechnungen, Anfragen, neue Anfrage, Zugangskarte) einzeln ein-/ausschalten. Aussehen,
+    Titel und Texte: ☰ → System & Konto → Oberfläche gestalten → Mitgliederbereich gestalten.
   - Buchbare Tarife auswählen (keiner ausgewählt = alle).
   - Upgrade (teurerer bzw. schnellerer Tarif) jederzeit: sofort gebucht – im Modus "Bezahldienst" nach der Bezahlung.
   - Kleinerer Tarif (Downgrade) nur als Antrag: im Ticket erscheint "Tarif-Antrag" mit "Freigeben und buchen" oder "Ablehnen …"
@@ -146,7 +157,7 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
 
 ### ENTER BESTÄTIGT EINGABEN – neu in 5.5
   In der Oberfläche löst Enter in einem Eingabefeld den nächsten grünen Knopf im selben Block aus (z. B. Speichern, Anlegen).
-  Im Mitgliederbereich: E-Mail → Code senden, Code → Anmelden, Nachricht mit Strg+Enter senden. Pächter-Seite: Enter sendet das Formular.
+  Im Mitgliederbereich: E-Mail → Code senden, Code → Anmelden, Nachricht mit Strg+Enter senden. Kontakt-Seite: Enter sendet das Formular.
 
 ### FEHLERBEHEBUNGEN – 5.5
   App-Zugangstoken wurde nach dem Erzeugen nicht angezeigt; CPU-/RAM-Balken unter System standen fast immer auf 100 %;
@@ -171,7 +182,7 @@ Eigene Seite für Mitglieder (Reiter "Tickets" → Karte "Mitgliederbereich" ein
 ### OBERFLÄCHE GESTALTEN (☰ → System & Konto → Oberfläche gestalten) – neu in 5.3
   • Anmeldeseite gestalten: Aufbau (zweigeteilt oder mittig), Schrift, Ecken, Farben, Logo und Hintergrundbild aus den
     Unterlagen (mit Abdunkeln), alle Texte, bis zu 6 Punkte, Kontakt, Impressum/Datenschutz – mit Live-Vorschau PC/Handy.
-  • Pächter-Seite gestalten: ebenso, dazu Namen und Reihenfolge der Funktionen, Hinweise, Danke-Text, Kontakt, Fußzeile.
+  • Kontakt-Seite gestalten: ebenso, dazu Namen und Reihenfolge der Funktionen, Hinweise, Danke-Text, Kontakt, Fußzeile.
     Nur Text und Farben – kein eigenes HTML. Öffentliche Bilder nur über /seitenbild/<seite>/<logo|hintergrund>.
   • Menü und Ansichtsprofile: je Profil eigener Menübaum mit Nummern (1 · 1.1 · 1.1.1) und festen Kennnummern (B…, R…, K…):
     Bereiche, Reiter und Karten umbenennen, sortieren, ausblenden; Bereiche anlegen, Reiter verschieben, Startseite,
@@ -180,7 +191,7 @@ Eigene Seite für Mitglieder (Reiter "Tickets" → Karte "Mitgliederbereich" ein
   • Neues Recht „Oberfläche gestalten“ (kein/lesen/schreiben).
 
 ### ANFRAGEN NUR MIT PASSENDEN MITGLIEDSDATEN – neu in 5.3
-  Pächter-Seite: Anfrage als Mitglied nur, wenn Vorname, Nachname, E-Mail, Sparte und Parzelle zu einem gespeicherten
+  Kontakt-Seite: Anfrage als Mitglied nur, wenn Vorname, Nachname, E-Mail, Sparte und Parzelle zu einem gespeicherten
   Mitglied passen (Groß-/Kleinschreibung egal, ä = ae, ß = ss). Die Meldung verrät nicht, welches Feld falsch war; nach
   5 Fehlversuchen je Parzelle/Absender eine Stunde gesperrt. Auswahl „Ich bin kein Mitglied einer Sparte“ und „Ich bin
   Interessent“ (abschaltbar) – solche Tickets sind gekennzeichnet. Stand abfragen: Ticket-Nr., Name, E-Mail (Mitglieder

@@ -20,7 +20,7 @@ MB_STANDARD = {"aktiv": False, "tarifwechsel": True, "downgrade": True, "neubuch
                "zugangskarte": True, "tarife": []}
 _MB_SITZ, _MB_CODES = {}, {}
 _MB_LOCK = threading.Lock()
-_GRENZEN.update({"mb_code": (5, 3600), "mb_code_mail": (3, 900), "mb_anmelden": (10, 900), "mb_aktion": (30, 3600)})
+_GRENZEN.update({"mb_logo": (60, 3600), "mb_code": (5, 3600), "mb_code_mail": (3, 900), "mb_anmelden": (10, 900), "mb_aktion": (30, 3600)})
 _GERAETE_CACHE = {"zeit": 0, "liste": [], "fehler": ""}
 AUSLOESER["zahlung_mitglied"] = "Mitglied hat im Mitgliederbereich bezahlt (Tarif/Laufzeit gebucht)"
 
@@ -34,7 +34,8 @@ def mb_einstellungen(d):
                 e[k] = [str(x) for x in roh[k]] if isinstance(roh[k], list) else []
             else:
                 e[k] = bool(roh[k]) if isinstance(s, bool) else (int(roh[k]) if isinstance(s, int) else str(roh[k]))
-    e["titel"] = e["titel"] or "Mitgliederbereich"
+    g = seiten_design(d, "mein")                  # Titel und Texte stehen unter „Oberfläche gestalten → Mitgliederbereich“
+    e["titel"], e["text_anmeldung"], e["hinweis"] = g.get("titel") or "Mitgliederbereich", g.get("text_anmeldung", ""), g.get("hinweis", "")
     e["geheim_gesetzt"] = bool(roh.get("geheim"))
     return e
 
@@ -48,8 +49,11 @@ def akt_mitgliederbereich(d, b=None, ich=""):
     roh = d.get("mitgliederbereich") if isinstance(d.get("mitgliederbereich"), dict) else {}
     extra = {}
     if b is not None:
+        texte = {k: b[k] for k in ("titel", "text_anmeldung", "hinweis") if k in b}
+        if texte:                                    # Titel und Texte gehören zur Gestaltung des Mitgliederbereichs
+            d.setdefault("seiten_design", {})["mein"] = seite_pruefen(d, texte, MEIN_DESIGN_STANDARD, seiten_design(d, "mein"))
         for k, s in MB_STANDARD.items():
-            if k not in b:
+            if k not in b or k in texte:
                 continue
             v = b[k]
             if isinstance(s, bool):
@@ -152,6 +156,16 @@ def mb_code_anfordern(d, b, quelle):
         journal("Mitgliederbereich: Einmalcode konnte nicht gesendet werden (E-Mail-Versand prüfen)")
         raise Fehler("Der Code konnte gerade nicht gesendet werden – bitte später erneut versuchen oder beim Verein melden.")
     return antwort
+
+
+def mb_logo_zur_email(d, email, quelle):
+    """Vereinslogo (Spartenlogo) zur eingegebenen E-Mail-Adresse – damit das Mitglied gleich „seinen“ Verein sieht"""
+    _grenze("mb_logo", quelle)
+    if not seiten_design(d, "mein").get("vereinslogo", True):
+        return {"logo": ""}
+    kz = sparte_aus_email(d, email)
+    i = sparten_logo_id(d, kz) if kz else ""
+    return {"logo": f"/spartenlogo/{urllib.parse.quote(kz)}?v={i[:6]}", "name": _sparten_kz(d).get(kz, kz)} if i else {"logo": ""}
 
 
 def mb_anmelden(d, b, quelle):
@@ -635,20 +649,37 @@ def mb_rechnung_pdf(d, email, rid):
     return rechnung_pdf(d, x), f"Rechnung_{x['nr']}.pdf"
 
 
-def mein_seite(d):
-    """Seite /mein im Design der Pächter-Seite (Kopf, Farben, Schrift, Hintergrund und Fußzeile von dort)"""
-    e = mb_einstellungen(d)
-    titel = html_mod.escape(e["titel"])
-    seite = portal_seite(d)
+def mein_seite(d, design=None, inline=False, vorschau=False):
+    """Seite /mein – Aussehen aus „Oberfläche gestalten → Mitgliederbereich“ (ohne eigene Gestaltung wie die Kontakt-Seite)"""
+    g = design or seiten_design(d, "mein")
+    titel = html_mod.escape(g.get("titel") or "Mitgliederbereich")
+    seite = portal_seite(d, g, inline=inline, art="mein")
     kopf, rest = seite.split("<body", 1)
     kopf = re.sub(r"<title>.*?</title>", f"<title>{titel}</title>", kopf, flags=re.S)
     body_tag, rest = rest.split(">", 1)
     header = rest[:rest.index("</header>")].replace('<div id="titel"></div>', f'<div id="titel">{titel}</div>') + "</header>"
     fuss = re.search(r"<footer>.*?</footer>", seite, re.S)
-    text = html_mod.escape(e["text_anmeldung"]) if e["text_anmeldung"] else ("Mit der E-Mail-Adresse, die beim Verein für Ihre Parzelle hinterlegt ist. "
-                                                                           "Der Verein schickt Ihnen einen Einmalcode per E-Mail – ein Passwort ist nicht nötig.")
-    return (MEIN_HTML.replace("__KOPF__", kopf + "<body" + body_tag + ">" + header).replace("__FUSS__", fuss.group(0) if fuss else "")
-            .replace("__ANMELDETEXT__", text))
+    text = html_mod.escape(g["text_anmeldung"]).replace("\n", "<br>") if g.get("text_anmeldung") else (
+        "Mit der E-Mail-Adresse, die beim Verein für Ihre Parzelle hinterlegt ist. Der Verein schickt Ihnen einen Einmalcode per E-Mail – ein Passwort ist nicht nötig.")
+    html = (MEIN_HTML.replace("__KOPF__", kopf + "<body" + body_tag + ">" + header).replace("__FUSS__", fuss.group(0) if fuss else "")
+            .replace("__ANMELDETEXT__", text).replace("__VEREINSLOGO__", "1" if g.get("vereinslogo", True) else ""))
+    if vorschau:                                  # Vorschau im Editor: Anmeldung und Beispieldaten nebeneinander, ohne Server-Abfrage
+        html = html.replace("laden();</script>", "vorschau(" + json.dumps(_mb_beispiel(d, g), ensure_ascii=False).replace("</", "<\\/") + ");</script>")
+    return html
+
+
+def _mb_beispiel(d, g):
+    sp = next(iter(kalk_sparten(d).items()), ("BW", {"name": "Beispielsparte"}))
+    sl = sparten_logo_uri(d, sp[0]) if g.get("vereinslogo", True) else ""
+    t = [{**_tarif_info(x), "rang": list(tarif_rang(x))} for x in tarife_pruefen(d["tarife"])][:3]
+    return {"mitglied": "Erika Muster", "hinweis": g.get("hinweis", ""), "titel": g.get("titel", ""), "modus": "anfrage", "kategorien": ["Sonstiges"],
+            "erlaubt": {"tarifwechsel": True, "downgrade": True, "neubuchung": True, "verlaengern": True, "geraete": False, "zeige_rechnungen": True,
+                        "zeige_anfragen": True, "neue_anfrage": True, "zugangskarte": True},
+            "tarife": t, "parzellen": [{"id": "x", "sparte": sp[0], "sparte_name": sp[1].get("name", sp[0]), "parzelle": "12", "sparte_logo": sl,
+                                        "tarif": t[0]["name"] if t else "", "rang": t[0]["rang"] if t else None, "tarif_laufzeit": "unbegrenzt",
+                                        "laufzeit": None, "gesperrt": False, "offen": 0, "rechnungen": [{"id": "r", "nr": "RE-2026-0001", "datum": "2026-03-01", "brutto": 120, "status": "bezahlt"}],
+                                        "tickets": [{"nr": "T-0001", "betreff": "WLAN langsam", "status": "geschlossen", "erstellt": "2026-05-02 18:10", "loesung": "Access Point neu gestartet"}],
+                                        "auftrag": None, "antraege": []}]}
 
 
 MEIN_HTML = r"""__KOPF__<main>
@@ -658,7 +689,7 @@ MEIN_HTML = r"""__KOPF__<main>
 .tarife{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-top:10px}.tarif{border:1.5px solid var(--l);border-radius:var(--ecken);padding:12px;cursor:pointer;background:var(--c)}
 .tarif.akt{border-color:var(--a);box-shadow:0 0 0 2px var(--a) inset}.tarif b{font-size:17px}.gesperrt{background:#fde8e6;color:#b42318;border-radius:8px;padding:8px 10px;margin-top:8px}</style>
 <section id="v_login" class="karte" style="display:none"><h2 style="margin-top:0">Anmelden</h2><p class="hint">__ANMELDETEXT__</p>
-<label for="l_email">E-Mail-Adresse</label><input id="l_email" type="email" autocomplete="email" onkeydown="if(event.key=='Enter')codeAnfordern()"><button class="los" id="l_b1" onclick="codeAnfordern()">Code per E-Mail senden</button>
+<label for="l_email">E-Mail-Adresse</label><input id="l_email" type="email" autocomplete="email" oninput="logoNachEmail()" onchange="logoNachEmail()" onkeydown="if(event.key=='Enter')codeAnfordern()"><button class="los" id="l_b1" onclick="codeAnfordern()">Code per E-Mail senden</button>
 <div id="l_code_box" style="display:none"><label for="l_code">Einmalcode aus der E-Mail</label><input id="l_code" onkeydown="if(event.key=='Enter')anmelden()" inputmode="numeric" autocomplete="one-time-code" maxlength="6" style="font-size:22px;letter-spacing:6px;text-align:center"><button class="los" onclick="anmelden()">Anmelden</button></div>
 <div class="msg" id="m_login"></div></section>
 <div id="v_daten" style="display:none"><div class="zeile" style="margin-bottom:10px"><p class="hint" id="d_hallo" style="margin:0"></p><div style="flex:none"><select id="d_parz" onchange="zeigen()" style="min-width:200px"></select></div><button class="k2" style="flex:none" onclick="abmelden()">Abmelden</button></div>
@@ -677,13 +708,21 @@ async function codeAnfordern(){try{const d=await post("/mein/code",{email:$("l_e
 async function anmelden(){try{await post("/mein/anmelden",{email:$("l_email").value.trim(),code:$("l_code").value});msg("m_login","");laden()}catch(e){msg("m_login",e.message)}}
 async function abmelden(){await post("/mein/abmelden").catch(()=>{});location.replace("/mein")}
 async function laden(){try{D=await post("/mein/daten");ansicht(true)}catch(e){ansicht(false);return}
+ datenZeigen()}
+function vorschau(x){D=x;ansicht(true);$("v_login").style.display="block";datenZeigen();document.querySelectorAll("button").forEach(b=>b.onclick=null)}
+const VL="__VEREINSLOGO__";
+function kopfLogo(src,titel){const mk=document.querySelector("header .mk");let sl=document.getElementById("sp_logo");
+ if(VL&&src&&mk){if(!sl){sl=document.createElement("img");sl.id="sp_logo";sl.alt="";sl.style.cssText="height:42px;width:auto;margin:0 8px";mk.insertBefore(sl,mk.querySelector("b"))}sl.src=src;sl.title=titel||""}else if(sl)sl.remove()}
+let LT=null;function logoNachEmail(){clearTimeout(LT);const e=$("l_email").value.trim();if(!VL||!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(e)){kopfLogo("");return}
+ LT=setTimeout(async()=>{try{const d=await post("/mein/logo",{email:e});kopfLogo(d.logo,d.name)}catch(x){}},500)}
+function datenZeigen(){
  $("d_hallo").textContent="Hallo "+D.mitglied;$("d_hinweis").textContent=D.hinweis||"";$("d_parz").innerHTML=D.parzellen.map(p=>`<option value="${esc(p.id)}">${esc(p.sparte_name)} · Parzelle ${esc(p.parzelle)}</option>`).join("");
  $("d_parz").style.display=D.parzellen.length>1?"":"none";if(WAHL&&D.parzellen.some(p=>p.id==WAHL))$("d_parz").value=WAHL;$("t_kat").innerHTML=D.kategorien.map(k=>`<option>${esc(k)}</option>`).join("");
  const q=new URLSearchParams(location.search);if(q.get("zahlung")=="abbruch")msg("m_daten","Die Zahlung wurde abgebrochen – es wurde nichts gebucht.");else if(q.get("zahlung"))msg("m_daten","Danke! Sobald der Bezahldienst die Zahlung bestätigt, ist die Buchung erledigt (Referenz "+q.get("zahlung")+").",true);
  if(q.has("zahlung"))history.replaceState(null,"","/mein");zeigen()}
 function P(){return D.parzellen.find(p=>p.id==$("d_parz").value)||D.parzellen[0]}
 function zeigen(){const p=P();if(!p)return;WAHL=p.id;const lz=p.laufzeit;
- const mk=document.querySelector("header .mk");let sl=document.getElementById("sp_logo");if(p.sparte_logo&&mk){if(!sl){sl=document.createElement("img");sl.id="sp_logo";sl.alt="";sl.style.cssText="height:42px;width:auto;margin:0 8px";const b=mk.querySelector("b");mk.insertBefore(sl,b)}sl.src=p.sparte_logo;sl.title=p.sparte_name}else if(sl)sl.remove();
+ kopfLogo(p.sparte_logo,p.sparte_name);
  $("d_tarif").innerHTML=p.tarif?`<div class="zeile"><div><div class="klein">Tarif</div><div class="wert">${esc(p.tarif)}</div></div>${lz?`<div><div class="klein">Laufzeit</div><div><b>${lz.aktiv?"bis "+esc(lz.ende):"abgelaufen am "+esc(lz.ende)}</b>${lz.aktiv?`<br><span class="klein">noch ${lz.rest_tage} Tag(e)</span>`:""}</div></div>`:`<div><div class="klein">Laufzeit</div><div><b>unbegrenzt</b></div></div>`}<div><div class="klein">Offen</div><div class="wert" style="font-size:18px">${eur(p.offen)}</div></div></div>${p.gesperrt?'<div class="gesperrt">Der WLAN-Zugang ist gerade gesperrt (Laufzeit abgelaufen) – mit einer Verlängerung wird er wieder freigegeben.</div>':""}`:'<p class="hint">Für diese Parzelle ist noch kein Tarif gebucht.</p>';
  const e=D.erlaubt,R=t=>t.rang.join(","),hoeher=(t)=>p.rang&&(t.rang[0]>p.rang[0]||t.rang[0]==p.rang[0]&&(t.rang[1]>p.rang[1]||t.rang[1]==p.rang[1]&&t.rang[2]>p.rang[2]));
  const ups=D.tarife.filter(t=>t.name!=p.tarif&&hoeher(t)),downs=D.tarife.filter(t=>t.name!=p.tarif&&!hoeher(t));let akt=[];

@@ -540,6 +540,7 @@ class Version50(unittest.TestCase):
         self.assertEqual(s.roh("/portal")[0], 404)
         a.req("/api/portal-einstellungen", {"aktiv": True})
         code, _, html = s.roh("/portal")
+        self.assertEqual(s.roh("/kontakt")[0], 200)                                   # Kontakt-Seite unter /kontakt
         self.assertEqual(code, 200)
         self.assertIn(b"Zugangskarte", html)
         a.req("/api/ppsk", {"sparte": "BW", "art": "fehlende"})
@@ -605,6 +606,10 @@ class Version50(unittest.TestCase):
         self.assertEqual(Sitzung(SRV.basis).roh("/spartenlogo/BW")[0], 404)
         a.req("/api/sparten-logos", {"sparte": "BW", "logo": ""})                      # zurück auf automatisch
         self.assertEqual(Sitzung(SRV.basis).roh("/spartenlogo/BW")[0], 200)
+        self.assertIn(b'class="kopflogos"', a.roh("/")[2])                             # Vereinslogo neben dem Manager-Logo
+        a.req("/api/seiten-design", {"art": "login", "design": {"spartenlogos": True}})
+        self.assertIn(b"/spartenlogo/BW", Sitzung(SRV.basis).roh("/")[2])             # Anmeldeseite: neben dem Logo
+        a.req("/api/seiten-design", {"art": "login", "design": {"spartenlogos": False}})
 
     def test_zz_mitgliederbereich(self):
         """/mein: Anmeldung per E-Mail-Code, eigene Daten, Wechsel als Anfrage, Bezahldienst mit signiertem Webhook (läuft als letzter der Klasse)"""
@@ -705,6 +710,15 @@ class Version50(unittest.TestCase):
         self.assertEqual(s.req("/mein/daten", {})[0], 401)
         # Mitglieder-App: Anmeldung mit Code, dann dauerhafter Schlüssel im Kopf (kein Cookie)
         self.assertEqual(api(SRV.basis, "POST", "/mein/info", {})[1]["titel"], "Mein WLAN")
+        code, x = api(SRV.basis, "POST", "/mein/logo", {"email": "Paul@example.org"})        # Vereinslogo nach Eingabe der E-Mail
+        self.assertTrue(code == 200 and x["logo"].startswith("/spartenlogo/BW"), x)
+        self.assertEqual(api(SRV.basis, "POST", "/mein/logo", {"email": "niemand@example.org"})[1]["logo"], "")
+        code, x = a.req("/api/seiten-design", {"art": "mein", "design": {"titel": "Gartenfreunde online", "farbe_kopf": "#224466"}})
+        self.assertEqual((code, x["mein"]["titel"]), (200, "Gartenfreunde online"), x)
+        self.assertIn(b"Gartenfreunde online", Sitzung(SRV.basis).roh("/mein")[2])
+        code, x = a.req("/api/seiten-vorschau", {"art": "mein", "design": {"titel": "Vorschau"}})
+        self.assertIn("vorschau(", x["html"])
+        a.req("/api/seiten-design", {"art": "mein", "zuruecksetzen": True})
         n = len(SMTP.mails)
         api(SRV.basis, "POST", "/mein/code", {"email": "paul@example.org"})
         teile = [x.get_payload(decode=True).decode("utf-8", "replace") for x in em.message_from_string(self._mails_seit(n)[0]["text"]).walk() if not x.is_multipart()]

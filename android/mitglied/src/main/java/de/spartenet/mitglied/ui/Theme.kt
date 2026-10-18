@@ -7,7 +7,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-// Eigene Farbe (Blau wie die Pächter-Seite), damit Mitglieder- und Manager-App nicht verwechselt werden
+// Eigene Farbe (Blau wie die Kontakt-Seite), damit Mitglieder- und Manager-App nicht verwechselt werden
 private val Hell = lightColorScheme(
     primary = Color(0xFF1F5FA8),
     onPrimary = Color.White,

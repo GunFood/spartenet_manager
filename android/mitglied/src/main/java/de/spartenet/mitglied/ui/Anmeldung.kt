@@ -43,7 +43,12 @@ import de.spartenet.mitglied.data.Api
 import de.spartenet.mitglied.data.Speicher
 import de.spartenet.mitglied.data.s
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.runtime.LaunchedEffect
+import org.json.JSONObject
 
 /**
  * Anmeldung in zwei Schritten: Adresse + E-Mail → Code per E-Mail anfordern → Code eingeben.
@@ -60,6 +65,23 @@ fun Anmeldung(speicher: Speicher, onAngemeldet: (String) -> Unit) {
     var fehler by remember { mutableStateOf<String?>(null) }
     var laedt by remember { mutableStateOf(false) }
     val titel = speicher.titel.ifEmpty { "Mitgliederbereich" }
+    var vereinslogo by remember { mutableStateOf("") }
+    var vereinsname by remember { mutableStateOf("") }
+
+    // Vereinslogo der Sparte zeigen, sobald eine passende E-Mail-Adresse eingegeben ist
+    LaunchedEffect(email, server) {
+        vereinslogo = ""
+        if (server.isBlank() || !Regex("^[^@\\s]+@[^@\\s]+\\.[A-Za-z]{2,}$").matches(email.trim())) return@LaunchedEffect
+        delay(600)
+        try {
+            val a = Api(server, null).post("/mein/logo", JSONObject().put("email", email.trim()))
+            vereinslogo = a.s("logo")
+            vereinsname = a.s("name")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+        }
+    }
 
     fun codeAnfordern() {
         if (laedt) return
@@ -119,7 +141,14 @@ fun Anmeldung(speicher: Speicher, onAngemeldet: (String) -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Icon(Icons.Filled.Wifi, null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.padding(top = 24.dp).size(56.dp))
+            Row(Modifier.padding(top = 24.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.Wifi, null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(56.dp))
+                if (vereinslogo.isNotEmpty()) {
+                    Spacer(Modifier.size(12.dp))
+                    NetzBild(Api(server, null), vereinslogo, vereinsname.ifEmpty { "Vereinslogo" }, 64.dp)
+                }
+            }
+            if (vereinsname.isNotEmpty() && vereinslogo.isNotEmpty()) Text(vereinsname, color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.bodyMedium)
             Text("SparteNet", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
             Text(titel, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimary)
             Card(Modifier.fillMaxWidth().padding(top = 12.dp)) {

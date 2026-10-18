@@ -560,7 +560,7 @@ private fun AnfrageDialog(kategorien: List<String>, onAbbrechen: () -> Unit, onS
 
 /** Logo vom Manager laden (Vereins- oder Spartenlogo, öffentlich) und klein anzeigen */
 @Composable
-private fun NetzBild(api: Api, pfad: String, beschreibung: String) {
+fun NetzBild(api: Api, pfad: String, beschreibung: String, groesse: androidx.compose.ui.unit.Dp = 40.dp) {
     var bild by remember(pfad) { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(pfad) {
         bild = try {
@@ -572,7 +572,7 @@ private fun NetzBild(api: Api, pfad: String, beschreibung: String) {
             null
         }
     }
-    bild?.let { Image(it, beschreibung, Modifier.padding(end = 6.dp).size(40.dp), contentScale = ContentScale.Fit) }
+    bild?.let { Image(it, beschreibung, Modifier.padding(end = 6.dp).size(groesse), contentScale = ContentScale.Fit) }
 }
 
 fun oeffnen(ctx: Context, uri: String) {

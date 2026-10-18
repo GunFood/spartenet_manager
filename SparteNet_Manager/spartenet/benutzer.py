@@ -34,7 +34,7 @@ BEREICHE = [
     ("rechnungen", "Rechnungen und Zahlungsabgleich: ansehen (lesen), erstellen, senden, Zahlungen buchen (schreiben)", ("kein", "lesen", "schreiben"), ["rechnungen"]),
     ("tickets", "Anfragen (Tickets): ansehen (lesen), bearbeiten, beantworten, zuweisen (schreiben)", ("kein", "lesen", "schreiben"), ["tickets"]),
     ("verbindung", "Verbindung, Cloud-Key, Handy & Tablet, Protokoll, Diagnose", ("kein", "lesen", "schreiben"), ["verbindung"]),
-    ("gestaltung", "Oberfläche gestalten: Anmeldeseite, Pächter-Seite, Menü und Ansichtsprofile der Konten", ("kein", "lesen", "schreiben"), ["gestaltung"]),
+    ("gestaltung", "Oberfläche gestalten: Anmeldeseite, Kontakt-Seite, Menü und Ansichtsprofile der Konten", ("kein", "lesen", "schreiben"), ["gestaltung"]),
 ]
 BEREICH_TEXT = {k: t for k, t, _, _ in BEREICHE}
 BEREICH_STUFEN = {k: s for k, _, s, _ in BEREICHE}

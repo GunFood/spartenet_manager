@@ -359,7 +359,7 @@ private fun AbschlussDialog(loesung: String, onLoesung: (String) -> Unit, abMail
         title = { Text("Ticket abschließen") },
         text = {
             Column {
-                Text("Was wurde getan? Die Lösung sieht der Pächter auch auf der Pächter-Seite.", style = MaterialTheme.typography.bodySmall)
+                Text("Was wurde getan? Die Lösung sieht der Pächter auch auf der Kontakt-Seite.", style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(loesung, onLoesung, modifier = Modifier.fillMaxWidth().height(130.dp).padding(top = 8.dp), placeholder = { Text("Lösung") })
                 if (mailMoeglich) Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = abMail, onCheckedChange = onMail); Text("Kontakt per E-Mail informieren")

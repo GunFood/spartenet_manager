@@ -1,6 +1,6 @@
-"""SparteNet Manager – Oberfläche gestalten: Anmeldeseite, Pächter-Seite und Ansichtsprofile (Menü, Reiter, Karten)
+"""SparteNet Manager – Oberfläche gestalten: Anmeldeseite, Kontakt-Seite und Ansichtsprofile (Menü, Reiter, Karten)
 
-Anmelde- und Pächter-Seite: Texte, Farben, Schrift, Logo und Hintergrundbild (aus den Unterlagen), Impressum/Datenschutz.
+Anmelde- und Kontakt-Seite: Texte, Farben, Schrift, Logo und Hintergrundbild (aus den Unterlagen), Impressum/Datenschutz.
 Nur Text und Farbwerte – kein eigenes HTML, damit niemand Schadcode in die öffentlichen Seiten bringen kann.
 Bilder der öffentlichen Seiten werden über /seitenbild/<seite>/<logo|hintergrund> ausgeliefert – nur genau die gewählten Bilder.
 
@@ -48,9 +48,17 @@ PORTAL_DESIGN_STANDARD = {
     "t_interessent": "Ich bin Interessent (möchte WLAN buchen)",
     "kontakt": "", "impressum": "", "datenschutz": "", "fuss": "",
 }
+# Mitgliederbereich (/mein): eigenes Aussehen – ohne eigene Einstellung wie die Kontakt-Seite
+MEIN_DESIGN_STANDARD = {
+    "marke": "SparteNet", "marke_hervor": "Net", "logo": "", "hintergrund": "", "abdunkeln": 30, "vereinslogo": True,
+    "farbe_kopf": "#1d2f3e", "farbe_kopf_text": "#ffffff", "farbe_knopf": "#3a9a1f", "farbe_grund": "#f5f7f4", "farbe_karte": "#ffffff", "farbe_text": "#1d2f3e",
+    "schrift": "system", "ecken": 12, "dunkel": True, "breite": 640,
+    "titel": "Mitgliederbereich", "text_anmeldung": "", "hinweis": "",
+    "kontakt": "", "impressum": "", "datenschutz": "", "fuss": "",
+}
 _GRENZEN_SEITE = {"abdunkeln": (0, 90), "ecken": (0, 32), "breite": (480, 1100)}
 _LANG = {"text": 600, "untertitel": 300, "ueberschrift": 160, "fuss": 600, "kontakt": 300, "danke": 300, "h_ticket": 600, "h_status": 600, "h_zugang": 600,
-         "impressum": 300, "datenschutz": 300}
+         "impressum": 300, "datenschutz": 300, "text_anmeldung": 600, "hinweis": 600, "titel": 80}
 
 
 def _bild_ok(d, wert, standard_erlaubt=False):
@@ -102,27 +110,38 @@ def seite_pruefen(d, roh, std, alt=None):
             r = [x for x in (v if isinstance(v, list) else []) if x in ("ticket", "status", "zugang")]
             aus[k] = list(dict.fromkeys(r + [x for x in ("ticket", "status", "zugang") if x not in r]))
         else:
-            aus[k] = text_einzeilig(v, _LANG.get(k, 120)) if k not in ("text", "fuss", "h_ticket", "h_status", "h_zugang") else str(v or "").replace("\r", "")[:_LANG.get(k, 600)]
+            aus[k] = text_einzeilig(v, _LANG.get(k, 120)) if k not in ("text", "fuss", "h_ticket", "h_status", "h_zugang", "text_anmeldung", "hinweis") else str(v or "").replace("\r", "")[:_LANG.get(k, 600)]
     return aus
+
+
+SEITEN_NAMEN = {"login": "Anmeldeseite", "portal": "Kontakt-Seite", "mein": "Mitgliederbereich"}
+
+
+def seiten_std(art):
+    return {"login": LOGIN_STANDARD, "portal": PORTAL_DESIGN_STANDARD, "mein": MEIN_DESIGN_STANDARD}[art]
 
 
 def seiten_design(d, art):
     roh = (d.get("seiten_design") or {}).get(art) if isinstance(d.get("seiten_design"), dict) else None
-    std = LOGIN_STANDARD if art == "login" else PORTAL_DESIGN_STANDARD
+    std = seiten_std(art)
     aus = dict(std)
+    if art == "mein" and not roh:            # noch nicht gestaltet: Aussehen der Kontakt-Seite, Texte aus den bisherigen Einstellungen
+        aus.update({k: v for k, v in seiten_design(d, "portal").items() if k in std and k not in ("titel",)})
+        mb = d.get("mitgliederbereich") if isinstance(d.get("mitgliederbereich"), dict) else {}
+        aus.update({k: str(mb[k]) for k in ("titel", "text_anmeldung", "hinweis") if mb.get(k)})
     for k, v in (roh or {}).items():
         if k in std:
             aus[k] = v
     if art == "portal":
         p = d.get("portal") if isinstance(d.get("portal"), dict) else {}
-        aus["titel"] = str(p.get("titel") or "SparteNet – Service für Pächter")
+        aus["titel"] = str(p.get("titel") or "SparteNet – Kontakt")
         aus["text"] = str(p.get("text") or "Hier können Sie eine Anfrage stellen, den Stand Ihrer Anfrage abfragen oder Ihre WLAN-Zugangskarte erneut anfordern.")
     return aus
 
 
 def seitenbild(d, art, feld):
     """(Bytes, MIME) des für eine öffentliche Seite gewählten Bildes oder None"""
-    if art not in ("login", "portal") or feld not in ("logo", "hintergrund"):
+    if art not in ("login", "portal", "mein") or feld not in ("logo", "hintergrund"):
         return None
     i = seiten_design(d, art).get(feld)
     if not i or i == "standard":
@@ -176,7 +195,7 @@ _DUNKEL = ("--grund:#0c1410;--karte:#16211b;--text:#e3ebe5;--leise:#9db0a4;--ran
 
 
 def sparten_logo_leiste(d, inline=False, hell=False):
-    """Logos aller Sparten nebeneinander (für Anmelde- und Pächter-Seite)"""
+    """Logos aller Sparten nebeneinander (für Anmelde- und Kontakt-Seite)"""
     bilder = []
     for kz, sp in kalk_sparten(d).items():
         i = sparten_logo_id(d, kz)
@@ -184,6 +203,22 @@ def sparten_logo_leiste(d, inline=False, hell=False):
             src = sparten_logo_uri(d, kz) if inline else f"/spartenlogo/{urllib.parse.quote(kz)}?v={i[:6]}"
             bilder.append(f'<img src="{_e(src)}" alt="{_e(sp.get("name", kz))}" title="{_e(sp.get("name", kz))}" style="height:44px;width:auto;margin:4px 6px">')
     return f'<span style="display:flex;flex-wrap:wrap;justify-content:center;align-items:center;margin:6px 0">{"".join(bilder)}</span>' if bilder else ""
+
+
+def kopf_logos(d, erlaubt=None, inline=False, hoehe=34, hell=True):
+    """Vereinslogos der Sparten (für das Konto erlaubte) – klein neben dem Manager-Logo"""
+    teile = []
+    for kz, sp in kalk_sparten(d).items():
+        if erlaubt is not None and kz not in erlaubt:
+            continue
+        i = sparten_logo_id(d, kz)
+        if i:
+            src = sparten_logo_uri(d, kz) if inline else f"/spartenlogo/{urllib.parse.quote(kz)}?v={i[:6]}"
+            teile.append(f'<img src="{_e(src)}" alt="{_e(sp.get("name", kz))}" title="{_e(sp.get("name", kz))}" '
+                         f'style="height:{hoehe}px;width:auto;margin-left:8px;vertical-align:middle;{"background:#fff;border-radius:50%;padding:2px" if hell else ""}">')
+        if len(teile) >= 8:
+            break
+    return f'<span class="kopflogos" style="display:inline-flex;align-items:center;flex-wrap:wrap">{"".join(teile)}</span>' if teile else ""
 
 
 def login_seite(d, design=None, inline=False):
@@ -200,10 +235,8 @@ def login_seite(d, design=None, inline=False):
     logo = _bild_src(d, "login", "logo", g["logo"], inline)
     fuss = _links(g, "#cfe9c6")
     if g["portal_link"] and portal_an:
-        fuss.insert(0, '<a href="/portal" style="color:#cfe9c6">Pächter-Seite</a>')
+        fuss.insert(0, '<a href="/portal" style="color:#cfe9c6">Kontakt-Seite</a>')
     klein = []
-    if g["spartenlogos"]:
-        klein.append(sparten_logo_leiste(d, inline))
     if g["fuss"]:
         klein.append(_absaetze(g["fuss"]))
     klein.append((f"Aus Sicherheitsgründen werden Sie nach {ab} Minuten ohne Aktivität automatisch abgemeldet. " if ab else "")
@@ -213,7 +246,11 @@ def login_seite(d, design=None, inline=False):
     unten = _links(g)
     if unten:
         klein.append(" · ".join(unten))
-    return (LOGIN_HTML.replace("__VARS__", vars_).replace("__DUNKEL__", dunkel)
+    vorlage = LOGIN_HTML
+    if g["spartenlogos"]:                          # Vereinslogos der Sparten neben dem Manager-Logo
+        logos = kopf_logos(d, inline=inline, hoehe=38, hell=False)
+        vorlage = vorlage.replace("<b>__MARKE__</b>", "<b>__MARKE__</b>" + logos)
+    return (vorlage.replace("__VARS__", vars_).replace("__DUNKEL__", dunkel)
             .replace("__LAYOUT__", "mittig" if g["layout"] == "mittig" else "geteilt")
             .replace("__HG__", f"url('{hg}')" if hg else "none")
             .replace("__LOGO__", f'<img src="{_e(logo)}" alt="">' if logo else "")
@@ -226,16 +263,16 @@ def login_seite(d, design=None, inline=False):
             .replace("__KLEIN__", "<br>".join(klein)))
 
 
-def portal_seite(d, design=None, inline=False):
+def portal_seite(d, design=None, inline=False, art="portal"):
     from .portal import PORTAL_HTML       # steht in der späteren Datei portal.py
-    g = design or seiten_design(d, "portal")
+    g = design or seiten_design(d, art)
     vars_ = (f"--a:{g['farbe_knopf']};--k:{g['farbe_kopf']};--kt:{g['farbe_kopf_text']};--bg:{g['farbe_grund']};--c:{g['farbe_karte']};--t:{g['farbe_text']};"
              f"--ecken:{int(g['ecken'])}px;--breite:{int(g['breite'])}px;--schrift:{SEITEN_SCHRIFTEN[g['schrift']][1]};--abdunkeln:{int(g['abdunkeln']) / 100:.2f}")
     dunkel = ("@media (prefers-color-scheme:dark){:root{--bg:#0f161c;--c:#18222a;--t:#e2e8ec;--m:#9aa9b3;--l:#2e3c46}}" if g["dunkel"] else "")
-    hg = _bild_src(d, "portal", "hintergrund", g["hintergrund"], inline)
-    logo = _bild_src(d, "portal", "logo", g["logo"], inline)
+    hg = _bild_src(d, art, "hintergrund", g["hintergrund"], inline)
+    logo = _bild_src(d, art, "logo", g["logo"], inline)
     fuss = []
-    if g["spartenlogos"]:
+    if g.get("spartenlogos"):
         fuss.append(sparten_logo_leiste(d, inline))
     if g["kontakt"]:
         fuss.append("Kontakt: " + _e(g["kontakt"]))
@@ -310,24 +347,27 @@ def akt_gestaltung(d, ich, log=None):
     a = ansicht_profile(d)
     konten = [{"name": ADMIN_NAME, "anzeige": "Administrator", "profil": d.get("admin_profil") or ""}] + [
         {"name": n, "anzeige": x.get("anzeige", ""), "profil": x.get("profil", "")} for n, x in sorted(benutzer_liste(d).items())]
-    return {"login": seiten_design(d, "login"), "portal": seiten_design(d, "portal"),
-            "standard": {"login": LOGIN_STANDARD, "portal": PORTAL_DESIGN_STANDARD}, "schriften": {k: v[0] for k, v in SEITEN_SCHRIFTEN.items()},
+    return {"login": seiten_design(d, "login"), "portal": seiten_design(d, "portal"), "mein": seiten_design(d, "mein"),
+            "standard": {"login": LOGIN_STANDARD, "portal": PORTAL_DESIGN_STANDARD, "mein": MEIN_DESIGN_STANDARD},
+            "mein_aktiv": bool((d.get("mitgliederbereich") or {}).get("aktiv")) if isinstance(d.get("mitgliederbereich"), dict) else False, "schriften": {k: v[0] for k, v in SEITEN_SCHRIFTEN.items()},
             "logos": logo_unterlagen(d), "profile": a["profile"], "standardprofil": a.get("standard", ""), "konten": konten,
             "portal_aktiv": bool((d.get("portal") or {}).get("aktiv")) if isinstance(d.get("portal"), dict) else False, "log": log or []}
 
 
 def akt_seiten_design(d, b, ich):
     art = b.get("art")
-    if art not in ("login", "portal"):
-        raise Fehler("Seite: login oder portal.")
+    if art not in ("login", "portal", "mein"):
+        raise Fehler("Seite: login, portal oder mein.")
     roh = b.get("design") or {}
     if b.get("zuruecksetzen"):
         (d.setdefault("seiten_design", {})).pop(art, None)
         speichere(d)
-        journal(f"{'Anmeldeseite' if art == 'login' else 'Pächter-Seite'}: Standard wiederhergestellt durch {ich}")
+        journal(f"{SEITEN_NAMEN[art]}: Standard wiederhergestellt durch {ich}")
         return akt_gestaltung(d, ich, ["✔ Standard wiederhergestellt."])
-    std = LOGIN_STANDARD if art == "login" else PORTAL_DESIGN_STANDARD
-    alt = (d.get("seiten_design") or {}).get(art) if isinstance(d.get("seiten_design"), dict) else None
+    std = seiten_std(art)
+    alt = (d.get("seiten_design") or {}).get(art) if isinstance(d.get("seiten_design"), dict) else (None)
+    if art == "mein" and not alt:
+        alt = seiten_design(d, "mein")
     neu = seite_pruefen(d, roh, std, alt)
     d.setdefault("seiten_design", {})[art] = neu
     if art == "portal":
@@ -338,16 +378,19 @@ def akt_seiten_design(d, b, ich):
             p["text"] = text_einzeilig(roh["text"], 1000)
         d["portal"] = p
     speichere(d)
-    journal(f"{'Anmeldeseite' if art == 'login' else 'Pächter-Seite'} gestaltet durch {ich}")
+    journal(f"{SEITEN_NAMEN[art]} gestaltet durch {ich}")
     return akt_gestaltung(d, ich, ["✔ Gespeichert – die Seite sieht ab sofort so aus."])
 
 
 def akt_seiten_vorschau(d, b):
     art = b.get("art")
-    if art not in ("login", "portal"):
-        raise Fehler("Seite: login oder portal.")
-    std = LOGIN_STANDARD if art == "login" else PORTAL_DESIGN_STANDARD
+    if art not in ("login", "portal", "mein"):
+        raise Fehler("Seite: login, portal oder mein.")
+    std = seiten_std(art)
     g = seite_pruefen(d, b.get("design") or {}, std, seiten_design(d, art))
+    if art == "mein":
+        from .mitgliederbereich import mein_seite      # steht in der späteren Datei mitgliederbereich.py
+        return {"html": mein_seite(d, g, inline=True, vorschau=True), "log": []}
     if art == "portal":
         g["titel"], g["text"] = text_einzeilig((b.get("design") or {}).get("titel") or seiten_design(d, art)["titel"], 120), \
             text_einzeilig((b.get("design") or {}).get("text") or seiten_design(d, art)["text"], 1000)
@@ -358,10 +401,13 @@ def akt_seiten_vorschau(d, b):
 
 
 def portal_info_aus(d, g):
-    """Angaben für die Pächter-Seite (Texte, Reihenfolge, Sparten) – auch für die Vorschau"""
+    """Angaben für die Kontakt-Seite (Texte, Reihenfolge, Sparten) – auch für die Vorschau"""
     e = d.get("portal") if isinstance(d.get("portal"), dict) else {}
     an = {k: bool(e.get(k, True)) for k in ("ticket", "status", "zugang")}
-    sparten = sorted(({"kz": k, "name": n} for k, n in _sparten_kz(d).items()), key=lambda x: x["name"].lower())
+    def _logo(kz):
+        i = sparten_logo_id(d, kz)
+        return f"/spartenlogo/{urllib.parse.quote(kz)}?v={i[:6]}" if i else ""
+    sparten = sorted(({"kz": k, "name": n, "logo": _logo(k)} for k, n in _sparten_kz(d).items()), key=lambda x: x["name"].lower())
     return {"titel": g["titel"], "text": g["text"], **an, "sparten": sparten, "kategorien": list(ticket_kategorien(d)),
             **{k: g[k] for k in ("reihenfolge", "t_ticket", "t_status", "t_zugang", "h_ticket", "h_status", "h_zugang", "art_kein_mitglied", "art_interessent",
                                  "t_mitglied", "t_kein_mitglied", "t_interessent", "kontakt", "spamschutz")},

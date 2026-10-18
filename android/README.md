@@ -4,7 +4,7 @@ Zwei getrennte Apps in einem Projekt – jede mit eigener Paket-ID, eigenem Symb
 
 | App | Modul | Paket | für wen | Anmeldung |
 |---|---|---|---|---|
-| **SparteNet Manager** (grün) | `app/` | `de.spartenet.manager` | Vorstand und Mitarbeiter | Benutzername, Passwort (+ Zwei-Faktor) und eigener App-Zugangstoken |
+| **SparteNet Manager** (grün) | `manager/` | `de.spartenet.manager` | Vorstand und Mitarbeiter | Benutzername, Passwort (+ Zwei-Faktor) und eigener App-Zugangstoken |
 | **SparteNet Mitglied** (blau) | `mitglied/` | `de.spartenet.mitglied` | Pächter/Mitglieder | E-Mail-Adresse + Code per E-Mail (kein Passwort) |
 
 Die Mitglieder-App hat **keinen** Zugang zum Manager – nur zum Mitgliederbereich der eigenen Parzelle(n).
@@ -24,7 +24,7 @@ Nutzt den Mitgliederbereich des Managers (ab 5.5, muss im Manager eingeschaltet 
 * Schnittstelle: `POST /mein/info`, `/mein/code`, `/mein/anmelden` (`"app": true`), danach mit `Authorization: Bearer snm_…`:
   `/mein/daten`, `/mein/geraete`, `/mein/buchen`, `/mein/ticket`, `/mein/zugangskarte`, `/mein/abmelden`, `GET /mein/rechnung?id=`.
 
-## SparteNet Manager (`app/`)
+## SparteNet Manager (`manager/`)
 
 Native App (Kotlin, Jetpack Compose, Material 3) für den **SparteNet Manager ab Version 5.3** (App-Zugangstoken).
 Sie nutzt ausschließlich die App-Schnittstelle des Managers (`/api/v1/app/…` und `/api/…` mit `Authorization: Bearer sna_…`)
@@ -81,8 +81,8 @@ Signierte Release-APK (optional): im Repository unter *Settings → Secrets and 
 
 ### B) Android Studio
 Ordner `android/` öffnen (Android Studio Ladybug oder neuer, JDK 17), Gradle-Sync abwarten, dann *Run* oder
-*Build → Build App Bundle(s)/APK(s)*. Oben die Ausführung „app“ (Manager) oder „mitglied“ (Mitglieder-App) wählen.
-Auf der Kommandozeile: `./gradlew :app:assembleDebug` → `app/build/outputs/apk/debug/`, `./gradlew :mitglied:assembleDebug` →
+*Build → Build App Bundle(s)/APK(s)*. Oben die Ausführung „manager“ (Manager-App) oder „mitglied“ (Mitglieder-App) wählen.
+Auf der Kommandozeile: `./gradlew :manager:assembleDebug` → `manager/build/outputs/apk/debug/`, `./gradlew :mitglied:assembleDebug` →
 `mitglied/build/outputs/apk/debug/`. Beide Apps können mit demselben Keystore signiert werden.
 
 Für eine lokale Release-Signatur `android/keystore.properties` anlegen (liegt nicht im Repo):

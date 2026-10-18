@@ -176,7 +176,7 @@ def pdf_logos(d, kz):
 
 
 def zugangskarte_pdf(d, kz, zeile, sparte_name):
-    """eine Zugangskarte als PDF (A5) – für den Versand per E-Mail (Pächter-Seite)"""
+    """eine Zugangskarte als PDF (A5) – für den Versand per E-Mail (Kontakt-Seite)"""
     g = design_pruefen(d.get("design"))
     p = PDF(148 * MM, 210 * MM, f"Zugang Parzelle {zeile['Parzelle']}")
     akz = g["farbe_akzent"]

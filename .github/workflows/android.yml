@@ -32,7 +32,7 @@ jobs:
       - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
       - name: Debug-APKs (Testversion) – Manager-App und Mitglieder-App
-        run: ./gradlew --no-daemon :app:assembleDebug :mitglied:assembleDebug :app:lintDebug :mitglied:lintDebug
+        run: ./gradlew --no-daemon :manager:assembleDebug :mitglied:assembleDebug :manager:lintDebug :mitglied:lintDebug
       # Optional: signierte Release-APK – nur wenn die Secrets im Repository hinterlegt sind
       #   SPARTENET_KEYSTORE_B64 (keystore als Base64), SPARTENET_KEYSTORE_PASSWORT, SPARTENET_KEY_ALIAS, SPARTENET_KEY_PASSWORT
       - name: Release-APK (signiert)
@@ -50,8 +50,8 @@ jobs:
         with:
           name: SparteNet-Manager-App
           path: |
-            android/app/build/outputs/apk/debug/*.apk
-            android/app/build/outputs/apk/release/*.apk
+            android/manager/build/outputs/apk/debug/*.apk
+            android/manager/build/outputs/apk/release/*.apk
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         with:
@@ -65,6 +65,6 @@ jobs:
         with:
           name: lint-bericht
           path: |
-            android/app/build/reports/lint-results-debug.html
+            android/manager/build/reports/lint-results-debug.html
             android/mitglied/build/reports/lint-results-debug.html
           if-no-files-found: ignore

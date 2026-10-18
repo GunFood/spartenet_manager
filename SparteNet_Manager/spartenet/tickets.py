@@ -297,7 +297,7 @@ def akt_ticket_schliessen(d, b, ich, erlaubt=None):
         email_senden(d, an, f"[{t['nr']}] Ihre Anfrage ist abgeschlossen: {t.get('betreff', '')}", None,
                      f"<p>Hallo {html_mod.escape(k.get('vorname') or k.get('name') or '')},</p><p>Ihre Anfrage <b>{html_mod.escape(t['nr'])}</b> "
                      f"(„{html_mod.escape(t.get('betreff', ''))}“) ist abgeschlossen.</p>{text_zu_html(loesung)}"
-                     "<p>Wenn noch etwas offen ist, antworten Sie einfach oder stellen Sie auf der Pächter-Seite eine neue Anfrage.</p>", sparte=t.get("sparte") or None)
+                     "<p>Wenn noch etwas offen ist, antworten Sie einfach oder stellen Sie auf der Kontakt-Seite eine neue Anfrage.</p>", sparte=t.get("sparte") or None)
         log.append(f"✔ Abschluss per E-Mail an {an} gesendet.")
     war_offen = ticket_offen(t)
     t["status"], t["loesung"], t["geschlossen"] = "geschlossen", loesung, time.strftime("%Y-%m-%d %H:%M")

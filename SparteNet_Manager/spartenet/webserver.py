@@ -196,6 +196,8 @@ class Handler(BaseHTTPRequestHandler):
             if pfad == "/mein/code":
                 with SCHREIB_SPERRE:
                     return self._send(200, mb_code_anfordern(lade(), b, self._quelle()))
+            if pfad == "/mein/logo":                 # Vereinslogo zur eingegebenen E-Mail-Adresse (Anmeldeseite und App)
+                return self._send(200, mb_logo_zur_email(d, b.get("email"), self._quelle()))
             if pfad == "/mein/info":                 # für die Mitglieder-App: ist der Bereich erreichbar?
                 e = mb_einstellungen(d)
                 return self._send(200, {"ok": True, "titel": e["titel"], "version": VERSION, "app_tage": MB_APP_TAGE})
@@ -292,11 +294,13 @@ class Handler(BaseHTTPRequestHandler):
             return
         if u.path.startswith("/api/v1/"):
             return self._api_v1("GET", u)
+        if u.path in ("/kontakt", "/kontakt/"):        # Kontakt-Seite (gleiche Seite wie /portal)
+            return self._portal("GET", urllib.parse.urlparse("/portal"))
         if u.path == "/portal" or u.path.startswith("/portal/"):
             return self._portal("GET", u)
         if u.path == "/mein" or u.path.startswith("/mein/"):
             return self._mein("GET", u)
-        if u.path.startswith("/seitenbild/"):     # öffentlich: nur die für Anmelde-/Pächter-Seite gewählten Bilder
+        if u.path.startswith("/seitenbild/"):     # öffentlich: nur die für Anmelde-/Kontakt-Seite gewählten Bilder
             d = self._lade()
             if d is None:
                 return
@@ -324,6 +328,7 @@ class Handler(BaseHTTPRequestHandler):
             ich = json.dumps(ich_daten(*wer)).replace("<", "\\u003c")
             return self._send(200, HTML.replace("__TOKEN__", TOKEN).replace("__VERSION__", VERSION).replace("__FERN__", "1" if fern_nur else "0")
                               .replace("__SITZUNG_TAGE__", str(SITZUNG_TAGE)).replace("__ABMELDEN__", str(0 if fern_nur else sicherheit(d)["abmelden_minuten"]))
+                              .replace("__KOPFLOGOS__", kopf_logos(d, sparten_von(wer[1])))
                               .replace("__ICH__", ich).replace("__PROFIL__", json.dumps(konto_profil(d, wer[0]), ensure_ascii=False).replace("<", "\\u003c")).encode("utf-8"), "text/html")
         if not wer:
             return self._send(401, {"fehler": "anmelden"})
