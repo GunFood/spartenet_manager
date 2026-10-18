@@ -299,7 +299,7 @@ nav{position:sticky;top:0;z-index:20}
 <p class="hint">Hier gehen alle Änderungen aus dem Manager über die UniFi-Cloud an das Gateway: fehlende Netze und Passwörter je Parzelle (neu, geändert, gesperrt). Immer erst „Unterschiede ermitteln“, dann auswählen und übertragen. Vor jeder Passwort-Übertragung wird der alte Stand gesichert.</p>
 <div class="knoepfe"><button class="k" onclick="schreibtest()">1. Schreibzugriff prüfen</button></div><div class="log" id="log_st"></div></div>
 <div class="karte"><h3>2. Unterschiede zwischen Manager und Gateway</h3><div class="reihe" style="max-width:520px"><div><label>Sparte</label><select id="ue_sp"></select></div></div>
-<div class="knoepfe"><button class="k p" onclick="vergleich()">Unterschiede ermitteln</button></div><div class="log" id="log_ue"></div><div class="kacheln" id="ue_k"></div>
+<div class="knoepfe"><button class="k p" onclick="vergleich()">Unterschiede ermitteln</button></div><div class="log" id="log_ue"></div><div class="kacheln" id="vg_k"></div>
 <div id="ue_bereich" style="display:none">
 <h3 style="margin-top:16px" id="ue_h_netze"></h3><div class="tab" id="ue_netze"></div>
 <h3 style="margin-top:16px" id="ue_h_ppsk"></h3><div class="tab" id="ue_ppsk"></div>
@@ -630,8 +630,8 @@ nav{position:sticky;top:0;z-index:20}
 <div><label for="si_merk">Zwei-Faktor-Code merken</label><select id="si_merk"><option value="0">nein – immer abfragen</option><option value="8">8 Stunden</option><option value="12">12 Stunden</option><option value="24">1 Tag</option><option value="72">3 Tage</option><option value="168">7 Tage</option><option value="336">14 Tage</option><option value="720">30 Tage</option></select></div></div>
 <div class="knoepfe"><button class="k p" onclick="siSpeichernAnmeldung()">Speichern</button></div><div class="log" id="log_sian"></div>
 <h3 style="margin-top:18px">App-Zugangstoken</h3><p class="hint">Schützt die Schnittstelle der Android-App zusätzlich: Die App fragt beim Einrichten nach diesem Token und schickt ihn bei jeder Anfrage mit. Ohne gültigen Token kann sich keine App anmelden oder Daten abrufen. Neu erzeugen macht den alten ungültig – alle Apps müssen den neuen eingeben. Gespeichert wird nur eine Prüfsumme; der Token wird nur einmal angezeigt.</p>
-<p id="zt_st" class="status"></p><div id="zt_neu" hidden style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input id="zt_wert" readonly class="mono" style="max-width:420px"><button class="k" onclick="navigator.clipboard&&navigator.clipboard.writeText($('zt_wert').value).then(()=>$('log_zt').textContent='✔ Kopiert.')">Kopieren</button></div>
-<div class="knoepfe"><button class="k" onclick="ztNeu()">Neuen Zugangstoken erzeugen</button><button class="k" onclick="ztAus()">App-Zugang sperren</button></div><div class="log" id="log_zt"></div></div>
+<p id="azt_st" class="status"></p><div id="azt_neu" hidden style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input id="azt_wert" readonly class="mono" style="max-width:420px"><button class="k" onclick="navigator.clipboard&&navigator.clipboard.writeText($('azt_wert').value).then(()=>$('log_azt').textContent='✔ Kopiert.')">Kopieren</button></div>
+<div class="knoepfe"><button class="k" onclick="aztNeu()">Neuen Zugangstoken erzeugen</button><button class="k" onclick="aztAus()">App-Zugang sperren</button></div><div class="log" id="log_azt"></div></div>
 <div class="karte bn-admin"><h3>Neues Benutzerkonto</h3>
 <div class="reihe"><div><label for="bn_name">Benutzername</label><input id="bn_name" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="z. B. vorstand.buchenweg"></div>
 <div><label for="bn_anz">Name (Anzeige, optional)</label><input id="bn_anz" placeholder="z. B. Maria Muster, Vorstand Buchenweg"></div>
@@ -876,7 +876,7 @@ const kbit=k=>k==null?"–":(k>=1e6?(k/1e6).toLocaleString("de-DE",{maximumFract
 const bytes=b=>!b?"0 B":b>=1e9?(b/1e9).toFixed(2)+" GB":b>=1e6?(b/1e6).toFixed(1)+" MB":(b/1e3).toFixed(0)+" kB";
 const dauer=s=>{if(s==null||s==="")return"–";s=+s;const t=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return t?t+" T "+h+" h":h?h+" h "+m+" min":m+" min"};
 const zahl=(v,n=1)=>v==null||v===""?"–":(+v).toFixed(n).replace(".",",");
-function balken(p){if(p==null||p==="")return"–";const k=p>=85?"s":p>=60?"w":"";return `<div class="balken"><i class="${k}" style="width:${Math.min(100,p)}%"></i><span>${zahl(p,0)} %</span></div>`}
+function balkenProzent(p){if(p==null||p==="")return"–";const k=p>=85?"s":p>=60?"w":"";return `<div class="balken"><i class="${k}" style="width:${Math.min(100,p)}%"></i><span>${zahl(p,0)} %</span></div>`}
 function htab(id,sp,z){$(id).innerHTML=z.length?"<table><tr>"+sp.map(s=>"<th>"+esc(s[0])+"</th>").join("")+"</tr>"+z.map(r=>"<tr>"+sp.map(s=>"<td>"+s[1](r)+"</td>").join("")+"</tr>").join("")+"</table>":"<p class='hint' style='padding:10px'>Keine Daten.</p>"}
 function kach(t,v,u,a){return `<div class="kachel ${a||""}"><b>${v}</b>${esc(t)}${u?`<small>${esc(u)}</small>`:""}</div>`}
 function diagramm(id,punkte,serien,einheit,fmt){const el=$(id);const pz=punkte.filter(p=>serien.some(s=>p[s.k]!=null));if(!pz.length){el.innerHTML="";return}
@@ -911,7 +911,7 @@ async function sysLaden(){let d;try{d=await api("/api/system",undefined,"log_sys
  diagramm("sys_ch1",vl,[{k:"down",n:"Download",f:"#3a9a1f"},{k:"up",n:"Upload",f:"#1f6fb2"}],"Durchsatz",kbit);
  diagramm("sys_ch2",d.isp,[{k:"lat",n:"Latenz Ø",f:"#9a6700"},{k:"maxlat",n:"Latenz max.",f:"#b42318"}],"Latenz",v=>v==null?"–":Math.round(v)+" ms");
  htab("sys_ger",[["Gerät",r=>`<span class="punkt ${String(r.status).toUpperCase()=="ONLINE"?"on":"off"}"></span>${esc(r.name)}${r.gw?" <span class='status ok'>Gateway</span>":""}`],["Modell",r=>esc(r.modell)],["IP",r=>esc(r.ip)],
-  ["CPU",r=>balken(r.cpu)],["RAM",r=>balken(r.ram)],["Last",r=>zahl(r.load,2)],["Laufzeit",r=>dauer(r.uptime)],["↓ Uplink",r=>mbit(r.rx_bps)],["↑ Uplink",r=>mbit(r.tx_bps)],
+  ["CPU",r=>balkenProzent(r.cpu)],["RAM",r=>balkenProzent(r.ram)],["Last",r=>zahl(r.load,2)],["Laufzeit",r=>dauer(r.uptime)],["↓ Uplink",r=>mbit(r.rx_bps)],["↑ Uplink",r=>mbit(r.tx_bps)],
   ["Ports",r=>r.ports?r.ports_auf+" / "+r.ports+(r.poe?` · PoE ${r.poe}`:""):"–"],["Funk",r=>(r.funk||"–").split(" · ").map(esc).join("<br>")],["Wiederholungen",r=>(r.retries||"–").split(" · ").map(esc).join("<br>")],["Clients",r=>r.clients??"–"],["Temp.",r=>r.temp!=null?zahl(r.temp,0)+" °C":"–"],
   ["Firmware",r=>esc(r.firmware||"")+(r.update?" <span class='status' style='background:#fff1c2;color:#7a5200'>Update</span>":"")]],d.geraete);
  const mitTraffic=d.top.length>0;$("sys_netz_hint").textContent=mitTraffic?"Datenverkehr seit Verbindungsbeginn der aktuell verbundenen Geräte.":"Anzahl verbundener Geräte je Netz. Datenverkehr je Parzelle liefert die Konsole über die Cloud nicht.";
@@ -968,7 +968,7 @@ let UE=null;
 async function schreibtest(){if(!confirm("Schreibzugriff prüfen?\nDabei wird ein Test-Voucher (1 Minute) angelegt und sofort wieder gelöscht. Sonst ändert sich nichts."))return;await api("/api/schreibtest",{},"log_st")}
 async function vergleich(){const kz=$("ue_sp").value;if(!kz)return alert("Erst unter „Planung“ eine Sparte speichern.");const d=await api("/api/vergleich?sparte="+encodeURIComponent(kz),undefined,"log_ue");UE=d;
  const z=st=>d.ppsk.filter(p=>p.status==st).length;
- $("ue_k").innerHTML=kachel("Netze fehlen",d.netze.length,d.netze.length?"warn":"gut")+kachel("Passwörter neu",z("neu"),z("neu")?"warn":"gut")+kachel("Passwörter geändert",z("geaendert"),z("geaendert")?"warn":"gut")+kachel("Zugang entfernen",z("entfernen"),z("entfernen")?"schlecht":"gut")+kachel("aktuell",d.gleich,"gut")+(z("netz_fehlt")?kachel("Netz fehlt (Passwort wartet)",z("netz_fehlt"),"warn"):"");
+ $("vg_k").innerHTML=kachel("Netze fehlen",d.netze.length,d.netze.length?"warn":"gut")+kachel("Passwörter neu",z("neu"),z("neu")?"warn":"gut")+kachel("Passwörter geändert",z("geaendert"),z("geaendert")?"warn":"gut")+kachel("Zugang entfernen",z("entfernen"),z("entfernen")?"schlecht":"gut")+kachel("aktuell",d.gleich,"gut")+(z("netz_fehlt")?kachel("Netz fehlt (Passwort wartet)",z("netz_fehlt"),"warn"):"");
  $("ue_bereich").style.display=(d.netze.length||d.ppsk.length)?"block":"none";
  $("ue_h_netze").textContent=d.netze.length?"Fehlende Netze ("+d.netze.length+")":"";
  $("ue_netze").innerHTML=d.netze.length?"<table><tr><th>Übertragen</th><th>Netz</th><th>VLAN</th><th>Subnetz</th></tr>"+d.netze.map(n=>`<tr><td><input type="checkbox" class="ue_n" value="${esc(n.Netz)}" style="width:auto" checked></td><td>${esc(n.Netz)}</td><td>${esc(n.VLAN)}</td><td>${esc(n.Subnetz)}</td></tr>`).join("")+"</table>":"";
@@ -1358,13 +1358,13 @@ async function bnEigenesPw(){await api("/api/benutzer-ich",{alt:$("bn_alt").valu
 async function bnLaden(){bnZeigen(await api("/api/benutzer",undefined,"log_bn"))}
 async function bnSpeichern(b,logid){bnZeigen(await api("/api/benutzer-speichern",b,logid||"log_bn"))}
 function siWahl(id,w){const e=$(id);if(![...e.options].some(o=>o.value==String(w))){const o=document.createElement("option");o.value=w;o.textContent=w+(id=="si_merk"?" Stunden":" Minuten");e.appendChild(o)}e.value=String(w)}
-function ztZeigen(d){const z=d.zugang;$("zt_st").textContent=z?"✔ Eingerichtet am "+z.erstellt+" von "+z.von+" (beginnt mit "+z.hinweis+")":"⚠ Kein Zugangstoken – die App kann sich nicht anmelden.";
- if(d.token){$("zt_neu").hidden=false;$("zt_wert").value=d.token;$("zt_wert").select()}else{$("zt_neu").hidden=true;$("zt_wert").value=""}}
-async function ztLaden(){if(!ICH.admin)return;try{ztZeigen(await api("/api/app-zugangstoken"))}catch(e){}}
-async function ztNeu(){if(!confirm("Neuen App-Zugangstoken erzeugen? Der bisherige gilt dann nicht mehr – alle Apps müssen den neuen eingeben."))return;ztZeigen(await api("/api/app-zugangstoken",{neu:true},"log_zt"))}
-async function ztAus(){if(!confirm("App-Zugang sperren? Keine App kann sich dann anmelden oder Daten abrufen, bis ein neuer Token erzeugt ist."))return;ztZeigen(await api("/api/app-zugangstoken",{aus:true},"log_zt"))}
+function aztZeigen(d){const z=d.zugang;$("azt_st").textContent=z?"✔ Eingerichtet am "+z.erstellt+" von "+z.von+" (beginnt mit "+z.hinweis+")":"⚠ Kein Zugangstoken – die App kann sich nicht anmelden.";
+ if(d.token){$("azt_neu").hidden=false;$("azt_wert").value=d.token;$("azt_wert").select()}else{$("azt_neu").hidden=true;$("azt_wert").value=""}}
+async function aztLaden(){if(!ICH.admin)return;try{aztZeigen(await api("/api/app-zugangstoken"))}catch(e){}}
+async function aztNeu(){if(!confirm("Neuen App-Zugangstoken erzeugen? Der bisherige gilt dann nicht mehr – alle Apps müssen den neuen eingeben."))return;aztZeigen(await api("/api/app-zugangstoken",{neu:true},"log_azt"))}
+async function aztAus(){if(!confirm("App-Zugang sperren? Keine App kann sich dann anmelden oder Daten abrufen, bis ein neuer Token erzeugt ist."))return;aztZeigen(await api("/api/app-zugangstoken",{aus:true},"log_azt"))}
 async function siSpeichernAnmeldung(){const d=await api("/api/sicherheit-einstellungen",{abmelden_minuten:+$("si_ab").value,app_abmelden_minuten:+$("si_app").value,"2fa_merken_stunden":+$("si_merk").value},"log_sian");bnZeigen(d);$("log_sian").textContent="✔ Gespeichert. Die neue Abmelde-Zeit gilt nach dem nächsten Neuladen der Seite."}
-function bnZeigen(d){BN=d;const box=$("bn_tab"),y=box.scrollTop;$("bn_2fa_pflicht").checked=!!d.zwei_faktor_pflicht;ztLaden();if(d.sicherheit){siWahl("si_ab",d.sicherheit.abmelden_minuten);siWahl("si_app",d.sicherheit.app_abmelden_minuten);siWahl("si_merk",d.sicherheit["2fa_merken_stunden"])}
+function bnZeigen(d){BN=d;const box=$("bn_tab"),y=box.scrollTop;$("bn_2fa_pflicht").checked=!!d.zwei_faktor_pflicht;aztLaden();if(d.sicherheit){siWahl("si_ab",d.sicherheit.abmelden_minuten);siWahl("si_app",d.sicherheit.app_abmelden_minuten);siWahl("si_merk",d.sicherheit["2fa_merken_stunden"])}
  if(!$("bn_vorlage").options.length)$("bn_vorlage").innerHTML=Object.entries(d.vorlagen).map(([k,v])=>`<option value="${k}">${esc(v.text)}</option>`).join("")+'<option value="#admin">Administrator</option><option value="#gesperrt">Gesperrt (noch nicht freigeschaltet)</option>';
  let h="<table><tr><th>Benutzername</th><th>Name</th><th>Kontoart</th><th>Rechte</th><th>angelegt</th><th>zuletzt angemeldet</th><th>Sitzungen</th><th>2FA</th><th></th></tr>";
  for(const z of d.zeilen){const n=esc(z.name),offen=BNOFFEN.has(z.name);
