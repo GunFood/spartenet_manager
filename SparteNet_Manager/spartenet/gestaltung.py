@@ -62,7 +62,7 @@ _LANG = {"text": 600, "untertitel": 300, "ueberschrift": 160, "fuss": 600, "kont
 
 
 def _bild_ok(d, wert, standard_erlaubt=False):
-    if wert in ("",) or (standard_erlaubt and wert == "standard"):
+    if wert in ("",) or (standard_erlaubt and wert in ("standard", "manager")):
         return wert
     if not _ID_RE_SEITE.match(str(wert)):
         raise Fehler("Ungültiges Bild.")
@@ -144,6 +144,8 @@ def seitenbild(d, art, feld):
     if art not in ("login", "portal", "mein") or feld not in ("logo", "hintergrund"):
         return None
     i = seiten_design(d, art).get(feld)
+    if i == "manager":
+        return manager_logo(d)
     if not i or i == "standard":
         return None
     try:
@@ -157,6 +159,8 @@ def _bild_src(d, art, feld, wert, inline):
         return ""
     if wert == "standard":
         return "/icon-192.png"
+    if wert == "manager":
+        return manager_logo_src(d, inline)
     if inline:
         try:
             roh, typ = logo_bild(d, wert)

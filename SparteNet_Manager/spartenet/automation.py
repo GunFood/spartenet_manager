@@ -241,7 +241,12 @@ def _logo_teil(d):
             roh, typ = logo_bild(d, lu)
             return roh, typ.split("/", 1)[1]
         except Fehler:
-            pass                      # Unterlage gelöscht → Kartenlogo
+            pass                      # Unterlage gelöscht → Manager-Logo
+    from .unterlagen import manager_logo_wahl, manager_logo      # Unterlagen kommen in der Modulkette später
+    if manager_logo_wahl(d) not in ("", "standard"):
+        x = manager_logo(d)
+        if x:
+            return x[0], x[1].split("/", 1)[1]
     uri = logo_daten_uri(d.get("design") or {})
     m = re.match(r"data:image/(png|jpeg|gif|webp);base64,(.+)", uri or "")
     if not m:

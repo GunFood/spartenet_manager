@@ -607,6 +607,19 @@ class Version50(unittest.TestCase):
         a.req("/api/sparten-logos", {"sparte": "BW", "logo": ""})                      # zurück auf automatisch
         self.assertEqual(Sitzung(SRV.basis).roh("/spartenlogo/BW")[0], 200)
         self.assertIn(b'class="kopflogos"', a.roh("/")[2])                             # Vereinslogo neben dem Manager-Logo
+        code, x = a.req("/api/manager-logo")
+        self.assertEqual((code, x["logo"]), (200, "standard"), x)                      # Manager-Logo: Standard ist das SparteNet-Symbol
+        self.assertIn(b'class="mlogo-kopf"', a.roh("/")[2])
+        self.assertEqual(Sitzung(SRV.basis).roh("/managerlogo")[0], 200)
+        code, x = a.req("/api/manager-logo", {"logo": bw["logo"]})                     # beliebiges Bild aus den Unterlagen
+        self.assertEqual((code, x["logo"]), (200, bw["logo"]), x)
+        a.req("/api/seiten-design", {"art": "login", "design": {"logo": "manager"}})
+        self.assertIn(b"/managerlogo?v=", Sitzung(SRV.basis).roh("/")[2])             # Anmeldeseite mit Manager-Logo
+        a.req("/api/manager-logo", {"logo": ""})
+        self.assertEqual(Sitzung(SRV.basis).roh("/managerlogo")[0], 404)
+        self.assertNotIn(b'class="mlogo-kopf"', a.roh("/")[2])
+        a.req("/api/manager-logo", {"logo": "standard"})
+        a.req("/api/seiten-design", {"art": "login", "design": {"logo": "standard"}})
         a.req("/api/seiten-design", {"art": "login", "design": {"spartenlogos": True}})
         self.assertIn(b"/spartenlogo/BW", Sitzung(SRV.basis).roh("/")[2])             # Anmeldeseite: neben dem Logo
         a.req("/api/seiten-design", {"art": "login", "design": {"spartenlogos": False}})

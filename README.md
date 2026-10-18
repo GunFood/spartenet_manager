@@ -112,6 +112,13 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   Umstieg: Der bisherige gemeinsame Token aus 5.3/5.4 gilt weiter für alle Konten ("alle Konten (alt)" in der Liste),
   bis der Administrator ihn entfernt – am besten, sobald jeder seinen eigenen Token eingetragen hat.
 
+### LOGOS: MANAGER-LOGO UND VEREINSLOGOS GETRENNT – neu in 5.5
+  ☰ → System & Konto → Oberfläche gestalten → Karte "Logos":
+  - Manager-Logo: anzeigen und wählen (Bild aus den Unterlagen, SparteNet-Symbol oder keins). Erscheint in der Kopfzeile neben
+    "SparteNet"; auf Anmelde-, Kontakt-Seite und im Mitgliederbereich beim Logo "Manager-Logo" wählen; in E-Mails und PDFs, wenn im
+    E-Mail-Layout kein eigenes Logo gewählt ist. Öffentlich unter /managerlogo.
+  - Vereinslogos der Sparten: getrennt davon je Sparte wählen, automatisch oder erzeugen (siehe "Spartenlogos").
+
 ### MEHRERE PERSONEN JE PARZELLE – neu in 5.5
   Mitglieder → Bearbeiten → "Weitere Personen dieser Parzelle" (bis 6: Mitpächter, Partner, Familie – Name, E-Mail, Telefon).
   Jede Person mit E-Mail-Adresse meldet sich selbst im Mitgliederbereich und in der Mitglieder-App an (Einmalcode an die eigene
@@ -132,7 +139,7 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   - Android: Ordner android/manager (Manager-App, vorher android/app) und android/mitglied (Mitglieder-App).
 
 ### SPARTENLOGOS UND VEREINSLOGOS – neu in 5.5
-  ☰ → System & Konto → Oberfläche gestalten → Karte "Spartenlogos": jede Sparte kann neben dem Vereinslogo ein eigenes Logo haben.
+  ☰ → System & Konto → Oberfläche gestalten → Karte "Logos" → Vereinslogos der Sparten: jede Sparte kann neben dem Vereinslogo ein eigenes Logo haben.
   - Wählen aus den Unterlagen – oder automatisch: ein Bild im Unterlagen-Ordner "Logos", das der Sparte zugeordnet ist.
   - "Erzeugen" / "Für alle Sparten ohne Logo erzeugen": der Manager zeichnet aus dem Spartennamen ein rundes Vereinsabzeichen
     (Farbe aus dem Namen; Motiv passend: Baum bei Buche/Eiche/Linde/…, Blüte bei Rose/Blume/Garten/…, Wellen bei See/Teich/Bach/…,

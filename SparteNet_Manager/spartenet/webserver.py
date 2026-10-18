@@ -309,6 +309,14 @@ class Handler(BaseHTTPRequestHandler):
             if not bild:
                 return self._send(404, {"fehler": "nicht gefunden"})
             return self._send(200, bild[0], bild[1])
+        if u.path == "/managerlogo":               # öffentlich: Logo des Managers
+            d = self._lade()
+            if d is None:
+                return
+            bild = manager_logo(d)
+            if not bild:
+                return self._send(404, {"fehler": "nicht gefunden"})
+            return self._send(200, bild[0], bild[1])
         if u.path.startswith("/spartenlogo/"):    # öffentlich: Logo einer Sparte (für Seiten, Mitgliederbereich und App)
             d = self._lade()
             if d is None:
@@ -328,6 +336,7 @@ class Handler(BaseHTTPRequestHandler):
             ich = json.dumps(ich_daten(*wer)).replace("<", "\\u003c")
             return self._send(200, HTML.replace("__TOKEN__", TOKEN).replace("__VERSION__", VERSION).replace("__FERN__", "1" if fern_nur else "0")
                               .replace("__SITZUNG_TAGE__", str(SITZUNG_TAGE)).replace("__ABMELDEN__", str(0 if fern_nur else sicherheit(d)["abmelden_minuten"]))
+                              .replace("__MANAGERLOGO__", (f'<img src="{manager_logo_src(d)}" alt="" class="mlogo-kopf">' if manager_logo(d) else ""))
                               .replace("__KOPFLOGOS__", kopf_logos(d, sparten_von(wer[1])))
                               .replace("__ICH__", ich).replace("__PROFIL__", json.dumps(konto_profil(d, wer[0]), ensure_ascii=False).replace("<", "\\u003c")).encode("utf-8"), "text/html")
         if not wer:
@@ -654,6 +663,7 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/logos": lambda: akt_logos(d, sp_erl),
                 "/api/logo-bild": lambda: akt_logo_bild(d, q, sp_erl),
                 "/api/logo-waehlen": lambda: akt_logo_waehlen(d, b or {}, ich, sp_erl),
+                "/api/manager-logo": lambda: akt_manager_logo(d, b if isinstance(b, dict) and "logo" in b else None, ich, sp_erl),
                 "/api/sparten-logos": lambda: akt_sparten_logos(d, b if isinstance(b, dict) and b else None, ich, sp_erl),
                 "/api/sparten-logo-erzeugen": lambda: akt_sparten_logo_erzeugen(d, b or {}, ich, sp_erl),
                 "/api/laufzeiten": lambda: akt_laufzeiten(d, sp_erl),

@@ -219,6 +219,54 @@ def akt_logos(d, erlaubt=None):
     return {"logos": logo_unterlagen(d, erlaubt), "karte": q.get("karte", ""), "ordner": LOGO_ORDNER, "log": []}
 
 
+# ---- Manager-Logo: ein Logo für den Manager selbst (Kopfzeile, Anmeldeseite, E-Mails, PDFs) -------------------------
+def manager_logo_wahl(d):
+    """Unterlagen-Id, "standard" (SparteNet-Symbol) oder "" (kein Logo)"""
+    w = d.get("manager_logo")
+    if w in (None, "standard"):
+        return "standard" if w == "standard" or w is None else ""
+    return w if str(w) in unterlagen_daten(d)["dateien"] else ""
+
+
+def manager_logo(d):
+    """(Bytes, MIME) des Manager-Logos oder None"""
+    w = manager_logo_wahl(d)
+    if w == "standard":
+        x = PWA_ICONS.get("/icon-192.png")
+        return (x[0], "image/png") if x else None
+    if not w:
+        return None
+    try:
+        return logo_bild(d, w)
+    except Fehler:
+        return None
+
+
+def manager_logo_src(d, inline=False):
+    x = manager_logo(d)
+    if not x:
+        return ""
+    if inline:
+        return f"data:{x[1]};base64," + base64.b64encode(x[0]).decode()
+    return f"/managerlogo?v={hashlib.sha256(x[0]).hexdigest()[:8]}"
+
+
+def akt_manager_logo(d, b=None, wer="", erlaubt=None):
+    """Manager-Logo anzeigen; {"logo": id | "standard" | ""} wählt es"""
+    log = []
+    if b is not None:
+        w = str(b.get("logo") or "")
+        if w and w != "standard":
+            logo_bild(d, w, erlaubt)
+        d["manager_logo"] = w
+        speichere(d)
+        journal(f"Manager-Logo geändert durch {wer}")
+        log = ["✔ Manager-Logo gespeichert."]
+    w = manager_logo_wahl(d)
+    x = unterlagen_daten(d)["dateien"].get(w) or {}
+    return {"logo": w, "name": "SparteNet-Symbol" if w == "standard" else x.get("name", ""), "src": manager_logo_src(d), "log": log}
+
+
 # ---- Spartenlogos: jede Sparte kann ein eigenes Logo haben (neben dem Logo des Vereins) -----------------------------
 def sparten_logo_id(d, kz):
     """Unterlage des Spartenlogos: in den Einstellungen gewählt – sonst automatisch ein Bild im Ordner „Logos“, das dieser Sparte zugeordnet ist"""
