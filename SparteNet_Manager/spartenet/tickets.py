@@ -50,6 +50,11 @@ def _konten(d):
     return [n for n in namen if n == ADMIN_NAME or konto_rechte(d, n)["art"] != "gesperrt"]
 
 
+def parzelle_passt(t, m):
+    """Ticket ohne Parzelle passt zu jedem Mitglied; mit Parzelle nur zu dem Mitglied genau dieser Sparte/Parzelle"""
+    return not t.get("parzelle") or (m.get("sparte") == t.get("sparte") and str(m.get("parzelle") or "") == str(t.get("parzelle")))
+
+
 def _pruefen(d, roh, alt=None):
     t = dict(alt or {})
     if "betreff" in roh:
@@ -89,8 +94,10 @@ def _pruefen(d, roh, alt=None):
         raise Fehler(f"E-Mail-Adresse „{k['email']}“ ist ungültig.")
     # Mitglied zuordnen: gleiche E-Mail oder gleiche Parzelle
     if not k.get("mitglied"):
-        m = next((i for i, m in mitglieder(d).items() if k.get("email") and m.get("email") == k["email"].lower()), None) or \
-            next((i for i, m in mitglieder(d).items() if t.get("parzelle") and m.get("sparte") == t.get("sparte") and str(m.get("parzelle")) == str(t["parzelle"])), None)
+        em = (k.get("email") or "").lower()
+        alle_m = mitglieder(d).items()
+        m = (next((i for i, m in alle_m if em and em in mitglied_emails(m) and parzelle_passt(t, m)), None) or
+             next((i for i, m in alle_m if t.get("parzelle") and parzelle_passt(t, m)), None))
         if m:
             mm = mitglieder(d)[m]
             k["mitglied"] = m
@@ -173,20 +180,20 @@ def ticket_mitglied_id(d, t):
         return k["mitglied"]
     em = (k.get("email") or "").strip().lower()
     if em and k.get("art", "mitglied") == "mitglied" and not k.get("geloest"):
-        return next((i for i, m in mitglieder(d).items() if (m.get("email") or "").lower() == em), None)
+        return next((i for i, m in mitglieder(d).items() if em in mitglied_emails(m) and parzelle_passt(t, m)), None)
     return None
 
 
 def mitglied_tickets(d, mid, ohne=None):
     """alle Tickets eines Mitglieds (fest zugeordnet oder gleiche E-Mail ohne andere Zuordnung), neueste zuerst"""
     m = mitglieder(d).get(mid) or {}
-    em = (m.get("email") or "").lower()
+    ems = set(mitglied_emails(m))
     aus = []
     for i, t in tickets_daten(d)["liste"].items():
         if i == ohne:
             continue
         k = t.get("kontakt") or {}
-        if k.get("mitglied") == mid or (not k.get("mitglied") and not k.get("geloest") and em and (k.get("email") or "").lower() == em):
+        if k.get("mitglied") == mid or (not k.get("mitglied") and not k.get("geloest") and (k.get("email") or "").lower() in ems and parzelle_passt(t, m)):
             aus.append((i, t))
     aus.sort(key=lambda x: x[1].get("erstellt", ""), reverse=True)
     return aus
@@ -216,7 +223,7 @@ def akt_ticket(d, q, ich, erlaubt=None):
         frueher = [_frueher_zeile(i, x) for i, x in sorted(tickets_daten(d)["liste"].items(), key=lambda y: y[1].get("erstellt", ""), reverse=True)
                    if i != tid and (x.get("kontakt") or {}).get("email", "").lower() == em and _sichtbar(x, ich, erlaubt)]
     return {"ticket": {**_zeile(t, tid), "text": t.get("text", ""), "verlauf": t.get("verlauf") or [], "loesung": t.get("loesung", ""),
-                       "geschlossen": t.get("geschlossen", ""), "bezug": t.get("bezug", "")},
+                       "geschlossen": t.get("geschlossen", ""), "bezug": t.get("bezug", ""), "antrag": t.get("antrag")},
             "mitglied": mitglied, "frueher": frueher[:50], "log": []}
 
 
@@ -290,7 +297,7 @@ def akt_ticket_schliessen(d, b, ich, erlaubt=None):
         email_senden(d, an, f"[{t['nr']}] Ihre Anfrage ist abgeschlossen: {t.get('betreff', '')}", None,
                      f"<p>Hallo {html_mod.escape(k.get('vorname') or k.get('name') or '')},</p><p>Ihre Anfrage <b>{html_mod.escape(t['nr'])}</b> "
                      f"(„{html_mod.escape(t.get('betreff', ''))}“) ist abgeschlossen.</p>{text_zu_html(loesung)}"
-                     "<p>Wenn noch etwas offen ist, antworten Sie einfach oder stellen Sie auf der Pächter-Seite eine neue Anfrage.</p>")
+                     "<p>Wenn noch etwas offen ist, antworten Sie einfach oder stellen Sie auf der Kontakt-Seite eine neue Anfrage.</p>", sparte=t.get("sparte") or None)
         log.append(f"✔ Abschluss per E-Mail an {an} gesendet.")
     war_offen = ticket_offen(t)
     t["status"], t["loesung"], t["geschlossen"] = "geschlossen", loesung, time.strftime("%Y-%m-%d %H:%M")
@@ -348,7 +355,7 @@ def _mitglied_neu(typ, daten, d):
     n = 0
     for t in tickets_daten(d)["liste"].values():
         k = t.get("kontakt") or {}
-        if not k.get("mitglied") and (k.get("email") or "").lower() == em and k.get("art", "mitglied") == "mitglied":
+        if not k.get("mitglied") and (k.get("email") or "").lower() == em and k.get("art", "mitglied") == "mitglied" and parzelle_passt(t, mitglieder(d)[mid]):
             k["mitglied"] = mid
             n += 1
     if n:
@@ -422,7 +429,7 @@ def akt_ticket_kommentar(d, b, ich, erlaubt=None):
             raise Fehler("Beim Ticket ist keine E-Mail-Adresse des Kontakts hinterlegt.")
         werte = _platzhalter_werte(_ereignis_daten(t), d)
         betreff = f"[{t['nr']}] {t.get('betreff', '')}"
-        email_senden(d, an, betreff, None, _ersetzen(html, werte, html=True))
+        email_senden(d, an, betreff, None, _ersetzen(html, werte, html=True), sparte=t.get("sparte") or None)
         _verlauf(t, ich, "antwort", f"E-Mail an {an}:\n" + html_zu_text(_ersetzen(html, werte, html=True)))
         log.append(f"✔ Antwort per E-Mail an {an} gesendet.")
         if t.get("status") == "neu":

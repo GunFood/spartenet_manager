@@ -1,4 +1,4 @@
-"""SparteNet Manager – Pächter-Seite (/portal): Anfrage stellen, Ticket-Status abfragen, Zugangskarte neu anfordern
+"""SparteNet Manager – Kontakt-Seite (/portal): Anfrage stellen, Ticket-Status abfragen, Zugangskarte neu anfordern
 
 Öffentlich ohne Anmeldung – deshalb eingeschaltet erst durch einen Administrator, mit Grenzen je Absender und Parzelle.
 Die Zugangskarte geht nur per E-Mail an die beim Mitglied hinterlegte Adresse; die Seite zeigt nie ein Passwort und verrät nicht,
@@ -10,7 +10,7 @@ Parzelle), Zugangskarte nur mit allen fünf Angaben eines Mitglieds.
 """
 from .gestaltung import *  # noqa: F401,F403 – alle Namen der vorherigen Module
 
-PORTAL_STANDARD = {"aktiv": False, "titel": "SparteNet – Service für Pächter", "text": "Hier können Sie eine Anfrage stellen, den Stand Ihrer Anfrage abfragen oder Ihre WLAN-Zugangskarte erneut anfordern.",
+PORTAL_STANDARD = {"aktiv": False, "titel": "SparteNet – Kontakt", "text": "Hier können Sie eine Anfrage stellen, den Stand Ihrer Anfrage abfragen oder Ihre WLAN-Zugangskarte erneut anfordern.",
                    "ticket": True, "status": True, "zugang": True, "bestaetigung": True}
 _GRENZEN = {"ticket": (10, 3600), "status": (30, 3600), "zugang": (5, 3600), "parzelle": (3, 86400), "fehlversuch": (5, 3600)}
 KONTAKT_ARTEN = {"mitglied": "Mitglied", "kein_mitglied": "kein Mitglied einer Sparte", "interessent": "Interessent"}
@@ -56,9 +56,11 @@ def mitglied_passt(d, vorname, nachname, email, kz, p):
     if not (v and n and e and kz and str(p).strip().isdigit()):
         return None, None
     for i, m in mitglieder(d).items():
-        if (m.get("sparte") == str(kz).upper() and str(m.get("parzelle")) == str(int(p)) and name_norm(m.get("vorname")) == v
-                and name_norm(m.get("nachname")) == n and name_norm(m.get("email")) == e):
-            return i, m
+        if m.get("sparte") != str(kz).upper() or str(m.get("parzelle")) != str(int(p)):
+            continue
+        for pe in personen(m):                       # Mitglied oder eine weitere Person der Parzelle
+            if name_norm(pe.get("vorname")) == v and name_norm(pe.get("nachname")) == n and name_norm(pe.get("email")) == e:
+                return i, person_sicht(m, pe)
     return None, None
 
 
@@ -150,7 +152,7 @@ def akt_portal_einstellungen(d, b=None, ich=""):
                 e[k] = bool(b[k]) if isinstance(s, bool) else text_einzeilig(b[k], 1000 if k == "text" else 120)
         d["portal"] = e
         speichere(d)
-        journal(f"Pächter-Seite {'eingeschaltet' if e['aktiv'] else 'ausgeschaltet'} durch {ich}")
+        journal(f"Kontakt-Seite {'eingeschaltet' if e['aktiv'] else 'ausgeschaltet'} durch {ich}")
     return {"einstellungen": portal_einstellungen(d), "log": ["✔ Gespeichert."] if b is not None else []}
 
 
@@ -163,7 +165,7 @@ def portal_anfrage(pfad, b, quelle):
     d = lade()
     e = portal_einstellungen(d)
     if not e["aktiv"]:
-        return 404, {"fehler": "Die Pächter-Seite ist nicht eingeschaltet."}
+        return 404, {"fehler": "Die Kontakt-Seite ist nicht eingeschaltet."}
     try:
         if pfad == "/portal/info":
             return 200, portal_info(d)
@@ -193,7 +195,7 @@ def portal_anfrage(pfad, b, quelle):
                 mid, m = mitglied_passt(d, vorname, nachname, email, kz, p)
                 if not mid:
                     _fehlversuch(kz, p, quelle)
-                    LOG.info("Pächter-Seite: Anfrage %s-%s abgelehnt – Angaben passen zu keinem Mitglied", kz, p)
+                    LOG.info("Kontakt-Seite: Anfrage %s-%s abgelehnt – Angaben passen zu keinem Mitglied", kz, p)
                     raise Fehler("Die Angaben passen nicht zu unseren Mitgliedsdaten. Bitte Vorname, Nachname, E-Mail-Adresse, Sparte und Parzelle prüfen"
                                  + (f" – oder wenden Sie sich an: {ds['kontakt']}" if ds["kontakt"] else " oder den Vorstand kontaktieren") + ".")
             roh = {k: b.get(k) for k in ("betreff", "text", "kategorie", "telefon") if b.get(k) not in (None, "")}
@@ -212,7 +214,7 @@ def portal_anfrage(pfad, b, quelle):
                     roh["text"] = f"[{KONTAKT_ARTEN[art]}]\n" + roh["text"]
             with SCHREIB_SPERRE:
                 d = lade()
-                tid, t = ticket_anlegen(d, roh, "Pächter-Seite", f"Pächter-Seite ({quelle})")
+                tid, t = ticket_anlegen(d, roh, "Kontakt-Seite", f"Kontakt-Seite ({quelle})")
                 k = t.setdefault("kontakt", {})
                 k.update(vorname=vorname, nachname=nachname, art=art, geprueft=bool(mid))
                 if mid:
@@ -224,7 +226,7 @@ def portal_anfrage(pfad, b, quelle):
                 try:
                     email_senden(d, t["kontakt"]["email"], f"[{t['nr']}] Ihre Anfrage: {t['betreff']}", None,
                                  f"<p>Hallo {html_mod.escape(vorname)} {html_mod.escape(nachname)},</p><p>vielen Dank – Ihre Anfrage ist bei uns eingegangen und hat die Nummer <b>{t['nr']}</b>. "
-                                 f"Wir melden uns so bald wie möglich.</p><p>Den Stand können Sie jederzeit auf der Pächter-Seite mit Ticket-Nummer, Name und E-Mail-Adresse abfragen.</p>")
+                                 f"Wir melden uns so bald wie möglich.</p><p>Den Stand können Sie jederzeit auf der Kontakt-Seite mit Ticket-Nummer, Name und E-Mail-Adresse abfragen.</p>", sparte=t.get("sparte") or None)
                 except Exception as f:
                     LOG.warning("Bestätigung zu %s nicht gesendet: %s", t["nr"], f)
             return 200, {"ok": True, "ticket": t["nr"], "text": ds["danke"].replace("{nr}", t["nr"])}
@@ -268,11 +270,11 @@ def portal_anfrage(pfad, b, quelle):
             _grenze("parzelle", f"{kz}-{p}")
             mid, m = mitglied_passt(d, b.get("vorname"), b.get("nachname"), em, kz, p)
             if not m:
-                LOG.info("Pächter-Seite: Zugangskarte %s-%s angefordert – Angaben passen nicht", kz, p)
+                LOG.info("Kontakt-Seite: Zugangskarte %s-%s angefordert – Angaben passen nicht", kz, p)
                 return 200, antwort
             z = next((z for z in lese_ppsk(kz) if str(z.get("Parzelle")) == p and z.get("Passwort")), None)
             if not z or not ((d.get("buchungen") or {}).get(kz) or {}).get(p):
-                LOG.info("Pächter-Seite: Zugangskarte %s-%s – kein Passwort oder keine Buchung", kz, p)
+                LOG.info("Kontakt-Seite: Zugangskarte %s-%s – kein Passwort oder keine Buchung", kz, p)
                 return 200, antwort
             zeile = {**z, "WLAN": wlan_ssid(d, kz)}
             name = _sparten_kz(d).get(kz, kz)
@@ -281,20 +283,20 @@ def portal_anfrage(pfad, b, quelle):
                          f"<p>Hallo {html_mod.escape(m.get('vorname') or '')},</p><p>anbei Ihre WLAN-Zugangskarte für Parzelle {p} ({html_mod.escape(name)}).</p>"
                          f"<p>WLAN: <b>{html_mod.escape(zeile['WLAN'])}</b><br>Den QR-Code auf der Karte mit der Handy-Kamera scannen – das Handy verbindet sich automatisch.</p>"
                          "<p>Bitte vertraulich behandeln. Haben Sie die Karte nicht angefordert, melden Sie sich bitte bei uns.</p>",
-                         anhaenge=[(f"Zugangskarte_Parzelle_{p}.pdf", karte, "application/pdf")])
-            journal(f"Pächter-Seite: Zugangskarte {kz} Parzelle {p} an hinterlegte E-Mail gesendet")
+                         anhaenge=[(f"Zugangskarte_Parzelle_{p}.pdf", karte, "application/pdf")], sparte=kz)
+            journal(f"Kontakt-Seite: Zugangskarte {kz} Parzelle {p} an hinterlegte E-Mail gesendet")
             return 200, antwort
         return 404, {"fehler": "Diese Funktion ist nicht eingeschaltet."}
     except Fehler as f:
         return 400, {"fehler": str(f)}
     except Exception:
         ref = secrets.token_hex(3)
-        LOG.error("Pächter-Seite Fehler %s:\n%s", ref, traceback.format_exc())
+        LOG.error("Kontakt-Seite Fehler %s:\n%s", ref, traceback.format_exc())
         return 500, {"fehler": f"Es ist ein Fehler aufgetreten (Nr. {ref}). Bitte später erneut versuchen."}
 
 
 PORTAL_HTML = r"""<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Service für Pächter</title><meta name="robots" content="noindex"><link rel="icon" href="/favicon.png">
+<title>Kontakt</title><meta name="robots" content="noindex"><link rel="icon" href="/favicon.png">
 <style>:root{--m:#5d6b75;--l:#d9e0d6;__VARS__}
 __DUNKEL__
 *{box-sizing:border-box}body{margin:0;font-family:var(--schrift);background:var(--bg);color:var(--t)}
@@ -336,7 +338,12 @@ body.mitbild footer{color:#eee}</style></head>
 <label for="z_email" class="pflicht">Ihre hinterlegte E-Mail-Adresse</label><input id="z_email" type="email" autocomplete="email">
 <button class="los" onclick="senden('zugang')">Zugangskarte senden</button><div class="msg" id="m_zugang"></div></section></main>
 <footer>__FUSS__</footer>
-<script>const $=i=>document.getElementById(i),esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));let INFO=null;
+<script>document.addEventListener("change",e=>{const s=e.target;if(!s||s.tagName!=="SELECT"||!/_sparte$/.test(s.id)||!INFO)return;   // Vereinslogo der gewählten Sparte im Kopf
+ const sp=(INFO.sparten||[]).find(x=>x.kz==s.value),mk=document.querySelector("header .mk");let im=document.getElementById("sp_logo");
+ if(sp&&sp.logo&&mk){if(!im){im=document.createElement("img");im.id="sp_logo";im.alt="";im.style.cssText="height:42px;width:auto;margin:0 8px";mk.insertBefore(im,mk.querySelector("b"))}im.src=sp.logo;im.title=sp.name}else if(im)im.remove()});
+document.addEventListener("keydown",e=>{if(e.key!=="Enter"||e.isComposing)return;const el=e.target;if(!el||el.tagName!=="INPUT"||["checkbox","radio"].includes(el.type))return;
+ const sec=el.closest("section");const b=sec&&sec.querySelector("button.los");if(b&&!b.disabled){e.preventDefault();b.click()}});
+const $=i=>document.getElementById(i),esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));let INFO=null;
 function zeige(id){document.querySelectorAll("section").forEach(s=>s.classList.toggle("aktiv",s.id=="s_"+id));document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("aktiv",b.dataset.id==id))}
 function art(){const r=document.querySelector("input[name=t_art]:checked");return r?r.value:"mitglied"}
 function artGeaendert(){const m=art()=="mitglied";$("l_sparte").className=m?"pflicht":"";$("l_parzelle").className=m?"pflicht":"";

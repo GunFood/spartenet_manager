@@ -4,7 +4,7 @@ Inhalt einer Sicherung (ZIP): meta.json, daten.json (alle Einstellungen, Planung
 journal.txt, register.txt und dateien/ (Passwörter je Parzelle, WLAN-/Tarif-Sicherungen, Kartenlogo, Unterlagen).
 Verschlüsselt: AES-256-GCM, Schlüssel per PBKDF2-SHA256 (600 000 Runden) aus dem Passwort – Paket „cryptography“.
 """
-from .unterlagen import *  # noqa: F401,F403 – alle Namen der vorherigen Module
+from .logoerzeuger import *  # noqa: F401,F403 – alle Namen der vorherigen Module
 
 SICHERUNG_KOPF = b"SPARTENET-SICHERUNG-1\n"
 SICHERUNG_DIR = os.path.join(HIER, "datensicherungen")

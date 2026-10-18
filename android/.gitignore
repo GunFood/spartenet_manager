@@ -1,6 +1,7 @@
 .gradle/
 build/
-/app/build/
+/manager/build/
+/mitglied/build/
 local.properties
 .idea/
 *.iml

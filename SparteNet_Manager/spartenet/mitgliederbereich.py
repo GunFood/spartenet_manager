@@ -14,11 +14,15 @@ POST /mein/zahlung-webhook (HMAC-SHA256-Signatur mit dem gemeinsamen Geheimnis) 
 from .app import *  # noqa: F401,F403 – alle Namen der vorherigen Module
 import urllib.request as _ur
 
-MB_STANDARD = {"aktiv": False, "tarifwechsel": True, "neubuchung": True, "verlaengern": True, "geraete": True, "modus": "anfrage",
-               "link_api": "", "checkout_vorlage": "", "hinweis": "", "minuten": 30, "adresse": ""}
+MB_STANDARD = {"aktiv": False, "tarifwechsel": True, "downgrade": True, "neubuchung": True, "verlaengern": True, "geraete": True, "modus": "anfrage",
+               "link_api": "", "checkout_vorlage": "", "hinweis": "", "minuten": 30, "adresse": "",
+               "titel": "Mitgliederbereich", "text_anmeldung": "", "zeige_rechnungen": True, "zeige_anfragen": True, "neue_anfrage": True,
+               "zugangskarte": True, "tarife": [], "stoerung_zeigen": True, "stoerung_farbe": "#b42318",
+               "stoerung_meldung": "Achtung: {geraet} ist aktuell ausgefallen (seit {seit}). Ein Störungsticket {ticket} ist erstellt und an den Verein verschickt – wir kümmern uns darum.",
+               "stoerung_text": ""}
 _MB_SITZ, _MB_CODES = {}, {}
 _MB_LOCK = threading.Lock()
-_GRENZEN.update({"mb_code": (5, 3600), "mb_code_mail": (3, 900), "mb_anmelden": (10, 900), "mb_aktion": (30, 3600)})
+_GRENZEN.update({"mb_logo": (60, 3600), "mb_code": (5, 3600), "mb_code_mail": (3, 900), "mb_anmelden": (10, 900), "mb_aktion": (30, 3600)})
 _GERAETE_CACHE = {"zeit": 0, "liste": [], "fehler": ""}
 AUSLOESER["zahlung_mitglied"] = "Mitglied hat im Mitgliederbereich bezahlt (Tarif/Laufzeit gebucht)"
 
@@ -28,7 +32,12 @@ def mb_einstellungen(d):
     e = dict(MB_STANDARD)
     for k, s in MB_STANDARD.items():
         if k in roh:
-            e[k] = bool(roh[k]) if isinstance(s, bool) else (int(roh[k]) if isinstance(s, int) else str(roh[k]))
+            if isinstance(s, list):
+                e[k] = [str(x) for x in roh[k]] if isinstance(roh[k], list) else []
+            else:
+                e[k] = bool(roh[k]) if isinstance(s, bool) else (int(roh[k]) if isinstance(s, int) else str(roh[k]))
+    g = seiten_design(d, "mein")                  # Titel und Texte stehen unter „Oberfläche gestalten → Mitgliederbereich“
+    e["titel"], e["text_anmeldung"], e["hinweis"] = g.get("titel") or "Mitgliederbereich", g.get("text_anmeldung", ""), g.get("hinweis", "")
     e["geheim_gesetzt"] = bool(roh.get("geheim"))
     return e
 
@@ -42,14 +51,30 @@ def akt_mitgliederbereich(d, b=None, ich=""):
     roh = d.get("mitgliederbereich") if isinstance(d.get("mitgliederbereich"), dict) else {}
     extra = {}
     if b is not None:
+        texte = {k: b[k] for k in ("titel", "text_anmeldung", "hinweis") if k in b}
+        if texte:                                    # Titel und Texte gehören zur Gestaltung des Mitgliederbereichs
+            d.setdefault("seiten_design", {})["mein"] = seite_pruefen(d, texte, MEIN_DESIGN_STANDARD, seiten_design(d, "mein"))
         for k, s in MB_STANDARD.items():
-            if k not in b:
+            if k not in b or k in texte:
                 continue
             v = b[k]
             if isinstance(s, bool):
                 roh[k] = bool(v)
             elif isinstance(s, int):
                 roh[k] = max(5, min(240, int(v or 30)))
+            elif k == "tarife":
+                namen = {t["name"] for t in tarife_pruefen(d["tarife"])}
+                if not isinstance(v, list) or any(x not in namen for x in v):
+                    raise Fehler("Buchbare Tarife: nur vorhandene Tarife auswählen.")
+                roh[k] = [str(x) for x in v]
+            elif k == "titel":
+                roh[k] = text_einzeilig(v or "", 80) or "Mitgliederbereich"
+            elif k == "stoerung_farbe":
+                if not re.fullmatch(r"#[0-9a-fA-F]{6}", str(v or "")):
+                    raise Fehler("Farbe der Störungsmeldung: Form #RRGGBB.")
+                roh[k] = str(v).lower()
+            elif k in ("stoerung_meldung", "stoerung_text"):
+                roh[k] = str(v or "").replace("\r", "").strip()[:800]
             elif k == "modus":
                 if v not in ("anfrage", "bezahldienst"):
                     raise Fehler("Modus: anfrage oder bezahldienst.")
@@ -71,6 +96,9 @@ def akt_mitgliederbereich(d, b=None, ich=""):
                 roh[k] = v
             else:
                 roh[k] = text_einzeilig(v or "", 600)
+        if b.get("apps_abmelden"):
+            d["mitglied_apps"] = {}
+            journal(f"Alle Mitglieder-Apps abgemeldet durch {ich}")
         if b.get("geheim_neu"):
             roh["geheim"] = secrets.token_urlsafe(32)
             extra["geheim"] = roh["geheim"]
@@ -80,7 +108,8 @@ def akt_mitgliederbereich(d, b=None, ich=""):
         speichere(d)
         journal(f"Mitgliederbereich-Einstellungen gespeichert durch {ich}" + (" (Webhook-Geheimnis neu)" if extra else ""))
     auf = sorted(zahlungsauftraege(d).items(), key=lambda x: x[1].get("erstellt", ""), reverse=True)[:100]
-    return {"einstellungen": mb_einstellungen(d), "auftraege": [{"referenz": r, **{k: a.get(k) for k in ("sparte", "parzelle", "tarif", "art", "betrag", "status", "erstellt", "bezahlt_am", "name")}}
+    return {"einstellungen": mb_einstellungen(d), "alle_tarife": [{"name": t["name"], "preis": t.get("preis", 0)} for t in sorted(tarife_pruefen(d["tarife"]), key=tarif_rang)],
+            "antraege": len(tarif_antraege(d)), "versand": mb_versand_bereit(d), "apps": len([x for x in mitglied_apps(d).values() if x.get("ablauf", 0) > time.time()]), "auftraege": [{"referenz": r, **{k: a.get(k) for k in ("sparte", "parzelle", "tarif", "art", "betrag", "status", "erstellt", "bezahlt_am", "name")}}
                                                                 for r, a in auf],
             **extra, "log": (["✔ Gespeichert."] + (["Neues Webhook-Geheimnis – jetzt kopieren, es wird nur einmal angezeigt."] if extra else [])) if b is not None else []}
 
@@ -91,15 +120,39 @@ def _mb_hash(x):
 
 
 def mb_mitglieder_von(d, email):
+    """Parzellen, auf die diese E-Mail-Adresse Zugriff hat – als Mitglied oder als weitere Person der Parzelle.
+    Ergebnis: {Mitglied-Id: Mitglied aus Sicht der Person (Name/E-Mail/Telefon der Person)}"""
     e = name_norm(email)
-    return {i: m for i, m in mitglieder(d).items() if e and name_norm(m.get("email")) == e}
+    aus = {}
+    if not e:
+        return aus
+    for i, m in mitglieder(d).items():
+        pe = next((x for x in personen(m) if x.get("email") and name_norm(x["email"]) == e), None)
+        if pe:
+            aus[i] = person_sicht(m, pe)
+    return aus
+
+
+def _parzellen_ids(d, kz, p):
+    """alle Mitglieder-Einträge derselben Parzelle (falls mehrere einzeln angelegt sind)"""
+    return {i for i, m in mitglieder(d).items() if kz and m.get("sparte") == kz and str(m.get("parzelle") or "") == str(p)}
+
+
+def mb_versand_bereit(d):
+    """Einmalcodes gehen über den E-Mail-Versand des Managers (Automationen → E-Mail-Versand)"""
+    s = smtp_einstellungen(d)
+    return bool(s["host"] and s["absender"])
 
 
 def mb_code_anfordern(d, b, quelle):
+    """Einmalcode (6 Ziffern, 10 Minuten, nur einmal gültig) per E-Mail über den E-Mail-Versand des Managers"""
     email = str(b.get("email") or "").strip()
-    antwort = {"ok": True, "text": "Wenn die Adresse bei uns hinterlegt ist, kommt jetzt ein Anmeldecode per E-Mail (10 Minuten gültig)."}
+    antwort = {"ok": True, "text": "Wenn die Adresse bei uns hinterlegt ist, kommt jetzt ein Einmalcode per E-Mail (10 Minuten gültig)."}
     if not re.fullmatch(r"[^@\s,;<>]{1,64}@[A-Za-z0-9.-]{1,190}\.[A-Za-z]{2,}", email):
         raise Fehler("Bitte eine gültige E-Mail-Adresse eingeben.")
+    if not mb_versand_bereit(d):                  # für alle Adressen gleich – verrät nicht, ob es die Adresse gibt
+        LOG.warning("Mitgliederbereich: Einmalcode angefordert, aber der E-Mail-Versand ist nicht eingerichtet")
+        raise Fehler("Die Anmeldung ist gerade nicht möglich (E-Mail-Versand des Vereins nicht eingerichtet) – bitte beim Verein melden.")
     _grenze("mb_code", quelle)
     _grenze("mb_code_mail", name_norm(email))
     treffer = mb_mitglieder_von(d, email)
@@ -107,13 +160,44 @@ def mb_code_anfordern(d, b, quelle):
         LOG.info("Mitgliederbereich: Code für unbekannte Adresse angefordert")
         return antwort
     email = next(iter(treffer.values()))["email"]          # an die hinterlegte Adresse, nicht an die eingetippte
+    m = next(iter(treffer.values()))
     code = f"{secrets.randbelow(1000000):06d}"
     with _MB_LOCK:
         _MB_CODES[name_norm(email)] = {"hash": _mb_hash(code), "bis": time.time() + 600, "versuche": 0}
-    email_senden(d, email, f"Ihr Anmeldecode: {code}", None,
-                 f"<p>Ihr Anmeldecode für den Mitgliederbereich lautet:</p><p style='font-size:28px;letter-spacing:6px;font-weight:bold'>{code}</p>"
-                 "<p>Er gilt 10 Minuten. Haben Sie keinen Code angefordert, können Sie diese E-Mail ignorieren.</p>")
+    wo = "in der App „SparteNet Mitglied“" if b.get("app") else "im " + mb_einstellungen(d)["titel"]
+    try:
+        email_senden(d, email, f"Ihr Einmalcode: {code}", None,
+                     f"<p>Hallo {html_mod.escape(m.get('vorname') or '')},</p><p>Ihr Einmalcode zum Anmelden {html_mod.escape(wo)} lautet:</p>"
+                     f"<p style='font-size:28px;letter-spacing:6px;font-weight:bold'>{code}</p>"
+                     "<p>Er gilt 10 Minuten und nur für eine Anmeldung. Geben Sie ihn nicht weiter – der Verein fragt nie danach.<br>"
+                     "Haben Sie keinen Code angefordert, können Sie diese E-Mail ignorieren.</p>", sparte=m.get("sparte") or None)
+    except Fehler as f:
+        with _MB_LOCK:
+            _MB_CODES.pop(name_norm(email), None)
+        LOG.warning("Mitgliederbereich: Einmalcode nicht gesendet: %s", f)
+        journal("Mitgliederbereich: Einmalcode konnte nicht gesendet werden (E-Mail-Versand prüfen)")
+        raise Fehler("Der Code konnte gerade nicht gesendet werden – bitte später erneut versuchen oder beim Verein melden.")
     return antwort
+
+
+def mb_logo_zur_email(d, email, quelle):
+    """Vereinslogo (Spartenlogo) zur eingegebenen E-Mail-Adresse – damit das Mitglied gleich „seinen“ Verein sieht"""
+    _grenze("mb_logo", quelle)
+    kz = sparte_aus_email(d, email)
+    e = mb_einstellungen(d)
+    st = {"stoerungen": mb_stoerungen(d, e, kz) if kz else mb_stoerungen(d, e, None, nur_alle=True),
+          "stoerung_text": e["stoerung_text"], "stoerung_farbe": e["stoerung_farbe"]}      # Störungen passend zur Sparte
+    if not seiten_design(d, "mein").get("vereinslogo", True):
+        return {"logo": "", **st}
+    i = sparten_logo_id(d, kz) if kz else ""
+    return ({"logo": f"/spartenlogo/{urllib.parse.quote(kz)}?v={i[:6]}", "name": _sparten_kz(d).get(kz, kz)} if i else {"logo": ""}) | st
+
+
+def mb_stoerung_oeffentlich(d, quelle):
+    """Anmeldeseite ohne E-Mail: nur Störungen, die alle Sparten betreffen"""
+    _grenze("mb_logo", quelle)
+    e = mb_einstellungen(d)
+    return {"stoerungen": mb_stoerungen(d, e, None, nur_alle=True), "stoerung_text": e["stoerung_text"], "stoerung_farbe": e["stoerung_farbe"]}
 
 
 def mb_anmelden(d, b, quelle):
@@ -155,6 +239,67 @@ def mb_sitzung(d, t):
 def mb_abmelden(t):
     with _MB_LOCK:
         _MB_SITZ.pop(_mb_hash(t or ""), None)
+
+
+# ---- Mitglieder-App: dauerhafter Schlüssel „snm_<id>_<geheim>“ (nur als Prüfsumme gespeichert) -----------------------
+MB_APP_TAGE = max(1, int(os.environ.get("SPARTENET_MITGLIED_APP_TAGE", "180") or 180))
+_MBA_RE = re.compile(r"^snm_([0-9a-f]{10})_([A-Za-z0-9_-]{30,80})$")
+
+
+def mitglied_apps(d):
+    a = d.get("mitglied_apps")
+    if not isinstance(a, dict):
+        a = {}
+        d["mitglied_apps"] = a
+    return a
+
+
+def mb_app_anlegen(d, email, geraet):
+    """nach erfolgreicher Code-Anmeldung: Schlüssel für die Mitglieder-App (höchstens 10 Geräte je E-Mail-Adresse)"""
+    e = name_norm(email)
+    a = mitglied_apps(d)
+    jetzt = time.time()
+    for k in [k for k, x in a.items() if x.get("ablauf", 0) < jetzt]:
+        del a[k]
+    eigene = sorted((k for k, x in a.items() if x.get("email") == e), key=lambda k: a[k].get("angelegt", ""))
+    for k in eigene[:-9]:
+        del a[k]                                     # ältestes Gerät fällt raus
+    i, geheim = secrets.token_hex(5), secrets.token_urlsafe(32)
+    a[i] = {"email": e, "hash": _mb_hash("app|" + geheim), "geraet": text_einzeilig(geraet or "App", 60) or "App",
+            "angelegt": time.strftime("%Y-%m-%d %H:%M"), "zuletzt": "", "ablauf": jetzt + MB_APP_TAGE * 86400}
+    speichere(d)
+    journal("Mitgliederbereich: Mitglieder-App angemeldet")
+    return f"snm_{i}_{geheim}"
+
+
+def mb_app_pruefen(d, kopf):
+    """E-Mail (normalisiert) für einen gültigen Mitglieder-App-Schlüssel, sonst None"""
+    roh = str(kopf or "")
+    if not roh.lower().startswith("bearer snm_"):
+        return None
+    m = _MBA_RE.match(roh[7:].strip())
+    if not m:
+        return None
+    x = mitglied_apps(d).get(m.group(1))
+    if not x or x.get("ablauf", 0) < time.time() or not hmac.compare_digest(x.get("hash", ""), _mb_hash("app|" + m.group(2))):
+        return None
+    if not mb_mitglieder_von(d, x["email"]):
+        return None                                  # Mitglied gelöscht oder E-Mail geändert
+    jetzt = time.strftime("%Y-%m-%d %H:%M")
+    if x.get("zuletzt", "")[:15] != jetzt[:15]:
+        with SCHREIB_SPERRE:
+            d2 = lade()
+            y = mitglied_apps(d2).get(m.group(1))
+            if y:
+                y["zuletzt"] = jetzt
+                speichere(d2)
+    return x["email"]
+
+
+def mb_app_entfernen(d, kopf):
+    m = _MBA_RE.match(str(kopf or "")[7:].strip())
+    if m and mitglied_apps(d).pop(m.group(1), None):
+        speichere(d)
 
 
 # ---- Daten für das Mitglied ------------------------------------------------------------------------------------------
@@ -205,9 +350,55 @@ def _tarif_info(t):
             "laufzeit": laufzeit_text(t.get("laufzeit", 0), t.get("laufzeit_einheit", "tage"))}
 
 
+def tarif_rang(t):
+    """Reihenfolge für Up-/Downgrade: Preis, dann Download, dann Upload"""
+    return (float(t.get("preis") or 0), float(t.get("down") or 0), float(t.get("up") or 0)) if t else (0, 0, 0)
+
+
+def mb_buchbar(d):
+    """im Mitgliederbereich buchbare Tarife (Auswahl in den Einstellungen; leer = alle)"""
+    wahl = mb_einstellungen(d)["tarife"]
+    return [t for t in tarife_pruefen(d["tarife"]) if not wahl or t["name"] in wahl]
+
+
+def mb_tickets(d, mid, m):
+    """nur die Tickets dieser Parzelle: fest zugeordnet (an ein Mitglied der Parzelle) – oder ohne Zuordnung mit passender E-Mail und Parzelle"""
+    kz, p = m.get("sparte", ""), str(m.get("parzelle") or "")
+    ids = _parzellen_ids(d, kz, p) | {mid}
+    aus, gesehen = [], set()
+    for x in ids:
+        for i, t in mitglied_tickets(d, x):
+            k = t.get("kontakt") or {}
+            if i not in gesehen and (k.get("mitglied") in ids or (not k.get("mitglied") and str(t.get("sparte") or "") == kz and str(t.get("parzelle") or "") == p)):
+                gesehen.add(i)
+                aus.append((i, t))
+    aus.sort(key=lambda x: x[1].get("erstellt", ""), reverse=True)
+    return aus
+
+
+def tarif_antraege(d, kz=None, p=None, offen=True):
+    """[(ticket_id, ticket)] mit Tarif-Antrag (Downgrade, oder Buchung/Verlängerung im Modus „Anfrage“)"""
+    return [(i, t) for i, t in tickets_daten(d)["liste"].items() if isinstance(t.get("antrag"), dict)
+            and (kz is None or t["antrag"].get("sparte") == kz) and (p is None or str(t["antrag"].get("parzelle")) == str(p))
+            and (not offen or t["antrag"].get("status") == "offen")]
+
+
+def mb_stoerungen(d, e, kz, nur_alle=False):
+    """Meldungen für die Störungsanzeige im Mitgliederbereich (nur_alle: nur Geräte ohne Spartenzuordnung – für die Anmeldeseite)"""
+    if not e["stoerung_zeigen"]:
+        return []
+    aus = []
+    for s in aktuelle_stoerungen(d, kz, nur_alle):
+        t = (e["stoerung_meldung"] or MB_STANDARD["stoerung_meldung"])
+        for k, v in (("geraet", s["geraet"]), ("modell", s["modell"]), ("seit", s["seit"]), ("ticket", s["ticket"])):
+            t = t.replace("{" + k + "}", v)
+        aus.append({**s, "text": re.sub(r"\s{2,}", " ", t.replace("()", "")).strip()})
+    return aus
+
+
 def mb_daten(d, email):
     e = mb_einstellungen(d)
-    tarife = [_tarif_info(t) for t in tarife_pruefen(d["tarife"])]
+    tarife = [{**_tarif_info(t), "rang": list(tarif_rang(t))} for t in mb_buchbar(d)]
     parz = []
     for mid, m in sorted(mb_mitglieder_von(d, email).items(), key=lambda x: (x[1].get("sparte", ""), str(x[1].get("parzelle", "")))):
         kz, p = m.get("sparte", ""), str(m.get("parzelle") or "")
@@ -216,20 +407,29 @@ def mb_daten(d, email):
         gesp = zugang_gesperrt(d).get(f"{kz}-{p}") if kz and p.isdigit() else None
         rechn = [{"id": i, "nr": x.get("nr"), "datum": x.get("datum"), "faellig": x.get("faellig"), "brutto": x.get("brutto"), "bezahlt": x.get("bezahlt"),
                   "status": R_STATUS.get(x.get("status"), x.get("status"))} for i, x in rechnungen_daten(d)["liste"].items()
-                 if x.get("mitglied") == mid and x.get("status") != "storniert"]
+                 if x.get("status") != "storniert" and (x.get("mitglied") == mid or (kz and x.get("sparte") == kz and str(x.get("parzelle") or "") == p))]
         rechn.sort(key=lambda x: x.get("datum") or "", reverse=True)
+        akt_t = next((t for t in tarife_pruefen(d["tarife"]) if t["name"] == tarif), None)
+        antr = [{"nr": t["nr"], "art": t["antrag"]["art"], "tarif": t["antrag"]["tarif"], "erstellt": t.get("erstellt", "")}
+                for _i, t in tarif_antraege(d, kz, p) if kz and p]
         tk = [{"nr": t.get("nr"), "betreff": t.get("betreff", ""), "status": T_STATUS.get(t.get("status"), ""), "erstellt": t.get("erstellt", ""),
-               "loesung": t.get("loesung", "")} for _i, t in mitglied_tickets(d, mid)][:20]
+               "loesung": t.get("loesung", "")} for _i, t in mb_tickets(d, mid, m)][:20] if e["zeige_anfragen"] else []
         offen_auftrag = next(({"referenz": r, "tarif": a.get("tarif"), "art": a.get("art"), "betrag": a.get("betrag")} for r, a in zahlungsauftraege(d).items()
                               if a.get("mitglied") == mid and a.get("status") == "offen" and a.get("erstellt", "") > time.strftime("%Y-%m-%d %H:%M", time.localtime(time.time() - 86400))), None)
-        parz.append({"id": mid, "sparte": kz, "sparte_name": _sparten_kz(d).get(kz, kz), "parzelle": p, "name": f"{m.get('vorname', '')} {m.get('nachname', '')}".strip(),
+        sl = sparten_logo_id(d, kz)
+        parz.append({"id": mid, "sparte": kz, "sparte_name": _sparten_kz(d).get(kz, kz), "parzelle": p,
+                     "sparte_logo": f"/spartenlogo/{urllib.parse.quote(kz)}?v={sl[:6]}" if sl else "", "name": f"{m.get('vorname', '')} {m.get('nachname', '')}".strip(),
                      "tarif": tarif, "laufzeit": ({"start": time.strftime("%d.%m.%Y %H:%M", time.localtime(lz["start"])), "ende": time.strftime("%d.%m.%Y %H:%M", time.localtime(lz["ende"])),
                                                    "aktiv": lz.get("status") == "aktiv", "rest_tage": max(0, int((lz["ende"] - time.time()) // 86400))} if lz else None),
                      "gesperrt": bool(gesp), "rechnungen": rechn, "offen": round(sum(float(x["brutto"] or 0) - float(x["bezahlt"] or 0) for x in rechn), 2),
-                     "tickets": tk, "auftrag": offen_auftrag})
+                     "tickets": tk, "auftrag": offen_auftrag, "stoerungen": mb_stoerungen(d, e, kz), "antraege": antr, "rang": list(tarif_rang(akt_t)) if akt_t else None,
+                     **({"tarif_laufzeit": laufzeit_text(akt_t.get("laufzeit", 0), akt_t.get("laufzeit_einheit", "tage")) if akt_t.get("laufzeit") else "unbegrenzt",
+                         "tarif_preis": akt_t.get("preis", 0), "tarif_down": akt_t["down"], "tarif_up": akt_t["up"], "tarif_geraete": akt_t.get("geraete", 0)} if akt_t else {})})
     return {"mitglied": parz[0]["name"] if parz else "", "parzellen": parz, "tarife": tarife,
-            "erlaubt": {k: e[k] for k in ("tarifwechsel", "neubuchung", "verlaengern", "geraete")}, "modus": e["modus"], "hinweis": e["hinweis"],
-            "kategorien": list(ticket_kategorien(d))}
+            "erlaubt": {k: e[k] for k in ("tarifwechsel", "downgrade", "neubuchung", "verlaengern", "geraete", "zeige_rechnungen", "zeige_anfragen", "neue_anfrage", "zugangskarte")},
+            "modus": e["modus"], "hinweis": e["hinweis"], "titel": e["titel"], "kategorien": list(ticket_kategorien(d)),
+            "stoerung_text": e["stoerung_text"] if e["stoerung_zeigen"] else "", "stoerung_farbe": e["stoerung_farbe"],
+            "logo_verein": "/seitenbild/portal/logo" if seitenbild(d, "portal", "logo") else ""}
 
 
 def _mb_parzelle(d, email, mid):
@@ -268,33 +468,67 @@ def _link_erzeugen(d, e, ref, a, basis):
     return re.sub(r"\{(\w+)\}", lambda mm: urllib.parse.quote(werte.get(mm.group(1), mm.group(0)), safe=""), e["checkout_vorlage"])
 
 
+def _mb_ticket(d, mid, m, kz, p, betreff, text, status="neu", antrag=None):
+    tid, tk = ticket_anlegen(d, {"betreff": betreff, "text": text, "status": status,
+                                 "kategorie": "Buchung / Tarif" if "Buchung / Tarif" in ticket_kategorien(d) else "Sonstiges",
+                                 "sparte": kz, "parzelle": p, "name": f"{m.get('vorname', '')} {m.get('nachname', '')}".strip(), "email": m.get("email", "")},
+                             "Mitgliederbereich", "Mitgliederbereich")
+    tk.setdefault("kontakt", {}).update(mitglied=mid, art="mitglied", geprueft=True, vorname=m.get("vorname", ""), nachname=m.get("nachname", ""))
+    if antrag:
+        tk["antrag"] = {**antrag, "status": "offen", "mitglied": mid}
+    speichere(d)
+    return tid, tk
+
+
 def mb_buchen(d, email, b, basis):
-    """Tarif wechseln, neu buchen oder Laufzeit verlängern – als Anfrage oder über den Bezahldienst"""
+    """Tarif wechseln, neu buchen oder Laufzeit verlängern.
+    Upgrade (teurer/schneller): jederzeit – sofort gebucht bzw. über den Bezahldienst. Downgrade: nur als Antrag, der im Ticketsystem
+    freigegeben werden muss. Neu buchen/Verlängern: im Modus „Anfrage“ als Antrag zur Freigabe, sonst über den Bezahldienst."""
     e = mb_einstellungen(d)
     mid, m, kz, p = _mb_parzelle(d, email, b.get("id"))
     art = b.get("art")
-    aktuell = ((d.get("buchungen") or {}).get(kz) or {}).get(p, "")
-    tarif = str(b.get("tarif") or (aktuell if art == "verlaengern" else ""))
-    t = next((x for x in tarife_pruefen(d["tarife"]) if x["name"] == tarif), None)
-    if not t:
-        raise Fehler("Bitte einen Tarif wählen.")
-    if art == "neu" and (aktuell or not e["neubuchung"]):
-        raise Fehler("Neu buchen ist hier nicht möglich." if not e["neubuchung"] else "Die Parzelle hat schon einen Tarif – bitte „Tarif wechseln“.")
-    if art == "wechsel" and (not aktuell or not e["tarifwechsel"] or tarif == aktuell):
-        raise Fehler("Tarifwechsel ist hier nicht möglich." if not e["tarifwechsel"] else "Bitte einen anderen Tarif wählen." if aktuell else "Noch kein Tarif gebucht – bitte „Neu buchen“.")
-    if art == "verlaengern" and (not e["verlaengern"] or not aktuell or not t.get("laufzeit")):
-        raise Fehler("Verlängern ist für diesen Tarif nicht möglich.")
     if art not in ("neu", "wechsel", "verlaengern"):
         raise Fehler("Unbekannte Aktion.")
+    aktuell = ((d.get("buchungen") or {}).get(kz) or {}).get(p, "")
+    tarif = str(b.get("tarif") or (aktuell if art == "verlaengern" else ""))
+    alle = {x["name"]: x for x in tarife_pruefen(d["tarife"])}
+    t = alle.get(tarif)
+    if not t or (art != "verlaengern" and tarif not in {x["name"] for x in mb_buchbar(d)}):
+        raise Fehler("Bitte einen der angebotenen Tarife wählen.")
+    if art == "neu" and (aktuell or not e["neubuchung"]):
+        raise Fehler("Neu buchen ist hier nicht möglich." if not e["neubuchung"] else "Die Parzelle hat schon einen Tarif – bitte „Tarif wechseln“.")
+    if art == "verlaengern" and (not e["verlaengern"] or not aktuell or tarif != aktuell or not t.get("laufzeit")):
+        raise Fehler("Verlängern ist für diesen Tarif nicht möglich.")
+    upgrade = art == "wechsel" and tarif_rang(t) > tarif_rang(alle.get(aktuell))
+    if art == "wechsel":
+        if not aktuell:
+            raise Fehler("Noch kein Tarif gebucht – bitte „Tarif buchen“.")
+        if tarif == aktuell:
+            raise Fehler("Bitte einen anderen Tarif wählen.")
+        if upgrade and not e["tarifwechsel"]:
+            raise Fehler("Ein Tarifwechsel ist hier nicht möglich – bitte beim Verein melden.")
+        if not upgrade and not e["downgrade"]:
+            raise Fehler("Ein Wechsel in einen kleineren Tarif ist hier nicht möglich – bitte beim Verein melden.")
+    offen = tarif_antraege(d, kz, p)
+    if offen and not upgrade:
+        raise Fehler(f"Für diese Parzelle liegt schon ein Antrag beim Verein ({offen[0][1]['nr']}) – bitte die Entscheidung abwarten.")
     name = f"{m.get('vorname', '')} {m.get('nachname', '')}".strip()
-    beschr = {"neu": f"Buchung {tarif}", "wechsel": f"Tarifwechsel {aktuell} → {tarif}", "verlaengern": f"Verlängerung {tarif}"}[art] + f" · {kz} Parzelle {p}"
+    beschr = {"neu": f"Buchung {tarif}", "wechsel": f"{'Upgrade' if upgrade else 'Downgrade'} {aktuell} → {tarif}", "verlaengern": f"Verlängerung {tarif}"}[art] + f" · {kz} Parzelle {p}"
+    preis = geld(float(t.get("preis") or 0))
+    antrag = {"art": art, "sparte": kz, "parzelle": int(p), "tarif": tarif, "tarif_alt": aktuell}
+    if art == "wechsel" and not upgrade:           # Downgrade: immer Freigabe im Ticketsystem
+        _tid, tk = _mb_ticket(d, mid, m, kz, p, f"Antrag: {beschr}", f"Antrag aus dem Mitgliederbereich: Wechsel von {aktuell} zu {tarif} ({preis}). "
+                              "Bitte im Ticket freigeben oder ablehnen.", antrag=antrag)
+        return {"ok": True, "text": f"Ihr Antrag {tk['nr']} auf Wechsel zu {tarif} ist beim Verein eingegangen. Ein Wechsel in einen kleineren Tarif muss freigegeben werden – Sie bekommen Bescheid."}
     if e["modus"] == "anfrage":
-        tid, tk = ticket_anlegen(d, {"betreff": beschr, "text": f"Wunsch aus dem Mitgliederbereich: {beschr} (Preis laut Tarif {geld(float(t.get('preis') or 0))}).",
-                                     "kategorie": "Buchung / Tarif" if "Buchung / Tarif" in ticket_kategorien(d) else "Sonstiges",
-                                     "sparte": kz, "parzelle": p, "name": name, "email": m.get("email", "")}, "Mitgliederbereich", "Mitgliederbereich")
-        tk.setdefault("kontakt", {}).update(mitglied=mid, art="mitglied", geprueft=True, vorname=m.get("vorname", ""), nachname=m.get("nachname", ""))
-        speichere(d)
-        return {"ok": True, "text": f"Danke! Ihr Wunsch ist als Anfrage {tk['nr']} beim Verein eingegangen. Sie bekommen Bescheid, sobald er umgesetzt ist."}
+        if upgrade:                                # Upgrade jederzeit: sofort buchen, Vorstand per Ticket informieren
+            akt_buchungen_speichern(d, kz, {p: tarif})
+            _tid, tk = _mb_ticket(d, mid, m, kz, p, beschr, f"Upgrade im Mitgliederbereich gebucht: {aktuell} → {tarif} ({preis}). Zur Info – bereits umgesetzt.", status="erledigt")
+            journal(f"Mitgliederbereich: {beschr} gebucht ({tk['nr']})")
+            _mb_mail(d, m, f"Tarif gewechselt: {tarif}", f"<p>Ihr Tarif für Parzelle {p} ist jetzt <b>{html_mod.escape(tarif)}</b> (vorher {html_mod.escape(aktuell)}).</p>")
+            return {"ok": True, "text": f"Erledigt – Ihr Tarif ist jetzt {tarif}. Die Änderung wird im WLAN vom Verein übernommen."}
+        _tid, tk = _mb_ticket(d, mid, m, kz, p, f"Antrag: {beschr}", f"Antrag aus dem Mitgliederbereich: {beschr} ({preis}). Bitte im Ticket freigeben oder ablehnen.", antrag=antrag)
+        return {"ok": True, "text": f"Danke! Ihr Antrag {tk['nr']} ist beim Verein eingegangen. Sie bekommen Bescheid, sobald er freigegeben ist."}
     ref = "SN-" + secrets.token_hex(5).upper()
     a = {"mitglied": mid, "sparte": kz, "parzelle": int(p), "tarif": tarif, "tarif_alt": aktuell, "art": art, "betrag": round(float(t.get("preis") or 0), 2),
          "email": m.get("email", ""), "name": name, "beschreibung": beschr, "status": "offen", "erstellt": time.strftime("%Y-%m-%d %H:%M")}
@@ -308,6 +542,50 @@ def mb_buchen(d, email, b, basis):
     speichere(d)
     journal(f"Zahlungsauftrag {ref} angelegt: {beschr}, {geld(a['betrag'])}")
     return {"ok": True, "url": url, "referenz": ref}
+
+
+def _mb_mail(d, m, betreff, inhalt):
+    if not m.get("email"):
+        return
+    try:
+        email_senden(d, m["email"], betreff, None, f"<p>Hallo {html_mod.escape(m.get('vorname') or '')},</p>{inhalt}", sparte=m.get("sparte") or None)
+    except Exception as x:
+        LOG.warning("Mitgliederbereich: E-Mail nicht gesendet: %s", x)
+
+
+def akt_tarif_antrag(d, b, ich, erlaubt=None):
+    """Tarif-Antrag aus dem Mitgliederbereich freigeben ({"id", "freigeben": true}) oder ablehnen ({"id", "freigeben": false, "grund"})"""
+    from .tickets import _holen as _ticket_holen
+    tid = str(b.get("id") or "")
+    t = _ticket_holen(d, tid, ich, erlaubt)
+    a = t.get("antrag") if isinstance(t.get("antrag"), dict) else None
+    if not a or a.get("status") != "offen":
+        raise Fehler("Kein offener Tarif-Antrag in diesem Ticket.")
+    kz, p, tarif = a["sparte"], str(a["parzelle"]), a["tarif"]
+    m = mitglieder(d).get(a.get("mitglied")) or {"email": (t.get("kontakt") or {}).get("email", ""), "vorname": (t.get("kontakt") or {}).get("vorname", "")}
+    if b.get("freigeben"):
+        aktuell = ((d.get("buchungen") or {}).get(kz) or {}).get(p, "")
+        if aktuell != (a.get("tarif_alt") or ""):
+            raise Fehler(f"Der Tarif der Parzelle hat sich inzwischen geändert (jetzt „{aktuell or 'keiner'}“) – bitte ablehnen und neu beantragen lassen.")
+        if a["art"] == "verlaengern":
+            _verlaengern(d, kz, p, 1, f"Antrag {t['nr']} ({ich})")
+        else:
+            akt_buchungen_speichern(d, kz, {p: tarif})
+        a.update(status="freigegeben", entschieden=time.strftime("%Y-%m-%d %H:%M"), von=ich)
+        loesung = f"Freigegeben durch {ich}: {t.get('betreff', '').replace('Antrag: ', '')} – gebucht."
+        _mb_mail(d, m, f"[{t['nr']}] Ihr Antrag ist freigegeben", f"<p>Ihr Antrag <b>{html_mod.escape(t['nr'])}</b> ({html_mod.escape(t.get('betreff', ''))}) ist freigegeben und gebucht.</p>")
+    else:
+        grund = str(b.get("grund") or "").strip()[:1000]
+        if not grund:
+            raise Fehler("Bitte einen Grund für die Ablehnung angeben – er geht an das Mitglied.")
+        a.update(status="abgelehnt", entschieden=time.strftime("%Y-%m-%d %H:%M"), von=ich, grund=grund)
+        loesung = f"Abgelehnt durch {ich}: {grund}"
+        _mb_mail(d, m, f"[{t['nr']}] Ihr Antrag wurde abgelehnt", f"<p>Ihr Antrag <b>{html_mod.escape(t['nr'])}</b> ({html_mod.escape(t.get('betreff', ''))}) wurde leider abgelehnt.</p>{text_zu_html(grund)}")
+    speichere(d)
+    journal(f"Tarif-Antrag {t['nr']} {a['status']} durch {ich}")
+    r = akt_ticket_schliessen(d, {"id": tid, "loesung": loesung}, ich, erlaubt)
+    r["log"] = [f"✔ Antrag {a['status']}." + (" Buchung ausgeführt." if a["status"] == "freigegeben" else "") + " Mitglied per E-Mail informiert."]
+    return r
 
 
 def zahlungsauftrag_bezahlt(d, ref, betrag=None, quelle=""):
@@ -334,7 +612,7 @@ def zahlungsauftrag_bezahlt(d, ref, betrag=None, quelle=""):
     try:
         email_senden(d, a["email"], f"Zahlung erhalten: {a['beschreibung']}", None,
                      f"<p>Hallo {html_mod.escape(a.get('name') or '')},</p><p>vielen Dank – Ihre Zahlung über {geld(a['betrag'])} ist eingegangen.</p>"
-                     f"<p><b>{html_mod.escape(a['beschreibung'])}</b> ist gebucht (Referenz {ref}). Die Änderung am WLAN wird vom Verein übernommen.</p>")
+                     f"<p><b>{html_mod.escape(a['beschreibung'])}</b> ist gebucht (Referenz {ref}). Die Änderung am WLAN wird vom Verein übernommen.</p>", sparte=a.get("sparte"))
     except Exception as x:
         LOG.warning("Bestätigung zu %s nicht gesendet: %s", ref, x)
     return f"{ref}: {a['beschreibung']} gebucht."
@@ -378,6 +656,8 @@ def mb_anfrage(pfad, b, email, quelle, basis):
             with SCHREIB_SPERRE:
                 return 200, mb_buchen(lade(), email, b or {}, basis)
         if pfad == "/mein/zugangskarte":
+            if not mb_einstellungen(d)["zugangskarte"]:
+                raise Fehler("Die Zugangskarte ist hier nicht abrufbar – bitte beim Verein melden.")
             mid, m, kz, p = _mb_parzelle(d, email, (b or {}).get("id"))
             z = next((z for z in lese_ppsk(kz) if str(z.get("Parzelle")) == p and z.get("Passwort")), None)
             if not z or not ((d.get("buchungen") or {}).get(kz) or {}).get(p):
@@ -386,10 +666,12 @@ def mb_anfrage(pfad, b, email, quelle, basis):
             karte = zugangskarte_pdf(d, kz, zeile, _sparten_kz(d).get(kz, kz))
             email_senden(d, m["email"], f"Ihre WLAN-Zugangskarte für Parzelle {p}", None,
                          f"<p>Hallo {html_mod.escape(m.get('vorname') or '')},</p><p>anbei Ihre WLAN-Zugangskarte für Parzelle {p}.</p>",
-                         anhaenge=[(f"Zugangskarte_Parzelle_{p}.pdf", karte, "application/pdf")])
+                         anhaenge=[(f"Zugangskarte_Parzelle_{p}.pdf", karte, "application/pdf")], sparte=kz)
             journal(f"Mitgliederbereich: Zugangskarte {kz} Parzelle {p} gesendet")
             return 200, {"ok": True, "text": "Die Zugangskarte ist per E-Mail unterwegs."}
         if pfad == "/mein/ticket":
+            if not mb_einstellungen(d)["neue_anfrage"]:
+                raise Fehler("Neue Anfragen sind hier ausgeschaltet.")
             mid, m, kz, p = _mb_parzelle(d, email, (b or {}).get("id"))
             if not str((b or {}).get("betreff") or "").strip():
                 raise Fehler("Bitte einen Betreff angeben.")
@@ -412,20 +694,46 @@ def mb_anfrage(pfad, b, email, quelle, basis):
 
 def mb_rechnung_pdf(d, email, rid):
     x = rechnungen_daten(d)["liste"].get(str(rid or ""))
-    if not x or x.get("mitglied") not in mb_mitglieder_von(d, email):
+    eigene = mb_mitglieder_von(d, email)
+    parzellen = {(m.get("sparte"), str(m.get("parzelle") or "")) for m in eigene.values()}
+    if not x or (x.get("mitglied") not in eigene and (x.get("sparte"), str(x.get("parzelle") or "")) not in parzellen):
         raise Fehler("Rechnung nicht gefunden.")
     return rechnung_pdf(d, x), f"Rechnung_{x['nr']}.pdf"
 
 
-def mein_seite(d):
-    """Seite /mein im Design der Pächter-Seite (Kopf, Farben, Schrift, Hintergrund und Fußzeile von dort)"""
-    seite = portal_seite(d)
+def mein_seite(d, design=None, inline=False, vorschau=False):
+    """Seite /mein – Aussehen aus „Oberfläche gestalten → Mitgliederbereich“ (ohne eigene Gestaltung wie die Kontakt-Seite)"""
+    g = design or seiten_design(d, "mein")
+    titel = html_mod.escape(g.get("titel") or "Mitgliederbereich")
+    seite = portal_seite(d, g, inline=inline, art="mein")
     kopf, rest = seite.split("<body", 1)
-    kopf = re.sub(r"<title>.*?</title>", "<title>Mitgliederbereich</title>", kopf, flags=re.S)
+    kopf = re.sub(r"<title>.*?</title>", f"<title>{titel}</title>", kopf, flags=re.S)
     body_tag, rest = rest.split(">", 1)
-    header = rest[:rest.index("</header>")].replace('<div id="titel"></div>', '<div id="titel">Mitgliederbereich</div>') + "</header>"
+    header = rest[:rest.index("</header>")].replace('<div id="titel"></div>', f'<div id="titel">{titel}</div>') + "</header>"
     fuss = re.search(r"<footer>.*?</footer>", seite, re.S)
-    return MEIN_HTML.replace("__KOPF__", kopf + "<body" + body_tag + ">" + header).replace("__FUSS__", fuss.group(0) if fuss else "")
+    text = html_mod.escape(g["text_anmeldung"]).replace("\n", "<br>") if g.get("text_anmeldung") else (
+        "Mit der E-Mail-Adresse, die beim Verein für Ihre Parzelle hinterlegt ist. Der Verein schickt Ihnen einen Einmalcode per E-Mail – ein Passwort ist nicht nötig.")
+    html = (MEIN_HTML.replace("__KOPF__", kopf + "<body" + body_tag + ">" + header).replace("__FUSS__", fuss.group(0) if fuss else "")
+            .replace("__ANMELDETEXT__", text).replace("__VEREINSLOGO__", "1" if g.get("vereinslogo", True) else ""))
+    if vorschau:                                  # Vorschau im Editor: Anmeldung und Beispieldaten nebeneinander, ohne Server-Abfrage
+        html = html.replace("laden();</script>", "vorschau(" + json.dumps(_mb_beispiel(d, g), ensure_ascii=False).replace("</", "<\\/") + ");</script>")
+    return html
+
+
+def _mb_beispiel(d, g):
+    sp = next(iter(kalk_sparten(d).items()), ("BW", {"name": "Beispielsparte"}))
+    sl = sparten_logo_uri(d, sp[0]) if g.get("vereinslogo", True) else ""
+    t = [{**_tarif_info(x), "rang": list(tarif_rang(x))} for x in tarife_pruefen(d["tarife"])][:3]
+    return {"mitglied": "Erika Muster", "hinweis": g.get("hinweis", ""), "titel": g.get("titel", ""), "modus": "anfrage", "kategorien": ["Sonstiges"],
+            "erlaubt": {"tarifwechsel": True, "downgrade": True, "neubuchung": True, "verlaengern": True, "geraete": False, "zeige_rechnungen": True,
+                        "zeige_anfragen": True, "neue_anfrage": True, "zugangskarte": True},
+            "tarife": t, "parzellen": [{"id": "x", "sparte": sp[0], "sparte_name": sp[1].get("name", sp[0]), "parzelle": "12", "sparte_logo": sl,
+                                        "tarif": t[0]["name"] if t else "", "rang": t[0]["rang"] if t else None, "tarif_laufzeit": "unbegrenzt",
+                                        "laufzeit": None, "gesperrt": False, "offen": 0, "rechnungen": [{"id": "r", "nr": "RE-2026-0001", "datum": "2026-03-01", "brutto": 120, "status": "bezahlt"}],
+                                        "tickets": [{"nr": "T-0001", "betreff": "WLAN langsam", "status": "geschlossen", "erstellt": "2026-05-02 18:10", "loesung": "Access Point neu gestartet"}],
+                                        "auftrag": None, "antraege": [],
+                                        "stoerungen": [{"geraet": "Access Point Festwiese", "text": MB_STANDARD["stoerung_meldung"].replace("{geraet}", "Access Point Festwiese").replace("{seit}", "18.10.2026 19:40").replace("{ticket}", "T-0042").replace("{modell}", "")}]}],
+            "stoerung_text": mb_einstellungen(d)["stoerung_text"], "stoerung_farbe": mb_einstellungen(d)["stoerung_farbe"]}
 
 
 MEIN_HTML = r"""__KOPF__<main>
@@ -434,42 +742,66 @@ MEIN_HTML = r"""__KOPF__<main>
 .k2{border:1px solid var(--l);background:var(--c);color:var(--t);border-radius:calc(var(--ecken) * .7);padding:10px 14px;cursor:pointer;font:inherit}.k2:hover{border-color:var(--a)}
 .tarife{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-top:10px}.tarif{border:1.5px solid var(--l);border-radius:var(--ecken);padding:12px;cursor:pointer;background:var(--c)}
 .tarif.akt{border-color:var(--a);box-shadow:0 0 0 2px var(--a) inset}.tarif b{font-size:17px}.gesperrt{background:#fde8e6;color:#b42318;border-radius:8px;padding:8px 10px;margin-top:8px}</style>
-<section id="v_login" class="karte" style="display:none"><h2 style="margin-top:0">Anmelden</h2><p class="hint">Mit der E-Mail-Adresse, die beim Verein für Ihre Parzelle hinterlegt ist. Sie bekommen einen Anmeldecode per E-Mail – ein Passwort ist nicht nötig.</p>
-<label for="l_email">E-Mail-Adresse</label><input id="l_email" type="email" autocomplete="email"><button class="los" id="l_b1" onclick="codeAnfordern()">Code per E-Mail senden</button>
-<div id="l_code_box" style="display:none"><label for="l_code">Anmeldecode aus der E-Mail</label><input id="l_code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" style="font-size:22px;letter-spacing:6px;text-align:center"><button class="los" onclick="anmelden()">Anmelden</button></div>
+<div id="l_stoerung"></div><section id="v_login" class="karte" style="display:none"><h2 style="margin-top:0">Anmelden</h2><p class="hint">__ANMELDETEXT__</p>
+<label for="l_email">E-Mail-Adresse</label><input id="l_email" type="email" autocomplete="email" oninput="logoNachEmail()" onchange="logoNachEmail()" onkeydown="if(event.key=='Enter')codeAnfordern()"><button class="los" id="l_b1" onclick="codeAnfordern()">Code per E-Mail senden</button>
+<div id="l_code_box" style="display:none"><label for="l_code">Einmalcode aus der E-Mail</label><input id="l_code" onkeydown="if(event.key=='Enter')anmelden()" inputmode="numeric" autocomplete="one-time-code" maxlength="6" style="font-size:22px;letter-spacing:6px;text-align:center"><button class="los" onclick="anmelden()">Anmelden</button></div>
 <div class="msg" id="m_login"></div></section>
 <div id="v_daten" style="display:none"><div class="zeile" style="margin-bottom:10px"><p class="hint" id="d_hallo" style="margin:0"></p><div style="flex:none"><select id="d_parz" onchange="zeigen()" style="min-width:200px"></select></div><button class="k2" style="flex:none" onclick="abmelden()">Abmelden</button></div>
-<p class="hint" id="d_hinweis"></p><div class="msg" id="m_daten"></div>
+<div id="d_stoerung"></div><p class="hint" id="d_hinweis"></p><div class="msg" id="m_daten"></div>
 <section class="karte" style="display:block"><h2 style="margin-top:0">Mein Tarif</h2><div id="d_tarif"></div><div id="d_wechsel"></div></section>
-<section class="karte" style="display:block" id="s_geraete"><h2 style="margin-top:0">Meine Geräte im WLAN</h2><p class="hint">Geräte, die gerade im Netz Ihrer Parzelle angemeldet sind. Erkennbar an der IP-Adresse: <span id="d_netz"></span> – die letzte Zahl ist das Gerät.</p><div id="d_geraete">…</div><div class="knoepfe"><button class="k2" onclick="geraete()">Aktualisieren</button><button class="k2" onclick="karte()">Zugangskarte per E-Mail</button></div></section>
-<section class="karte" style="display:block"><h2 style="margin-top:0">Meine Rechnungen</h2><div id="d_rechnungen"></div></section>
-<section class="karte" style="display:block"><h2 style="margin-top:0">Meine Anfragen</h2><div id="d_tickets"></div>
-<details style="margin-top:10px"><summary style="cursor:pointer;font-weight:600">Neue Anfrage</summary><label for="t_kat">Worum geht es?</label><select id="t_kat"></select><label for="t_betreff">Betreff</label><input id="t_betreff" maxlength="160"><label for="t_text">Nachricht</label><textarea id="t_text" maxlength="5000"></textarea><button class="los" onclick="ticket()">Anfrage senden</button></details><div class="msg" id="m_ticket"></div></section></div>
+<section class="karte" style="display:block" id="s_geraete"><h2 style="margin-top:0">Meine Geräte im WLAN</h2><p class="hint">Geräte, die gerade im Netz Ihrer Parzelle angemeldet sind. Erkennbar an der IP-Adresse: <span id="d_netz"></span> – die letzte Zahl ist das Gerät.</p><div id="d_geraete">…</div><div class="knoepfe"><button class="k2" onclick="geraete()">Aktualisieren</button><button class="k2" id="b_karte" onclick="karte()">Zugangskarte per E-Mail</button></div></section>
+<section class="karte" style="display:block" id="s_rechnungen"><h2 style="margin-top:0">Meine Rechnungen</h2><div id="d_rechnungen"></div></section>
+<section class="karte" style="display:block" id="s_anfragen"><h2 style="margin-top:0">Meine Anfragen</h2><div id="d_tickets"></div>
+<details style="margin-top:10px" id="s_neu"><summary style="cursor:pointer;font-weight:600">Neue Anfrage</summary><label for="t_kat">Worum geht es?</label><select id="t_kat"></select><label for="t_betreff">Betreff</label><input id="t_betreff" maxlength="160" onkeydown="if(event.key=='Enter'){event.preventDefault();$('t_text').focus()}"><label for="t_text">Nachricht</label><textarea id="t_text" maxlength="5000" onkeydown="if(event.key=='Enter'&&(event.ctrlKey||event.metaKey))ticket()" placeholder="Strg+Enter sendet"></textarea><button class="los" onclick="ticket()">Anfrage senden</button></details><div class="msg" id="m_ticket"></div></section></div>
 </main>__FUSS__<script>const $=i=>document.getElementById(i),esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));let D=null,WAHL=null;
 const eur=x=>Number(x||0).toLocaleString("de-DE",{style:"currency",currency:"EUR"});
 function msg(id,t,ok){const m=$(id);m.className="msg "+(t?(ok?"ok":"f"):"");m.textContent=t||""}
 async function post(p,b){const r=await fetch(p,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})});const d=await r.json().catch(()=>({}));if(r.status==401&&d.anmelden){ansicht(false);throw new Error("Bitte erneut anmelden.")}if(!r.ok)throw new Error(d.fehler||r.status);return d}
-function ansicht(an){$("v_login").style.display=an?"none":"block";$("v_daten").style.display=an?"block":"none"}
+function ansicht(an){$("v_login").style.display=an?"none":"block";$("v_daten").style.display=an?"block":"none";$("l_stoerung").style.display=an?"none":"";if(!an&&!$("l_stoerung").innerHTML)stoerungAllgemein()}
 async function codeAnfordern(){try{const d=await post("/mein/code",{email:$("l_email").value.trim()});msg("m_login",d.text,true);$("l_code_box").style.display="block";$("l_code").focus()}catch(e){msg("m_login",e.message)}}
 async function anmelden(){try{await post("/mein/anmelden",{email:$("l_email").value.trim(),code:$("l_code").value});msg("m_login","");laden()}catch(e){msg("m_login",e.message)}}
 async function abmelden(){await post("/mein/abmelden").catch(()=>{});location.replace("/mein")}
 async function laden(){try{D=await post("/mein/daten");ansicht(true)}catch(e){ansicht(false);return}
+ datenZeigen()}
+function vorschau(x){D=x;ansicht(true);$("v_login").style.display="block";datenZeigen();$("l_stoerung").style.display="";stoerungZeigen("l_stoerung",(x.parzellen[0]||{}).stoerungen,x.stoerung_text,x.stoerung_farbe);document.querySelectorAll("button").forEach(b=>b.onclick=null)}
+const VL="__VEREINSLOGO__";
+function kopfLogo(src,titel){const mk=document.querySelector("header .mk");let sl=document.getElementById("sp_logo");
+ if(VL&&src&&mk){if(!sl){sl=document.createElement("img");sl.id="sp_logo";sl.alt="";sl.style.cssText="height:42px;width:auto;margin:0 8px";mk.insertBefore(sl,mk.querySelector("b"))}sl.src=src;sl.title=titel||""}else if(sl)sl.remove()}
+function stoerungZeigen(id,liste,text,farbe){const sf=farbe||"#b42318";$(id).innerHTML=(liste||[]).length?`<div role="alert" style="border:2px solid ${sf};background:${sf}1a;color:${sf};border-radius:var(--ecken);padding:14px 16px;margin:0 0 12px;font-weight:600">`
+  +liste.map(s=>`<div style="display:flex;gap:10px;align-items:flex-start;margin:4px 0"><span style="font-size:22px;line-height:1">⚠</span><span>${esc(s.text)}</span></div>`).join("")
+  +(text?`<div style="font-weight:400;margin-top:8px;color:var(--t);white-space:pre-wrap">${esc(text)}</div>`:"")+"</div>":""}
+async function stoerungAllgemein(){try{const d=await post("/mein/stoerung",{});stoerungZeigen("l_stoerung",d.stoerungen,d.stoerung_text,d.stoerung_farbe)}catch(x){}}
+let LT=null;function logoNachEmail(){clearTimeout(LT);const e=$("l_email").value.trim();if(!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(e)){kopfLogo("");return}
+ LT=setTimeout(async()=>{try{const d=await post("/mein/logo",{email:e});if(VL)kopfLogo(d.logo,d.name);stoerungZeigen("l_stoerung",d.stoerungen,d.stoerung_text,d.stoerung_farbe)}catch(x){}},500)}
+function datenZeigen(){
  $("d_hallo").textContent="Hallo "+D.mitglied;$("d_hinweis").textContent=D.hinweis||"";$("d_parz").innerHTML=D.parzellen.map(p=>`<option value="${esc(p.id)}">${esc(p.sparte_name)} · Parzelle ${esc(p.parzelle)}</option>`).join("");
  $("d_parz").style.display=D.parzellen.length>1?"":"none";if(WAHL&&D.parzellen.some(p=>p.id==WAHL))$("d_parz").value=WAHL;$("t_kat").innerHTML=D.kategorien.map(k=>`<option>${esc(k)}</option>`).join("");
  const q=new URLSearchParams(location.search);if(q.get("zahlung")=="abbruch")msg("m_daten","Die Zahlung wurde abgebrochen – es wurde nichts gebucht.");else if(q.get("zahlung"))msg("m_daten","Danke! Sobald der Bezahldienst die Zahlung bestätigt, ist die Buchung erledigt (Referenz "+q.get("zahlung")+").",true);
  if(q.has("zahlung"))history.replaceState(null,"","/mein");zeigen()}
 function P(){return D.parzellen.find(p=>p.id==$("d_parz").value)||D.parzellen[0]}
 function zeigen(){const p=P();if(!p)return;WAHL=p.id;const lz=p.laufzeit;
+ kopfLogo(p.sparte_logo,p.sparte_name);
+ stoerungZeigen("d_stoerung",p.stoerungen,D.stoerung_text,D.stoerung_farbe);
  $("d_tarif").innerHTML=p.tarif?`<div class="zeile"><div><div class="klein">Tarif</div><div class="wert">${esc(p.tarif)}</div></div>${lz?`<div><div class="klein">Laufzeit</div><div><b>${lz.aktiv?"bis "+esc(lz.ende):"abgelaufen am "+esc(lz.ende)}</b>${lz.aktiv?`<br><span class="klein">noch ${lz.rest_tage} Tag(e)</span>`:""}</div></div>`:`<div><div class="klein">Laufzeit</div><div><b>unbegrenzt</b></div></div>`}<div><div class="klein">Offen</div><div class="wert" style="font-size:18px">${eur(p.offen)}</div></div></div>${p.gesperrt?'<div class="gesperrt">Der WLAN-Zugang ist gerade gesperrt (Laufzeit abgelaufen) – mit einer Verlängerung wird er wieder freigegeben.</div>':""}`:'<p class="hint">Für diese Parzelle ist noch kein Tarif gebucht.</p>';
- const e=D.erlaubt,tf=D.tarife.find(t=>t.name==p.tarif);let akt=[];if(!p.tarif&&e.neubuchung)akt.push(["neu","Tarif buchen"]);if(p.tarif&&e.tarifwechsel)akt.push(["wechsel","Tarif wechseln"]);if(p.tarif&&e.verlaengern&&tf&&tf.laufzeit!="unbegrenzt")akt.push(["verlaengern","Laufzeit verlängern ("+tf.laufzeit+")"]);
- $("d_wechsel").innerHTML=(p.auftrag?`<p class="hint">Offener Zahlungsauftrag ${esc(p.auftrag.referenz)} (${esc(p.auftrag.tarif)}, ${eur(p.auftrag.betrag)}) – wird gebucht, sobald die Zahlung bestätigt ist.</p>`:"")+(akt.length?`<div class="knoepfe">${akt.map(([a,t])=>`<button class="k2" onclick="waehlen('${a}')">${esc(t)}</button>`).join("")}</div><div id="d_auswahl"></div>`:"");
+ const e=D.erlaubt,R=t=>t.rang.join(","),hoeher=(t)=>p.rang&&(t.rang[0]>p.rang[0]||t.rang[0]==p.rang[0]&&(t.rang[1]>p.rang[1]||t.rang[1]==p.rang[1]&&t.rang[2]>p.rang[2]));
+ const ups=D.tarife.filter(t=>t.name!=p.tarif&&hoeher(t)),downs=D.tarife.filter(t=>t.name!=p.tarif&&!hoeher(t));let akt=[];
+ if(!p.tarif&&e.neubuchung&&D.tarife.length)akt.push(["neu","Tarif buchen"]);if(p.tarif&&e.tarifwechsel&&ups.length)akt.push(["upgrade","⬆ Upgrade"]);if(p.tarif&&e.downgrade&&downs.length&&!p.antraege.length)akt.push(["downgrade","⬇ Kleinerer Tarif"]);
+ if(p.tarif&&e.verlaengern&&p.tarif_laufzeit&&p.tarif_laufzeit!="unbegrenzt"&&!p.antraege.length)akt.push(["verlaengern","Laufzeit verlängern ("+p.tarif_laufzeit+")"]);
+ $("d_wechsel").innerHTML=(p.auftrag?`<p class="hint">Offener Zahlungsauftrag ${esc(p.auftrag.referenz)} (${esc(p.auftrag.tarif)}, ${eur(p.auftrag.betrag)}) – wird gebucht, sobald die Zahlung bestätigt ist.</p>`:"")
+  +p.antraege.map(a=>`<p class="hint">⏳ Antrag ${esc(a.nr)} vom ${esc(a.erstellt.slice(0,10))}: ${{wechsel:"Wechsel zu",neu:"Buchung",verlaengern:"Verlängerung"}[a.art]||""} ${esc(a.tarif)} – wartet auf Freigabe durch den Verein.</p>`).join("")
+  +(akt.length?`<div class="knoepfe">${akt.map(([a,t])=>`<button class="k2" onclick="waehlen('${a}')">${esc(t)}</button>`).join("")}</div><div id="d_auswahl"></div>`:"");
+ $("s_rechnungen").style.display=e.zeige_rechnungen?"block":"none";$("s_anfragen").style.display=e.zeige_anfragen||e.neue_anfrage?"block":"none";$("d_tickets").style.display=e.zeige_anfragen?"":"none";$("s_neu").style.display=e.neue_anfrage?"":"none";$("b_karte").style.display=e.zugangskarte?"":"none";
  $("d_rechnungen").innerHTML=p.rechnungen.length?'<table class="tabelle"><tr><th>Nr.</th><th>Datum</th><th>Betrag</th><th>Status</th><th></th></tr>'+p.rechnungen.map(r=>`<tr><td>${esc(r.nr)}</td><td>${esc(r.datum)}</td><td>${eur(r.brutto)}</td><td>${esc(r.status)}</td><td><a href="/mein/rechnung?id=${encodeURIComponent(r.id)}" target="_blank" rel="noopener">PDF</a></td></tr>`).join("")+"</table>":'<p class="hint">Noch keine Rechnungen.</p>';
  $("d_tickets").innerHTML=p.tickets.length?p.tickets.map(t=>`<div class="antwort"><b>${esc(t.nr)}</b> · ${esc(t.status)} · ${esc(t.erstellt)}<br>${esc(t.betreff)}${t.loesung?"<br><small>Lösung: "+esc(t.loesung)+"</small>":""}</div>`).join(""):'<p class="hint">Keine Anfragen.</p>';
  $("s_geraete").style.display=e.geraete?"block":"none";if(e.geraete)geraete()}
-function waehlen(art){const p=P();const liste=art=="verlaengern"?D.tarife.filter(t=>t.name==p.tarif):D.tarife.filter(t=>t.name!=p.tarif);
- $("d_auswahl").innerHTML=`<div class="tarife">${liste.map(t=>`<div class="tarif" data-t="${esc(t.name)}"><b>${esc(t.name)}</b><br><span class="klein">${t.down} / ${t.up} Mbit/s · ${t.geraete?t.geraete+" Geräte":"Geräte unbegrenzt"}<br>Laufzeit: ${esc(t.laufzeit)}</span><br><b>${eur(t.preis)}</b></div>`).join("")}</div>
- <button class="los" id="d_los" disabled>${D.modus=="bezahldienst"?"Weiter zur Bezahlung":"Wunsch an den Verein senden"}</button>`;
- let wahl=art=="verlaengern"?p.tarif:null;document.querySelectorAll(".tarif").forEach(x=>{if(x.dataset.t==wahl)x.classList.add("akt");x.onclick=()=>{wahl=x.dataset.t;document.querySelectorAll(".tarif").forEach(y=>y.classList.toggle("akt",y===x));$("d_los").disabled=false}});
+function waehlen(wie){const p=P();const e=D.erlaubt,hoeher=(t)=>p.rang&&(t.rang[0]>p.rang[0]||t.rang[0]==p.rang[0]&&(t.rang[1]>p.rang[1]||t.rang[1]==p.rang[1]&&t.rang[2]>p.rang[2]));
+ const art=wie=="upgrade"||wie=="downgrade"?"wechsel":wie;
+ const liste=wie=="verlaengern"?[{name:p.tarif,laufzeit:p.tarif_laufzeit,preis:p.tarif_preis,down:p.tarif_down,up:p.tarif_up,geraete:p.tarif_geraete}]:wie=="upgrade"?D.tarife.filter(t=>t.name!=p.tarif&&hoeher(t)):wie=="downgrade"?D.tarife.filter(t=>t.name!=p.tarif&&!hoeher(t)):D.tarife;
+ const knopf=wie=="downgrade"?"Antrag stellen (Freigabe durch den Verein)":D.modus=="bezahldienst"?"Weiter zur Bezahlung":wie=="upgrade"?"Jetzt wechseln":"Antrag an den Verein senden";
+ const hinweis=wie=="upgrade"?"Ein Upgrade ist jederzeit möglich"+(D.modus=="bezahldienst"?" – nach der Bezahlung sofort gebucht.":" und wird sofort gebucht."):wie=="downgrade"?"Ein Wechsel in einen kleineren Tarif muss vom Verein freigegeben werden. Sie bekommen per E-Mail Bescheid.":"";
+ $("d_auswahl").innerHTML=(hinweis?`<p class="hint" style="margin:10px 0 0">${esc(hinweis)}</p>`:"")+`<div class="tarife">${liste.map(t=>`<div class="tarif" data-t="${esc(t.name)}"><b>${esc(t.name)}</b><br><span class="klein">${t.down} / ${t.up} Mbit/s · ${t.geraete?t.geraete+" Geräte":"Geräte unbegrenzt"}<br>Laufzeit: ${esc(t.laufzeit)}</span><br><b>${eur(t.preis)}</b></div>`).join("")}</div>
+ <button class="los" id="d_los" disabled>${esc(knopf)}</button>`;
+ let wahl=wie=="verlaengern"?p.tarif:null;document.querySelectorAll(".tarif").forEach(x=>{if(x.dataset.t==wahl)x.classList.add("akt");x.onclick=()=>{wahl=x.dataset.t;document.querySelectorAll(".tarif").forEach(y=>y.classList.toggle("akt",y===x));$("d_los").disabled=false}});
  $("d_los").disabled=!wahl;$("d_los").onclick=async()=>{try{$("d_los").disabled=true;const d=await post("/mein/buchen",{id:p.id,art,tarif:wahl});if(d.url){location.href=d.url;return}msg("m_daten",d.text,true);laden()}catch(e){msg("m_daten",e.message);$("d_los").disabled=false}}}
 async function geraete(){const p=P();$("d_geraete").textContent="…";try{const d=await post("/mein/geraete",{id:p.id});$("d_netz").textContent=d.netz||"";
  $("d_geraete").innerHTML=d.geraete.length?'<table class="tabelle"><tr><th>Gerät</th><th>IP-Adresse</th><th>Nr.</th><th>Verbindung</th></tr>'+d.geraete.map(g=>`<tr><td>${esc(g.name)}<br><span class="klein">${esc(g.mac)}</span></td><td>${esc(g.ip)}</td><td>${esc(g.geraet)}</td><td>${esc(g.art)}</td></tr>`).join("")+"</table>":`<p class="hint">${esc(d.fehler||"Gerade ist kein Gerät angemeldet.")}</p>`}catch(e){$("d_geraete").textContent=e.message}}

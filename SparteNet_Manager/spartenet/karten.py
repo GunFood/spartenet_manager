@@ -2,7 +2,7 @@
 from .system import *  # noqa: F401,F403 – alle Namen der vorherigen Module
 
 
-def karten_html(design, sparte_name, kz, zeilen, drucken=True, vorschau=False):
+def karten_html(design, sparte_name, kz, zeilen, drucken=True, vorschau=False, sparte_logo=""):
     """Eine Seite je Eintrag. zeilen: [{"Parzelle", "WLAN", "Passwort"}] – Gast-Voucher zusätzlich mit
     "Titel", "Unter", "Fuss", "Scan" (Texte statt Kartendesign) und "Zugang" [(Bezeichnung, Wert, CSS-Klasse)]"""
     g = design_pruefen(design)
@@ -13,7 +13,8 @@ def karten_html(design, sparte_name, kz, zeilen, drucken=True, vorschau=False):
     innen_b, innen_h = breite - 2 * g["rand_mm"], hoehe - 2 * g["rand_mm"]
     qr_mm = min(g["qr_cm"] * 10, (innen_b * 0.45) if g["quer"] else (innen_b - 6), innen_h * 0.75)
     logo = logo_daten_uri(g)
-    logo_html = (f'<div class="logo" style="text-align:{g["logo_pos"]}"><img src="{logo}" alt=""></div>' if logo else "")
+    bilder = [x for x in (logo, sparte_logo if g["sparten_logo"] else "") if x]        # Vereinslogo und daneben das Spartenlogo
+    logo_html = (f'<div class="logo" style="text-align:{g["logo_pos"]}">' + "".join(f'<img src="{b}" alt="">' for b in bilder) + "</div>" if bilder else "")
 
     def txt(vorlage, z):
         t = vorlage
@@ -70,7 +71,7 @@ h1{{font-size:{g["gr_titel"]}pt;margin:3mm 0 0;line-height:1.1}}
 .ssid{{font-weight:bold;font-size:{g["gr_text"] + 1}pt;white-space:nowrap}}
 .pw{{display:inline-block;white-space:nowrap;font-family:Consolas,'DejaVu Sans Mono','Courier New',monospace;font-size:{g["gr_pw"]}pt;letter-spacing:1px;background:{g["farbe_pw_hinter"]};padding:1mm 3mm;border-radius:1.5mm;margin-top:.5mm;font-variant-ligatures:none}}
 .zwei{{display:flex;gap:6mm;align-items:center;flex:1 0 auto}}.sp-text{{flex:1 1 55%;min-width:0}}.sp-qr{{flex:0 1 45%;text-align:center}}
-.logo{{margin:1mm 0 2mm}}.logo img{{width:{g["logo_mm"]}mm;max-width:100%;max-height:{innen_h * 0.3:.0f}mm;object-fit:contain}}
+.logo{{margin:1mm 0 2mm}}.logo img+img{{margin-left:4mm}}.logo img{{width:{g["logo_mm"]}mm;max-width:100%;max-height:{innen_h * 0.3:.0f}mm;object-fit:contain}}
 .fuss{{font-size:{g["gr_klein"]}pt;color:{g["farbe_hell"]};margin:{"auto 0 0" if g["fuss_unten"] and not g["quer"] else "4mm 0 0"};padding-top:3mm}}
 @media screen{{body{{background:#8a949b;padding:8mm 0}}.seite{{margin:0 auto 8mm;box-shadow:0 2px 12px rgba(0,0,0,.35)}}}}"""
     # Passt der Inhalt nicht auf die Seite, wird der QR-Code schrittweise verkleinert (min. 2,5 cm).
@@ -109,7 +110,8 @@ def akt_karten_vorschau(d, design, drucken=False):
         log.append("⚠ QR-Code: zu wenig Kontrast – dunkle Punkte auf hellem Grund verwenden, sonst scannen viele Handys nicht.")
     if g["qr_cm"] < 3:
         log.append("⚠ QR-Code kleiner als 3 cm – aus der Hand schlecht lesbar.")
-    return {"html": karten_html(g, name, kz, [z], drucken=drucken, vorschau=not drucken), "log": log or ["✔ Vorschau aktuell."]}
+    from .unterlagen import sparten_logo_uri
+    return {"html": karten_html(g, name, kz, [z], drucken=drucken, vorschau=not drucken, sparte_logo=sparten_logo_uri(d, kz)), "log": log or ["✔ Vorschau aktuell."]}
 
 
 def akt_karten(d, kz, auswahl):
@@ -124,7 +126,8 @@ def akt_karten(d, kz, auswahl):
     if not zeilen:
         raise Fehler("Keine Einträge ausgewählt bzw. keine Passwörter vorhanden.")
     g = d["design"]
-    html = karten_html(g, s["name"], kz, zeilen)
+    from .unterlagen import sparten_logo_uri
+    html = karten_html(g, s["name"], kz, zeilen, sparte_logo=sparten_logo_uri(d, kz))
     LOG.info("Zugangskarten erzeugt: Sparte %s, %d Seiten, Format %s", kz, len(zeilen), g["format"])
     return {"html": html, "log": [f"✔ {len(zeilen)} Zugangskarten ({g['format']}{' quer' if g['quer'] else ''}, je Parzelle eine Seite, Design aus „Kartendesign“) zum Drucken geöffnet."]}
 

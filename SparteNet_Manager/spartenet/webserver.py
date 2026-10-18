@@ -140,6 +140,10 @@ class Handler(BaseHTTPRequestHandler):
         host = re.sub(r"[^A-Za-z0-9.:\[\]-]", "", self.headers.get("Host") or f"127.0.0.1:{PORT}")[:200]
         return f"{proto}://{host}"
 
+    def _mb_email(self, d):
+        """angemeldetes Mitglied: Cookie aus dem Browser oder Schlüssel der Mitglieder-App"""
+        return mb_sitzung(d, self._cookie("sn_mitglied")) or mb_app_pruefen(d, self.headers.get("Authorization"))
+
     def _mein(self, methode, u):
         """Mitgliederbereich – öffentlich erreichbar, eigene Anmeldung mit E-Mail-Code (Cookie sn_mitglied)"""
         d = self._lade()
@@ -153,7 +157,7 @@ class Handler(BaseHTTPRequestHandler):
             if pfad == "/mein":
                 return self._send(200, mein_seite(d).encode("utf-8"), "text/html")
             if pfad == "/mein/rechnung":
-                email = mb_sitzung(d, self._cookie("sn_mitglied"))
+                email = self._mb_email(d)
                 if not email:
                     return self._send(401, {"fehler": "Bitte anmelden."})
                 try:
@@ -192,15 +196,31 @@ class Handler(BaseHTTPRequestHandler):
             if pfad == "/mein/code":
                 with SCHREIB_SPERRE:
                     return self._send(200, mb_code_anfordern(lade(), b, self._quelle()))
+            if pfad == "/mein/stoerung":             # Anmeldeseite: Störungen, die alle Sparten betreffen
+                return self._send(200, mb_stoerung_oeffentlich(d, self._quelle()))
+            if pfad == "/mein/logo":                 # Vereinslogo zur eingegebenen E-Mail-Adresse (Anmeldeseite und App)
+                return self._send(200, mb_logo_zur_email(d, b.get("email"), self._quelle()))
+            if pfad == "/mein/info":                 # für die Mitglieder-App: ist der Bereich erreichbar?
+                e = mb_einstellungen(d)
+                return self._send(200, {"ok": True, "titel": e["titel"], "version": VERSION, "app_tage": MB_APP_TAGE})
             if pfad == "/mein/anmelden":
                 t = mb_anmelden(d, b, self._quelle())
+                if b.get("app"):                         # Mitglieder-App: dauerhafter Schlüssel statt Cookie
+                    mb_abmelden(t)
+                    with SCHREIB_SPERRE:
+                        tok = mb_app_anlegen(lade(), b.get("email"), b.get("geraet"))
+                    return self._send(200, {"ok": True, "token": tok, "gueltig_tage": MB_APP_TAGE,
+                                            "hinweis": "Bei jeder Anfrage: Authorization: Bearer <token>"})
                 return self._send(200, {"ok": True}, extra={"Set-Cookie": f"sn_mitglied={t}; Path=/mein; Max-Age=43200; HttpOnly; SameSite=Strict{sicher}"})
             if pfad == "/mein/abmelden":
+                if (self.headers.get("Authorization") or "").lower().startswith("bearer snm_"):
+                    with SCHREIB_SPERRE:
+                        mb_app_entfernen(lade(), self.headers.get("Authorization"))
                 mb_abmelden(self._cookie("sn_mitglied"))
                 return self._send(200, {"ok": True}, extra={"Set-Cookie": "sn_mitglied=; Path=/mein; Max-Age=0; HttpOnly; SameSite=Strict"})
         except Fehler as f:
             return self._send(400, {"fehler": str(f)})
-        code, antwort = mb_anfrage(pfad, b, mb_sitzung(d, self._cookie("sn_mitglied")), self._quelle(), self._basis(d))
+        code, antwort = mb_anfrage(pfad, b, self._mb_email(d), self._quelle(), self._basis(d))
         return self._send(code, antwort)
 
     def _erlaubt(self, d):
@@ -276,16 +296,34 @@ class Handler(BaseHTTPRequestHandler):
             return
         if u.path.startswith("/api/v1/"):
             return self._api_v1("GET", u)
+        if u.path in ("/kontakt", "/kontakt/"):        # Kontakt-Seite (gleiche Seite wie /portal)
+            return self._portal("GET", urllib.parse.urlparse("/portal"))
         if u.path == "/portal" or u.path.startswith("/portal/"):
             return self._portal("GET", u)
         if u.path == "/mein" or u.path.startswith("/mein/"):
             return self._mein("GET", u)
-        if u.path.startswith("/seitenbild/"):     # öffentlich: nur die für Anmelde-/Pächter-Seite gewählten Bilder
+        if u.path.startswith("/seitenbild/"):     # öffentlich: nur die für Anmelde-/Kontakt-Seite gewählten Bilder
             d = self._lade()
             if d is None:
                 return
             teile = u.path.split("/")
             bild = seitenbild(d, teile[2], teile[3]) if len(teile) == 4 else None
+            if not bild:
+                return self._send(404, {"fehler": "nicht gefunden"})
+            return self._send(200, bild[0], bild[1])
+        if u.path == "/managerlogo":               # öffentlich: Logo des Managers
+            d = self._lade()
+            if d is None:
+                return
+            bild = manager_logo(d)
+            if not bild:
+                return self._send(404, {"fehler": "nicht gefunden"})
+            return self._send(200, bild[0], bild[1])
+        if u.path.startswith("/spartenlogo/"):    # öffentlich: Logo einer Sparte (für Seiten, Mitgliederbereich und App)
+            d = self._lade()
+            if d is None:
+                return
+            bild = sparten_logo(d, urllib.parse.unquote(u.path.split("/", 2)[2]).upper()[:10])
             if not bild:
                 return self._send(404, {"fehler": "nicht gefunden"})
             return self._send(200, bild[0], bild[1])
@@ -300,6 +338,8 @@ class Handler(BaseHTTPRequestHandler):
             ich = json.dumps(ich_daten(*wer)).replace("<", "\\u003c")
             return self._send(200, HTML.replace("__TOKEN__", TOKEN).replace("__VERSION__", VERSION).replace("__FERN__", "1" if fern_nur else "0")
                               .replace("__SITZUNG_TAGE__", str(SITZUNG_TAGE)).replace("__ABMELDEN__", str(0 if fern_nur else sicherheit(d)["abmelden_minuten"]))
+                              .replace("__MANAGERLOGO__", (f'<img src="{manager_logo_src(d)}" alt="" class="mlogo-kopf">' if manager_logo(d) else ""))
+                              .replace("__KOPFLOGOS__", kopf_logos(d, sparten_von(wer[1])))
                               .replace("__ICH__", ich).replace("__PROFIL__", json.dumps(konto_profil(d, wer[0]), ensure_ascii=False).replace("<", "\\u003c")).encode("utf-8"), "text/html")
         if not wer:
             return self._send(401, {"fehler": "anmelden"})
@@ -625,12 +665,15 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/logos": lambda: akt_logos(d, sp_erl),
                 "/api/logo-bild": lambda: akt_logo_bild(d, q, sp_erl),
                 "/api/logo-waehlen": lambda: akt_logo_waehlen(d, b or {}, ich, sp_erl),
+                "/api/manager-logo": lambda: akt_manager_logo(d, b if isinstance(b, dict) and "logo" in b else None, ich, sp_erl),
+                "/api/sparten-logos": lambda: akt_sparten_logos(d, b if isinstance(b, dict) and b else None, ich, sp_erl),
+                "/api/sparten-logo-erzeugen": lambda: akt_sparten_logo_erzeugen(d, b or {}, ich, sp_erl),
                 "/api/laufzeiten": lambda: akt_laufzeiten(d, sp_erl),
                 "/api/laufzeit-verlaengern": lambda: akt_laufzeit_verlaengern(d, b or {}, ich, sp_erl),
                 "/api/laufzeit-starten": lambda: akt_laufzeit_starten(d, b or {}, ich, sp_erl),
                 "/api/zugang": lambda: akt_zugang(d, b or {}, ich, sp_erl),
                 "/api/laufzeit-einstellungen": lambda: akt_laufzeit_einstellungen(d, b or {}, ich),
-                "/api/app-zugangstoken": lambda: akt_app_zugangstoken(d, b or {}, ich),
+                "/api/app-zugangstoken": lambda: akt_app_zugangstoken(d, b or {}, ich, rechte["art"] == "admin"),
                 "/api/aktiv": lambda: {"ok": True, "abmelden_minuten": sicherheit(d)["abmelden_minuten"], "log": []},
                 "/api/2fa-vergessen": lambda: akt_2fa_vergessen(d, ich),
                 "/api/app-geraete": lambda: akt_app_geraete(d, ich, rechte["art"] == "admin" and q.get("alle", ["0"])[0] == "1"),
@@ -640,6 +683,7 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/ticket-kommentar": lambda: akt_ticket_kommentar(d, b or {}, ich, sp_erl),
                 "/api/ticket-loeschen": lambda: akt_ticket_loeschen(d, b or {}, ich),
                 "/api/ticket-schliessen": lambda: akt_ticket_schliessen(d, b or {}, ich, sp_erl),
+                "/api/tarif-antrag": lambda: akt_tarif_antrag(d, b or {}, ich, sp_erl),
                 "/api/ticket-zuordnen": lambda: akt_ticket_zuordnen(d, b or {}, ich, sp_erl),
                 "/api/ticket-mitglieder": lambda: akt_ticket_mitglieder(d, q, sp_erl),
                 "/api/mitglied-akte": lambda: akt_mitglied_akte(d, q, ich, rechte, sp_erl),

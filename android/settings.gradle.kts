@@ -13,4 +13,5 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "SparteNet"
-include(":app")
+include(":manager")  // Manager-App (Vorstand, Mitarbeiter)
+include(":mitglied") // Mitglieder-App (Pächter)

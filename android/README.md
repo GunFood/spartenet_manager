@@ -1,10 +1,36 @@
-# SparteNet – Android-App (Handy und Tablet)
+# SparteNet – Android-Apps (Handy und Tablet)
+
+Zwei getrennte Apps in einem Projekt – jede mit eigener Paket-ID, eigenem Symbol und eigener Anmeldung:
+
+| App | Modul | Paket | für wen | Anmeldung |
+|---|---|---|---|---|
+| **SparteNet Manager** (grün) | `manager/` | `de.spartenet.manager` | Vorstand und Mitarbeiter | Benutzername, Passwort (+ Zwei-Faktor) und eigener App-Zugangstoken |
+| **SparteNet Mitglied** (blau) | `mitglied/` | `de.spartenet.mitglied` | Pächter/Mitglieder | E-Mail-Adresse + Code per E-Mail (kein Passwort) |
+
+Die Mitglieder-App hat **keinen** Zugang zum Manager – nur zum Mitgliederbereich der eigenen Parzelle(n).
+
+## SparteNet Mitglied (`mitglied/`)
+
+Nutzt den Mitgliederbereich des Managers (ab 5.5, muss im Manager eingeschaltet sein: Reiter „Tickets“ → „Mitgliederbereich“).
+
+* **Anmelden:** Adresse des Vereins und E-Mail-Adresse eingeben → Code kommt per E-Mail → Code eingeben. Die App bekommt
+  einen eigenen Schlüssel `snm_…` (180 Tage gültig, nur als Prüfsumme gespeichert, verschlüsselt im Android Keystore).
+  „Abmelden“ entfernt den Schlüssel auch am Manager; der Administrator kann alle Mitglieder-Apps auf einmal abmelden.
+* **Mein Tarif:** Tarif, Laufzeit mit Resttagen, offener Betrag, Sperre; Upgrade jederzeit, kleinerer Tarif als Antrag
+  (Freigabe im Ticket), Neu buchen, Verlängern – je nach Einstellung im Manager; mit Bezahldienst öffnet sich die Bezahlseite.
+* **Geräte im WLAN:** angemeldete Geräte im Netz der Parzelle (IP 10.<Sparte>.<Parzelle>.<Gerät>), Zugangskarte per E-Mail.
+* **Rechnungen** als PDF öffnen, **Anfragen** ansehen und neue stellen.
+* **Tablet:** ab 840 dp zwei Spalten. Mehrere Parzellen mit derselben E-Mail-Adresse: Auswahl oben.
+* Schnittstelle: `POST /mein/info`, `/mein/code`, `/mein/anmelden` (`"app": true`), danach mit `Authorization: Bearer snm_…`:
+  `/mein/daten`, `/mein/geraete`, `/mein/buchen`, `/mein/ticket`, `/mein/zugangskarte`, `/mein/abmelden`, `GET /mein/rechnung?id=`.
+
+## SparteNet Manager (`manager/`)
 
 Native App (Kotlin, Jetpack Compose, Material 3) für den **SparteNet Manager ab Version 5.3** (App-Zugangstoken).
 Sie nutzt ausschließlich die App-Schnittstelle des Managers (`/api/v1/app/…` und `/api/…` mit `Authorization: Bearer sna_…`)
 und hat genau die Rechte des Benutzerkontos, mit dem sie angemeldet wird.
 
-## Funktionen
+### Funktionen
 
 | Bereich | Was geht in der App | nötiges Recht im Manager |
 |---|---|---|
@@ -22,11 +48,12 @@ und hat genau die Rechte des Benutzerkontos, mit dem sie angemeldet wird.
 **Tablet:** ab 600 dp Breite Navigationsleiste an der Seite, ab 1000 dp feste Seitenleiste; Anfragen und Mitglieder als
 Liste und Detail nebeneinander. Hoch- und Querformat werden unterstützt.
 
-## Sicherheit
+### Sicherheit
 
-* **App-Zugangstoken:** Beim Einrichten fragt die App nach dem Zugangstoken des Vereins (Manager → Benutzer → Anmeldung und
-  Sicherheit → App-Zugangstoken). Er wird verschlüsselt gespeichert und bei jeder Anfrage als `X-App-Token` mitgeschickt.
-  Erzeugt der Administrator einen neuen Token, fragt die App beim nächsten Anmelden danach.
+* **App-Zugangstoken:** Beim Einrichten fragt die App nach dem Zugangstoken des eigenen Kontos (Manager → Mein Konto →
+  Apps und Geräte → App-Zugangstokens; jeder Benutzer kann beliebig viele anlegen, z. B. einen je Gerät). Er wird
+  verschlüsselt gespeichert und bei jeder Anfrage als `X-App-Token` mitgeschickt. Wird der Token entfernt, fragt die App
+  beim nächsten Anmelden nach einem neuen.
 * Das Passwort wird **nicht** gespeichert. Nach der Anmeldung (mit Zwei-Faktor-Code, falls eingeschaltet) erhält die App einen
   eigenen Geräte-Schlüssel. Er liegt AES-GCM-verschlüsselt in den App-Einstellungen; der Schlüssel dazu steckt im
   **Android Keystore** und ist nicht exportierbar. Sicherung/Geräteübertragung ist für die App ausgeschaltet.
@@ -44,8 +71,8 @@ Liste und Detail nebeneinander. Hoch- und Querformat werden unterstützt.
 ## APK bauen
 
 ### A) GitHub Actions (ohne eigene Installation)
-Der Workflow `.github/workflows/android.yml` baut bei jeder Änderung unter `android/` eine **Debug-APK** und legt sie als
-Artefakt „SparteNet-App“ am Workflow-Lauf ab (Actions → Lauf → Artifacts). Die APK auf dem Handy öffnen und
+Der Workflow `.github/workflows/android.yml` baut bei jeder Änderung unter `android/` beide Apps als **Debug-APK** und legt sie als
+Artefakte „SparteNet-Manager-App“ und „SparteNet-Mitglieder-App“ am Workflow-Lauf ab (Actions → Lauf → Artifacts). Die APK auf dem Handy öffnen und
 „Installation aus unbekannten Quellen“ für den Browser/Dateimanager erlauben.
 
 Signierte Release-APK (optional): im Repository unter *Settings → Secrets and variables → Actions* anlegen:
@@ -54,7 +81,9 @@ Signierte Release-APK (optional): im Repository unter *Settings → Secrets and 
 
 ### B) Android Studio
 Ordner `android/` öffnen (Android Studio Ladybug oder neuer, JDK 17), Gradle-Sync abwarten, dann *Run* oder
-*Build → Build App Bundle(s)/APK(s)*. Auf der Kommandozeile: `./gradlew assembleDebug` → `app/build/outputs/apk/debug/`.
+*Build → Build App Bundle(s)/APK(s)*. Oben die Ausführung „manager“ (Manager-App) oder „mitglied“ (Mitglieder-App) wählen.
+Auf der Kommandozeile: `./gradlew :manager:assembleDebug` → `manager/build/outputs/apk/debug/`, `./gradlew :mitglied:assembleDebug` →
+`mitglied/build/outputs/apk/debug/`. Beide Apps können mit demselben Keystore signiert werden.
 
 Für eine lokale Release-Signatur `android/keystore.properties` anlegen (liegt nicht im Repo):
 ```

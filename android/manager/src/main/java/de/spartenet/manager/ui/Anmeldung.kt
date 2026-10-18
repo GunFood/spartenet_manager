@@ -73,7 +73,7 @@ fun AnmeldeSeite(speicher: Speicher, hinweis: String?, onAngemeldet: (Api, JSONO
 
     fun anmelden() {
         if (server.isBlank() || benutzer.isBlank() || passwort.isEmpty() || zugang.isBlank()) {
-            fehler = if (zugang.isBlank()) "Bitte den Zugangstoken eingeben – den bekommen Sie vom Administrator des Managers."
+            fehler = if (zugang.isBlank()) "Bitte Ihren Zugangstoken eingeben – im Manager unter Mein Konto → Apps und Geräte erzeugen."
             else "Bitte Server, Benutzer und Passwort eingeben."
             zeigeZugang = zeigeZugang || zugang.isBlank()
             return
@@ -153,10 +153,10 @@ fun AnmeldeSeite(speicher: Speicher, hinweis: String?, onAngemeldet: (Api, JSONO
                 if (zeigeZugang) {
                     OutlinedTextField(
                         value = zugang, onValueChange = { zugang = it.trim() },
-                        label = { Text("Zugangstoken (vom Administrator)") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Zugangstoken (Ihres Kontos)") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                         placeholder = { Text("snz_…") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next, autoCorrectEnabled = false),
-                        supportingText = { Text("Steht im Manager unter Benutzer → Anmeldung und Sicherheit → App-Zugangstoken. Wird verschlüsselt gespeichert.") },
+                        supportingText = { Text("Im Manager unter Mein Konto → Apps und Geräte → App-Zugangstokens selbst erzeugen (einer je Gerät). Wird verschlüsselt gespeichert.") },
                     )
                 } else {
                     androidx.compose.material3.TextButton(onClick = { zeigeZugang = true }) { Text("Zugangstoken ändern") }

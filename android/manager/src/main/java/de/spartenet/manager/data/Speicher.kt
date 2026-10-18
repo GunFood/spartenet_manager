@@ -49,7 +49,7 @@ class Speicher(context: Context) {
         if (wert.isNullOrEmpty()) prefs.edit().remove(k).apply() else prefs.edit().putString(k, verschluesseln(wert)).apply()
     }
 
-    /** App-Zugangstoken des Managers (vom Administrator), verschlüsselt je Server */
+    /** App-Zugangstoken des eigenen Kontos, verschlüsselt je Server */
     fun zugangstoken(server: String): String? = entschluesseln("zugang_" + schluesselName(server, ""))
 
     fun zugangstokenSetzen(server: String, wert: String?) {

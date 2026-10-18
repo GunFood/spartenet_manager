@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="sn_gruen">#1F5FA8</color>
+    <color name="sn_hintergrund">#E8F0FA</color>
+    <style name="Theme.SparteNet" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@color/sn_hintergrund</item>
+    </style>
+</resources>

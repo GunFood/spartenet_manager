@@ -218,10 +218,13 @@ class AnmeldungSicherheit(unittest.TestCase):
         self.assertEqual(b.anmelden("merker", "Merker-Passwort-1", code=notfall[0])[0], 200)
         self.assertEqual(b.anmelden("merker", "Merker-Passwort-1")[0], 200)                    # gleicher Browser: ohne Code
         self.assertEqual(Sitzung(SRV.basis).anmelden("merker", "Merker-Passwort-1")[0], 400)   # anderer Browser: Code nötig
-        app_token(a)
-        code, x = api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "merker", "passwort": "Merker-Passwort-1", "code": notfall[1], "geraet": "Test"})
-        self.assertTrue(x["merken"])
-        code, y = api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "merker", "passwort": "Merker-Passwort-1", "merken": x["merken"], "geraet": "Test"})
+        alt, APP_TOKEN["wert"] = APP_TOKEN["wert"], b.req("/api/app-zugangstoken", {"neu": True, "name": "Test"})[1]["token"]   # eigener Token von merker
+        try:
+            code, x = api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "merker", "passwort": "Merker-Passwort-1", "code": notfall[1], "geraet": "Test"})
+            self.assertTrue(x["merken"], x)
+            code, y = api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "merker", "passwort": "Merker-Passwort-1", "merken": x["merken"], "geraet": "Test"})
+        finally:
+            APP_TOKEN["wert"] = alt
         self.assertEqual(code, 200, y)
         b.req("/api/2fa-vergessen", {})
         self.assertEqual(b.anmelden("merker", "Merker-Passwort-1")[0], 400)                    # vergessen → wieder Code
@@ -537,6 +540,7 @@ class Version50(unittest.TestCase):
         self.assertEqual(s.roh("/portal")[0], 404)
         a.req("/api/portal-einstellungen", {"aktiv": True})
         code, _, html = s.roh("/portal")
+        self.assertEqual(s.roh("/kontakt")[0], 200)                                   # Kontakt-Seite unter /kontakt
         self.assertEqual(code, 200)
         self.assertIn(b"Zugangskarte", html)
         a.req("/api/ppsk", {"sparte": "BW", "art": "fehlende"})
@@ -573,6 +577,52 @@ class Version50(unittest.TestCase):
         for _ in range(6):
             code, x = s.req("/portal/zugang", paul)
         self.assertEqual(code, 400)                                  # Grenze
+
+    def test_y_spartenlogos(self):
+        """Logo je Sparte erzeugen, öffentlich abrufbar, in E-Mail (zwei Logos) und Rechnungs-PDF"""
+        import email as em
+        a = self.a
+        code, x = a.req("/api/sparten-logo-erzeugen", {"alle": True})
+        self.assertEqual(code, 200, x)
+        bw = next(z for z in x["sparten"] if z["sparte"] == "BW")
+        self.assertTrue(bw["logo"] and bw["logo_name"].startswith("Vereinslogo"), bw)
+        code, kopf, png = Sitzung(SRV.basis).roh("/spartenlogo/BW")
+        self.assertEqual((code, png[:8]), (200, b"\x89PNG\r\n\x1a\n"))
+        self.assertEqual(Sitzung(SRV.basis).roh("/spartenlogo/XX")[0], 404)
+        a.req("/api/email-layout", {"layout": {"aktiv": True, "logo": True, "spartenlogo": True}})
+        code, l = a.req("/api/rechnungslauf", {"jahr": 2032, "ausfuehren": True})
+        self.assertEqual(code, 200, l)
+        r41 = next(z for z in l["zeilen"] if z["parzelle"] == 41)
+        _, _, pdf = a.roh("/api/rechnung-pdf?id=" + r41["id"])
+        self.assertIn(b"/XObject", pdf)
+        n = len(SMTP.mails)
+        a.req("/api/rechnung-senden", {"ids": [r41["id"]]})
+        m = em.message_from_string(self._mails_seit(n)[0]["text"])
+        bilder = [t for t in m.walk() if t.get_content_type() == "image/png"]
+        self.assertGreaterEqual(len(bilder), 1)                       # Spartenlogo (Vereinslogo nur, wenn eines gewählt ist)
+        self.assertIn("cid:", next(t for t in m.walk() if t.get_content_type() == "text/html").get_payload(decode=True).decode())
+        code, x = a.req("/api/sparten-logos", {"sparte": "BW", "logo": "-"})
+        self.assertFalse(next(z for z in x["sparten"] if z["sparte"] == "BW")["logo"])
+        self.assertEqual(Sitzung(SRV.basis).roh("/spartenlogo/BW")[0], 404)
+        a.req("/api/sparten-logos", {"sparte": "BW", "logo": ""})                      # zurück auf automatisch
+        self.assertEqual(Sitzung(SRV.basis).roh("/spartenlogo/BW")[0], 200)
+        self.assertIn(b'class="kopflogos"', a.roh("/")[2])                             # Vereinslogo neben dem Manager-Logo
+        code, x = a.req("/api/manager-logo")
+        self.assertEqual((code, x["logo"]), (200, "standard"), x)                      # Manager-Logo: Standard ist das SparteNet-Symbol
+        self.assertIn(b'class="mlogo-kopf"', a.roh("/")[2])
+        self.assertEqual(Sitzung(SRV.basis).roh("/managerlogo")[0], 200)
+        code, x = a.req("/api/manager-logo", {"logo": bw["logo"]})                     # beliebiges Bild aus den Unterlagen
+        self.assertEqual((code, x["logo"]), (200, bw["logo"]), x)
+        a.req("/api/seiten-design", {"art": "login", "design": {"logo": "manager"}})
+        self.assertIn(b"/managerlogo?v=", Sitzung(SRV.basis).roh("/")[2])             # Anmeldeseite mit Manager-Logo
+        a.req("/api/manager-logo", {"logo": ""})
+        self.assertEqual(Sitzung(SRV.basis).roh("/managerlogo")[0], 404)
+        self.assertNotIn(b'class="mlogo-kopf"', a.roh("/")[2])
+        a.req("/api/manager-logo", {"logo": "standard"})
+        a.req("/api/seiten-design", {"art": "login", "design": {"logo": "standard"}})
+        a.req("/api/seiten-design", {"art": "login", "design": {"spartenlogos": True}})
+        self.assertIn(b"/spartenlogo/BW", Sitzung(SRV.basis).roh("/")[2])             # Anmeldeseite: neben dem Logo
+        a.req("/api/seiten-design", {"art": "login", "design": {"spartenlogos": False}})
 
     def test_zz_mitgliederbereich(self):
         """/mein: Anmeldung per E-Mail-Code, eigene Daten, Wechsel als Anfrage, Bezahldienst mit signiertem Webhook (läuft als letzter der Klasse)"""
@@ -611,11 +661,35 @@ class Version50(unittest.TestCase):
         rita = next((r for r in (rl.get("zeilen") or []) if r.get("parzelle") == 41), None)
         if rita:
             self.assertEqual(s.roh("/mein/rechnung?id=" + rita["id"])[0], 404)
+        # nur eigene Tickets: gleiche E-Mail, aber andere Parzelle → nicht sichtbar
+        a.req("/api/ticket-speichern", {"ticket": {"betreff": "Fremdes Ticket", "email": "paul@example.org", "sparte": "BW", "parzelle": "41"}})
+        self.assertNotIn("Fremdes Ticket", json.dumps(s.req("/mein/daten", {})[1]["parzellen"][0]["tickets"]))
+        # buchbare Tarife auswählen
+        self.assertEqual(a.req("/api/mitgliederbereich", {"tarife": ["Basic", "Max"], "titel": "Mein WLAN"})[0], 200)
+        self.assertIn(b"Mein WLAN", s.roh("/mein")[2])
+        self.assertEqual([t["name"] for t in s.req("/mein/daten", {})[1]["tarife"]], ["Basic", "Max"])
+        self.assertEqual(s.req("/mein/buchen", {"id": p["id"], "art": "wechsel", "tarif": "Plus"})[0], 400)
+        # Upgrade jederzeit: sofort gebucht
         code, x = s.req("/mein/buchen", {"id": p["id"], "art": "wechsel", "tarif": "Max"})
         self.assertEqual(code, 200, x)
-        self.assertIn("Anfrage", x["text"])
+        self.assertEqual(s.req("/mein/daten", {})[1]["parzellen"][0]["tarif"], "Max")
+        # Downgrade nur als Antrag mit Freigabe im Ticketsystem
+        code, x = s.req("/mein/buchen", {"id": p["id"], "art": "wechsel", "tarif": "Basic"})
+        self.assertEqual(code, 200, x)
+        self.assertIn("freigegeben", x["text"])
+        dd = s.req("/mein/daten", {})[1]["parzellen"][0]
+        self.assertEqual((dd["tarif"], dd["antraege"][0]["tarif"]), ("Max", "Basic"))
+        self.assertEqual(s.req("/mein/buchen", {"id": p["id"], "art": "wechsel", "tarif": "Basic"})[0], 400)     # nicht doppelt
         _, tl = a.req("/api/tickets?status=alle")
-        self.assertTrue(any("Tarifwechsel Basic → Max" in z["betreff"] for z in tl["zeilen"]))
+        tid = next(z["id"] for z in tl["zeilen"] if z["betreff"].startswith("Antrag: Downgrade Max → Basic"))
+        self.assertEqual(a.req("/api/tarif-antrag", {"id": tid, "freigeben": False})[0], 400)                # Ablehnen nur mit Grund
+        n = len(SMTP.mails)
+        code, x = a.req("/api/tarif-antrag", {"id": tid, "freigeben": True})
+        self.assertEqual(code, 200, x)
+        self.assertEqual((x["ticket"]["status"], x["ticket"]["antrag"]["status"]), ("geschlossen", "freigegeben"))
+        self.assertTrue(any("freigegeben" in m["text"] for m in self._mails_seit(n)))
+        self.assertEqual(s.req("/mein/daten", {})[1]["parzellen"][0]["tarif"], "Basic")
+        self.assertEqual(a.req("/api/tarif-antrag", {"id": tid, "freigeben": True})[0], 400)                  # nur einmal
         # Bezahldienst
         self.assertEqual(a.req("/api/mitgliederbereich", {"modus": "bezahldienst"})[0], 400)       # ohne Link/Schnittstelle
         code, x = a.req("/api/mitgliederbereich", {"modus": "bezahldienst", "checkout_vorlage": "https://bezahlen.example/pay?ref={referenz}&cent={betrag_cent}&zurueck={rueckkehr}", "geheim_neu": True})
@@ -638,9 +712,70 @@ class Version50(unittest.TestCase):
         self.assertIn(b"schon bezahlt", y)                                                          # nicht doppelt
         _, x = a.req("/api/mitgliederbereich")
         self.assertEqual(next(z for z in x["auftraege"] if z["referenz"] == ref)["status"], "bezahlt")
+        code, x = s.req("/mein/buchen", {"id": p["id"], "art": "wechsel", "tarif": "Basic"})          # Downgrade auch im Bezahlmodus nur als Antrag
+        self.assertEqual(code, 200, x)
+        _, tl = a.req("/api/tickets?status=offen")
+        tid = next(z["id"] for z in tl["zeilen"] if z["betreff"].startswith("Antrag: Downgrade"))
+        code, x = a.req("/api/tarif-antrag", {"id": tid, "freigeben": False, "grund": "Vertrag läuft noch"})
+        self.assertEqual((code, x["ticket"]["antrag"]["status"]), (200, "abgelehnt"), x)
+        self.assertEqual(s.req("/mein/daten", {})[1]["parzellen"][0]["tarif"], "Max")
         s.req("/mein/abmelden", {})
         self.assertEqual(s.req("/mein/daten", {})[0], 401)
-        a.req("/api/mitgliederbereich", {"aktiv": False, "modus": "anfrage"})
+        # weitere Person derselben Parzelle: eigener Einmalcode, gleiche Parzelle, gleiche Rechnungen
+        _, ml = a.req("/api/mitglieder")
+        paul = next(z for z in ml["zeilen"] if z["email"] == "paul@example.org")
+        self.assertEqual(a.req("/api/mitglied-speichern", {"mitglied": {**paul, "weitere": [{"vorname": "Pia", "nachname": "Portal", "email": "paul@example.org"}]}})[0], 400)
+        code, x = a.req("/api/mitglied-speichern", {"mitglied": {**paul, "weitere": [{"vorname": "Pia", "nachname": "Portal", "email": "Pia@Example.org"}, {}]}})
+        self.assertEqual(code, 200, x)
+        self.assertEqual(next(z for z in x["zeilen"] if z["id"] == paul["id"])["weitere"][0]["email"], "pia@example.org")
+        n = len(SMTP.mails)
+        pia = Sitzung(SRV.basis)
+        pia.req("/mein/code", {"email": "pia@example.org"})
+        m = self._mails_seit(n)[0]
+        self.assertIn("pia@example.org", m["an"])
+        teile = [x.get_payload(decode=True).decode("utf-8", "replace") for x in em.message_from_string(m["text"]).walk() if not x.is_multipart()]
+        self.assertIn("Hallo Pia", " ".join(teile))
+        self.assertEqual(pia.req("/mein/anmelden", {"email": "pia@example.org", "code": re.search(r">(\d{6})<", " ".join(teile)).group(1)})[0], 200)
+        code, x = pia.req("/mein/daten", {})
+        pp = x["parzellen"][0]
+        self.assertEqual((code, pp["parzelle"], x["mitglied"]), (200, "42", "Pia Portal"), x)
+        self.assertTrue(pp["rechnungen"])                                          # Rechnungen der Parzelle (laufen auf Paul)
+        self.assertEqual(pia.roh("/mein/rechnung?id=" + pp["rechnungen"][0]["id"])[0], 200)
+        code, x = Sitzung(SRV.basis).req("/portal/status", {"vorname": "Pia", "nachname": "Portal", "email": "pia@example.org", "sparte": "BW", "parzelle": "42"})
+        self.assertEqual(code, 200, x)                                             # Kontakt-Seite erkennt die weitere Person
+        a.req("/api/mitglied-speichern", {"mitglied": {**paul, "weitere": []}})
+        self.assertEqual(pia.req("/mein/daten", {})[1]["parzellen"], [])             # entfernt: kein Zugriff mehr
+        # Mitglieder-App: Anmeldung mit Code, dann dauerhafter Schlüssel im Kopf (kein Cookie)
+        self.assertEqual(api(SRV.basis, "POST", "/mein/info", {})[1]["titel"], "Mein WLAN")
+        code, x = api(SRV.basis, "POST", "/mein/logo", {"email": "Paul@example.org"})        # Vereinslogo nach Eingabe der E-Mail
+        self.assertTrue(code == 200 and x["logo"].startswith("/spartenlogo/BW"), x)
+        self.assertEqual(api(SRV.basis, "POST", "/mein/logo", {"email": "niemand@example.org"})[1]["logo"], "")
+        code, x = api(SRV.basis, "POST", "/mein/stoerung", {})
+        self.assertEqual((code, x["stoerungen"]), (200, []), x)                       # keine Störung gemeldet
+        code, x = a.req("/api/mitgliederbereich", {"stoerung_farbe": "#aa0000", "stoerung_text": "Ansprechpartner: Vorstand"})
+        self.assertEqual((code, x["einstellungen"]["stoerung_farbe"]), (200, "#aa0000"), x)
+        self.assertEqual(a.req("/api/mitgliederbereich", {"stoerung_farbe": "rot"})[0], 400)
+        code, x = a.req("/api/seiten-design", {"art": "mein", "design": {"titel": "Gartenfreunde online", "farbe_kopf": "#224466"}})
+        self.assertEqual((code, x["mein"]["titel"]), (200, "Gartenfreunde online"), x)
+        self.assertIn(b"Gartenfreunde online", Sitzung(SRV.basis).roh("/mein")[2])
+        code, x = a.req("/api/seiten-vorschau", {"art": "mein", "design": {"titel": "Vorschau"}})
+        self.assertIn("vorschau(", x["html"])
+        a.req("/api/seiten-design", {"art": "mein", "zuruecksetzen": True})
+        n = len(SMTP.mails)
+        api(SRV.basis, "POST", "/mein/code", {"email": "paul@example.org"})
+        teile = [x.get_payload(decode=True).decode("utf-8", "replace") for x in em.message_from_string(self._mails_seit(n)[0]["text"]).walk() if not x.is_multipart()]
+        code, x = api(SRV.basis, "POST", "/mein/anmelden", {"email": "paul@example.org", "code": re.search(r">(\d{6})<", " ".join(teile)).group(1), "app": True, "geraet": "Pixel"})
+        self.assertEqual(code, 200, x)
+        snm = x["token"]
+        self.assertTrue(snm.startswith("snm_"))
+        code, x = api(SRV.basis, "POST", "/mein/daten", {}, snm)
+        self.assertEqual((code, x["parzellen"][0]["parzelle"]), (200, "42"), x)
+        self.assertEqual(api(SRV.basis, "POST", "/mein/daten", {}, snm[:-2] + "xx")[0], 401)
+        self.assertEqual(a.req("/api/mitgliederbereich")[1]["apps"], 1)
+        self.assertEqual(api(SRV.basis, "GET", "/api/tickets", None, snm)[0], 401)                  # kein Zugang zum Manager
+        api(SRV.basis, "POST", "/mein/abmelden", {}, snm)
+        self.assertEqual(api(SRV.basis, "POST", "/mein/daten", {}, snm)[0], 401)
+        a.req("/api/mitgliederbereich", {"aktiv": False, "modus": "anfrage", "tarife": [], "titel": ""})
 
     def test_app_zugang(self):
         a = self.a
@@ -652,15 +787,36 @@ class Version50(unittest.TestCase):
         app_token(a)
         a.req("/api/benutzer-speichern", {"neu": True, "name": "appnutzer", "passwort": "App-Passwort-123", "passwort2": "App-Passwort-123", "art": "bereiche",
                                           "bereiche": {"tickets": "schreiben", "start": "lesen"}})
-        self.assertEqual(api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "appnutzer", "passwort": "falsch-falsch"})[0], 401)
-        code, x = api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "appnutzer", "passwort": "App-Passwort-123", "geraet": "Pixel 9"})
+        code, x = api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "appnutzer", "passwort": "App-Passwort-123"})
+        self.assertEqual((code, x.get("zugangstoken")), (401, True), x)          # Token des Administrators gilt nicht für andere Konten
+        n = Sitzung(SRV.basis)
+        self.assertEqual(n.anmelden("appnutzer", "App-Passwort-123")[0], 200)
+        code, t1 = n.req("/api/app-zugangstoken", {"neu": True, "name": "Pixel 9"})
+        self.assertEqual(code, 200, t1)
+        code, t2 = n.req("/api/app-zugangstoken", {"neu": True, "name": "Tablet"})
+        self.assertEqual([t["name"] for t in t2["tokens"]], ["Pixel 9", "Tablet"])             # beliebig viele, nur die eigenen
+        self.assertNotIn("token", n.req("/api/app-zugangstoken")[1])                           # nur einmal angezeigt
+        _, alle = a.req("/api/app-zugangstoken")
+        self.assertTrue({"admin", "appnutzer"} <= {t["konto"] for t in alle["tokens"]})          # Administrator sieht alle
+        adm = next(t["id"] for t in alle["tokens"] if t["konto"] == "admin")
+        self.assertEqual(n.req("/api/app-zugangstoken", {"entfernen": adm})[0], 400)           # fremden Token nicht entfernen
+        self.assertEqual(n.req("/api/app-zugangstoken", {"alle_sperren": True})[0], 400)
+        admin_token, APP_TOKEN["wert"] = APP_TOKEN["wert"], t1["token"]
+        try:
+            self.assertEqual(api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "appnutzer", "passwort": "falsch-falsch"})[0], 401)
+            code, x = api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "admin", "passwort": PASSWORT})
+            self.assertEqual((code, x.get("zugangstoken")), (401, True), x)      # Token von appnutzer gilt nicht für admin
+            code, x = api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "appnutzer", "passwort": "App-Passwort-123", "geraet": "Pixel 9"})
+        finally:
+            APP_TOKEN["wert"] = admin_token
         self.assertEqual(code, 200, x)
         tok = x["token"]
+        zt = t1["token"]
         self.assertTrue(tok.startswith("sna_"))
         def mit_app(pfad, body=None):
             r = urllib.request.Request(SRV.basis + pfad, data=json.dumps(body).encode() if body is not None else None, method="POST" if body is not None else "GET")
             r.add_header("Authorization", "Bearer " + tok)
-            r.add_header("X-App-Token", APP_TOKEN["wert"])
+            r.add_header("X-App-Token", zt)
             r.add_header("Content-Type", "application/json")
             try:
                 with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(r) as o:
@@ -676,6 +832,16 @@ class Version50(unittest.TestCase):
         self.assertEqual(mit_app("/api/ticket-speichern", {"ticket": {"betreff": "aus der App"}})[0], 200)
         code, x = mit_app("/api/v1/app/funktionen")
         self.assertTrue(any(f["pfad"] == "/api/tickets" for f in x["funktionen"]))
+        zt, gueltig = APP_TOKEN["wert"], t1["token"]
+        self.assertEqual(mit_app("/api/app-uebersicht")[0], 401)                 # Schlüssel von appnutzer + Token von admin: abgelehnt
+        zt = t2["token"]
+        self.assertEqual(mit_app("/api/app-uebersicht")[0], 200)                 # zweiter eigener Token geht auch
+        n.req("/api/app-zugangstoken", {"entfernen": t2["tokens"][1]["id"]})
+        self.assertEqual(mit_app("/api/app-uebersicht")[0], 401)                 # entfernt: kein Zugang mehr
+        zt = gueltig
+        code, x = mit_app("/api/app-zugangstoken")
+        self.assertEqual(x["tokens"][0]["name"], "Pixel 9")
+        self.assertTrue(x["tokens"][0]["zuletzt"])
         code, x = mit_app("/api/app-geraete")
         gid = x["geraete"][0]["id"]
         mit_app("/api/app-geraet-entfernen", {"id": gid})

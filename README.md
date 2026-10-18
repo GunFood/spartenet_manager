@@ -1,4 +1,4 @@
-SparteNet Manager 5.4 (Cloud)
+SparteNet Manager 5.5 (Cloud)
 ===============================
 
 Funktioniert komplett über die UniFi-Cloud (api.ui.com). Kein lokaler Zugriff, kein VPN.
@@ -101,9 +101,95 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   Höchstens 120 Anfragen je Minute und Schlüssel (SPARTENET_API_PRO_MINUTE). Zahlungsanbieter über n8n/Zapier/Make
   anbinden. Von außen nur über HTTPS (Reverse-Proxy, dann SPARTENET_PROXY=1).
 
+### APP-ZUGANGSTOKENS JE BENUTZER – neu in 5.5 (seit 5.3 ein gemeinsamer Token)
+  Mein Konto → Apps und Geräte → App-Zugangstokens: jeder Benutzer erzeugt seine eigenen Tokens, beliebig viele
+  (z. B. einen je Handy oder Tablet, mit Namen). Ein Token gilt nur für das eigene Konto, wird nur einmal angezeigt
+  und nur als Prüfsumme gespeichert; die Liste zeigt "zuletzt benutzt". Einzelne Tokens lassen sich entfernen – Apps
+  mit diesem Token haben dann sofort keinen Zugang mehr. Der Administrator sieht die Tokens aller Konten, kann jeden
+  entfernen oder alle auf einmal sperren.
+  Die App fragt den Token beim Einrichten ab und schickt ihn bei jeder Anfrage mit (Header "X-App-Token").
+  Anmeldung und Datenabruf klappen nur, wenn Token, Benutzerkonto und App-Schlüssel zusammengehören.
+  Umstieg: Der bisherige gemeinsame Token aus 5.3/5.4 gilt weiter für alle Konten ("alle Konten (alt)" in der Liste),
+  bis der Administrator ihn entfernt – am besten, sobald jeder seinen eigenen Token eingetragen hat.
+
+### STÖRUNGEN IM MITGLIEDERBEREICH – neu in 5.5
+  Meldet die Störungsüberwachung einen Ausfall (Ticket erstellt), sehen Mitglieder eine hervorgehobene Meldung – im Mitgliederbereich
+  oben auf der Hauptseite, schon auf seiner Anmeldeseite und in der Mitglieder-App, z. B. "Achtung: Access Point Festwiese ist aktuell
+  ausgefallen (seit …). Ein Störungsticket T-0042 ist erstellt und an den Verein verschickt …". Nach "wieder online" verschwindet sie.
+  - Karte "Mitgliederbereich": ein-/ausschalten, Farbe, Meldung je Gerät ({geraet} {seit} {ticket} {modell}) und ein eigener Zusatztext.
+  - System → Störungsüberwachung: je Gerät "betrifft Sparte" (Standard: alle Sparten). Mitglieder sehen nur Ausfälle ihrer Sparte;
+    die Anmeldeseite zeigt ohne E-Mail nur Ausfälle aller Sparten, nach Eingabe der E-Mail die passenden zur Sparte.
+
+### LOGOS: MANAGER-LOGO UND VEREINSLOGOS GETRENNT – neu in 5.5
+  ☰ → System & Konto → Oberfläche gestalten → Karte "Logos":
+  - Manager-Logo: anzeigen und wählen (Bild aus den Unterlagen, SparteNet-Symbol oder keins). Erscheint in der Kopfzeile neben
+    "SparteNet"; auf Anmelde-, Kontakt-Seite und im Mitgliederbereich beim Logo "Manager-Logo" wählen; in E-Mails und PDFs, wenn im
+    E-Mail-Layout kein eigenes Logo gewählt ist. Öffentlich unter /managerlogo.
+  - Vereinslogos der Sparten: getrennt davon je Sparte wählen, automatisch oder erzeugen (siehe "Spartenlogos").
+
+### MEHRERE PERSONEN JE PARZELLE – neu in 5.5
+  Mitglieder → Bearbeiten → "Weitere Personen dieser Parzelle" (bis 6: Mitpächter, Partner, Familie – Name, E-Mail, Telefon).
+  Jede Person mit E-Mail-Adresse meldet sich selbst im Mitgliederbereich und in der Mitglieder-App an (Einmalcode an die eigene
+  Adresse, Anrede mit eigenem Namen) und sieht dieselbe Parzelle: Tarif, Geräte, Rechnungen, Anfragen; Buchungen und Anfragen
+  laufen auf die Parzelle. Auf der Kontakt-Seite werden weitere Personen genauso erkannt, das Vereinslogo zur E-Mail ebenso.
+  Rechnungen, Verträge und Rundschreiben gehen weiter an das Mitglied selbst. Person entfernen = Zugang sofort weg.
+
+### KONTAKT-SEITE, MITGLIEDERBEREICH GESTALTEN, VEREINSLOGO – neu in 5.5
+  - Die bisherige "Pächter-Seite" heißt jetzt Kontakt-Seite (erreichbar unter /portal und /kontakt).
+  - Oberfläche gestalten → "Mitgliederbereich gestalten": eigenes Aussehen für /mein (Farben, Schrift, Logo, Hintergrund, Titel,
+    Text auf der Anmeldung, Hinweis, Kontakt, Impressum/Datenschutz) mit Vorschau (Anmeldung + Beispieldaten). Ohne eigene
+    Gestaltung sieht er aus wie die Kontakt-Seite; Titel und Texte stehen nicht mehr in der Karte "Mitgliederbereich".
+  - Vereinslogo zur E-Mail: Auf der Anmeldung des Mitgliederbereichs und in der Mitglieder-App erscheint das Logo der Sparte, sobald
+    eine passende E-Mail-Adresse eingegeben ist (abschaltbar: "Vereinslogo der Sparte daneben"; Abfrage begrenzt auf 60 je Stunde).
+    Auf der Kontakt-Seite erscheint das Vereinslogo, sobald eine Sparte gewählt ist.
+  - Vereinslogo neben dem Manager-Logo: in der Kopfzeile des Managers (Logos der Sparten, die das Konto sehen darf) und auf der
+    Anmeldeseite ("Vereinslogos der Sparten neben dem Manager-Logo zeigen").
+  - Android: Ordner android/manager (Manager-App, vorher android/app) und android/mitglied (Mitglieder-App).
+
+### SPARTENLOGOS UND VEREINSLOGOS – neu in 5.5
+  ☰ → System & Konto → Oberfläche gestalten → Karte "Logos" → Vereinslogos der Sparten: jede Sparte kann neben dem Vereinslogo ein eigenes Logo haben.
+  - Wählen aus den Unterlagen – oder automatisch: ein Bild im Unterlagen-Ordner "Logos", das der Sparte zugeordnet ist.
+  - "Erzeugen" / "Für alle Sparten ohne Logo erzeugen": der Manager zeichnet aus dem Spartennamen ein rundes Vereinsabzeichen
+    (Farbe aus dem Namen; Motiv passend: Baum bei Buche/Eiche/Linde/…, Blüte bei Rose/Blume/Garten/…, Wellen bei See/Teich/Bach/…,
+    Sonne, Berg, sonst Blatt; darunter das Kürzel) und legt es als PNG unter Unterlagen → Logos ab.
+  - Das Spartenlogo erscheint neben dem Vereinslogo: in E-Mails (die Sparte wird an der E-Mail-Adresse des Mitglieds erkannt;
+    Schalter "Spartenlogo daneben" im E-Mail-Layout), auf Rechnungen und Zugangskarten als PDF, auf gedruckten Zugangskarten und
+    Gast-Vouchern (Kartendesign → Logo → "Spartenlogo daneben"), im Mitgliederbereich und in der Mitglieder-App; auf Wunsch als
+    Leiste aller Sparten unten auf der Kontakt-Seite ("Logos aller Sparten unten zeigen").
+  - Öffentlich abrufbar unter /spartenlogo/<Kürzel> (für Seiten und App).
+
+### ZWEI ANDROID-APPS: MANAGER UND MITGLIED – neu in 5.5
+  Ordner android/manager: "SparteNet Manager" (grün, für Vorstand und Mitarbeiter, wie bisher) und android/mitglied: neu "SparteNet Mitglied" (blau,
+  nur für Pächter). Die Mitglieder-App meldet sich mit Adresse des Vereins, E-Mail-Adresse und Code per E-Mail an und zeigt
+  den Mitgliederbereich: Tarif mit Laufzeit, Upgrade/kleinerer Tarif/Verlängern, Geräte im WLAN, Zugangskarte, Rechnungen (PDF),
+  Anfragen. Sie bekommt einen eigenen Schlüssel (snm_…, 180 Tage, nur als Prüfsumme gespeichert) und hat keinen Zugang zum
+  Manager. Anzahl angemeldeter Mitglieder-Apps und "Alle abmelden" in der Karte "Mitgliederbereich". Bauen: android/README.md.
+
+### MITGLIEDERBEREICH: ANPASSEN, TARIFE, ANTRÄGE – neu in 5.5
+  Reiter "Tickets" → Karte "Mitgliederbereich":
+  - Anpassen: sichtbare Bereiche (Geräte, Rechnungen, Anfragen, neue Anfrage, Zugangskarte) einzeln ein-/ausschalten. Aussehen,
+    Titel und Texte: ☰ → System & Konto → Oberfläche gestalten → Mitgliederbereich gestalten.
+  - Buchbare Tarife auswählen (keiner ausgewählt = alle).
+  - Upgrade (teurerer bzw. schnellerer Tarif) jederzeit: sofort gebucht – im Modus "Bezahldienst" nach der Bezahlung.
+  - Kleinerer Tarif (Downgrade) nur als Antrag: im Ticket erscheint "Tarif-Antrag" mit "Freigeben und buchen" oder "Ablehnen …"
+    (mit Grund). Freigeben bucht sofort, schließt das Ticket und informiert das Mitglied per E-Mail. Recht: Buchungen bearbeiten.
+    Ohne Bezahldienst laufen auch Neubuchung und Verlängerung über diese Freigabe.
+  - Mitglieder sehen nur ihre eigenen Anfragen: fest zugeordnet oder gleiche E-Mail UND gleiche Parzelle. Tickets werden beim
+    Anlegen nur noch dem Mitglied zugeordnet, dessen Parzelle passt (gleiche E-Mail mit anderer Parzelle reicht nicht mehr).
+
+### ENTER BESTÄTIGT EINGABEN – neu in 5.5
+  In der Oberfläche löst Enter in einem Eingabefeld den nächsten grünen Knopf im selben Block aus (z. B. Speichern, Anlegen).
+  Im Mitgliederbereich: E-Mail → Code senden, Code → Anmelden, Nachricht mit Strg+Enter senden. Kontakt-Seite: Enter sendet das Formular.
+
+### FEHLERBEHEBUNGEN – 5.5
+  App-Zugangstoken wurde nach dem Erzeugen nicht angezeigt; CPU-/RAM-Balken unter System standen fast immer auf 100 %;
+  "Unterschiede ermitteln" schrieb seine Kacheln auf die Startseite. Ein Test verhindert jetzt doppelte Namen in der Oberfläche.
+
 ### MITGLIEDERBEREICH /mein – neu in 5.4
 Eigene Seite für Mitglieder (Reiter "Tickets" → Karte "Mitgliederbereich" einschalten, nur Administrator):
-- Anmeldung mit der beim Mitglied hinterlegten E-Mail-Adresse und einem 6-stelligen Code per E-Mail (10 Minuten gültig, kein Passwort). Abmelden nach einstellbarer Zeit ohne Aktivität.
+- Anmeldung mit der beim Mitglied hinterlegten E-Mail-Adresse und einem 6-stelligen Einmalcode per E-Mail (10 Minuten, nur einmal gültig, kein Passwort).
+  Der Code wird über den E-Mail-Versand des Managers verschickt (Automationen → E-Mail-Versand, mit E-Mail-Layout/Logo) – ohne
+  eingerichteten Versand ist keine Anmeldung möglich; die Karte "Mitgliederbereich" warnt dann. Abmelden nach einstellbarer Zeit ohne Aktivität.
 - Je Parzelle: Tarif mit Laufzeit (Ende, Resttage, Sperre), Rechnungen als PDF, offene Beträge, eigene Anfragen, neue Anfrage, Zugangskarte per E-Mail.
 - Geräte im WLAN: alle gerade angemeldeten Geräte im Netz der Parzelle, erkennbar an der IP 10.<Sparte>.<Parzelle>.<Gerät> (z. B. 10.20.56.121 = Sparte 20, Parzelle 56, Gerät 121). Quelle: Client-Liste des Gateways, MAC nur gekürzt.
 - Tarif wechseln, neu buchen, Laufzeit verlängern – einzeln abschaltbar. Modus "Anfrage" (Wunsch geht als geprüfte Anfrage an den Vorstand) oder "Bezahldienst":
@@ -118,7 +204,7 @@ Eigene Seite für Mitglieder (Reiter "Tickets" → Karte "Mitgliederbereich" ein
 ### OBERFLÄCHE GESTALTEN (☰ → System & Konto → Oberfläche gestalten) – neu in 5.3
   • Anmeldeseite gestalten: Aufbau (zweigeteilt oder mittig), Schrift, Ecken, Farben, Logo und Hintergrundbild aus den
     Unterlagen (mit Abdunkeln), alle Texte, bis zu 6 Punkte, Kontakt, Impressum/Datenschutz – mit Live-Vorschau PC/Handy.
-  • Pächter-Seite gestalten: ebenso, dazu Namen und Reihenfolge der Funktionen, Hinweise, Danke-Text, Kontakt, Fußzeile.
+  • Kontakt-Seite gestalten: ebenso, dazu Namen und Reihenfolge der Funktionen, Hinweise, Danke-Text, Kontakt, Fußzeile.
     Nur Text und Farben – kein eigenes HTML. Öffentliche Bilder nur über /seitenbild/<seite>/<logo|hintergrund>.
   • Menü und Ansichtsprofile: je Profil eigener Menübaum mit Nummern (1 · 1.1 · 1.1.1) und festen Kennnummern (B…, R…, K…):
     Bereiche, Reiter und Karten umbenennen, sortieren, ausblenden; Bereiche anlegen, Reiter verschieben, Startseite,
@@ -127,18 +213,13 @@ Eigene Seite für Mitglieder (Reiter "Tickets" → Karte "Mitgliederbereich" ein
   • Neues Recht „Oberfläche gestalten“ (kein/lesen/schreiben).
 
 ### ANFRAGEN NUR MIT PASSENDEN MITGLIEDSDATEN – neu in 5.3
-  Pächter-Seite: Anfrage als Mitglied nur, wenn Vorname, Nachname, E-Mail, Sparte und Parzelle zu einem gespeicherten
+  Kontakt-Seite: Anfrage als Mitglied nur, wenn Vorname, Nachname, E-Mail, Sparte und Parzelle zu einem gespeicherten
   Mitglied passen (Groß-/Kleinschreibung egal, ä = ae, ß = ss). Die Meldung verrät nicht, welches Feld falsch war; nach
   5 Fehlversuchen je Parzelle/Absender eine Stunde gesperrt. Auswahl „Ich bin kein Mitglied einer Sparte“ und „Ich bin
   Interessent“ (abschaltbar) – solche Tickets sind gekennzeichnet. Stand abfragen: Ticket-Nr., Name, E-Mail (Mitglieder
   zusätzlich Sparte und Parzelle); Zugangskarte: alle fünf Angaben. Spamschutz: kleine Rechenaufgabe, Mindestzeit,
   höchstens zwei Links, Honigtopf-Feld. API POST /api/v1/ticket: ebenso Prüfung ("vorname", "nachname", "email",
   "sparte", "parzelle" oder "art": "kein_mitglied"/"interessent"); Recht "tickets_ungeprueft" für eigene, geprüfte Formulare.
-
-### APP-ZUGANGSTOKEN – neu in 5.3
-  Benutzer → Anmeldung und Sicherheit → App-Zugangstoken: einmal erzeugen (nur einmal angezeigt, gespeichert als Prüfsumme)
-  und an die App-Nutzer geben. Die App fragt ihn beim Einrichten ab und schickt ihn bei jeder Anfrage mit
-  (Header "X-App-Token"). Ohne gültigen Token keine App-Anmeldung und kein Datenabruf; neu erzeugen sperrt alle alten.
 
 ### MENÜ (☰) – neu in 5.2
   Knopf ☰ oben links (oder Strg+K): alle Funktionen nach Bereichen geordnet – Übersicht, Einrichtung, WLAN & Zugang,

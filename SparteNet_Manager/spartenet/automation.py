@@ -52,7 +52,7 @@ PLATZHALTER = {
     "{rechnung}": "Rechnungsnummer", "{faellig}": "Fälligkeit der Rechnung",
 }
 AKTION_ERWEITERUNG = {}   # Aktionen späterer Module: f(d, daten, aktion, werte, probe, regelname) → Text fürs Protokoll
-LAYOUT_STANDARD = {"aktiv": True, "logo": True, "logo_unterlage": "", "farbe_kopf": "#1d2f3e", "farbe_kopf_text": "#ffffff", "farbe_akzent": "#3a9a1f",
+LAYOUT_STANDARD = {"aktiv": True, "logo": True, "logo_unterlage": "", "spartenlogo": True, "farbe_kopf": "#1d2f3e", "farbe_kopf_text": "#ffffff", "farbe_akzent": "#3a9a1f",
                    "farbe_hinter": "#f5f7f4", "farbe_text": "#1d2f3e", "schrift": "Arial, Helvetica, sans-serif", "breite": 600,
                    "kopf": "SparteNet.de", "fuss": "SparteNet.de · WLAN für Kleingärten\nDiese E-Mail wurde automatisch versendet."}
 _HTML_ERLAUBT = {"p": (), "br": (), "b": (), "strong": (), "i": (), "em": (), "u": (), "h2": (), "h3": (), "ul": (), "ol": (), "li": (),
@@ -241,7 +241,12 @@ def _logo_teil(d):
             roh, typ = logo_bild(d, lu)
             return roh, typ.split("/", 1)[1]
         except Fehler:
-            pass                      # Unterlage gelöscht → Kartenlogo
+            pass                      # Unterlage gelöscht → Manager-Logo
+    from .unterlagen import manager_logo_wahl, manager_logo      # Unterlagen kommen in der Modulkette später
+    if manager_logo_wahl(d) not in ("", "standard"):
+        x = manager_logo(d)
+        if x:
+            return x[0], x[1].split("/", 1)[1]
     uri = logo_daten_uri(d.get("design") or {})
     m = re.match(r"data:image/(png|jpeg|gif|webp);base64,(.+)", uri or "")
     if not m:
@@ -252,12 +257,17 @@ def _logo_teil(d):
         return None
 
 
-def email_html(d, inhalt_html, betreff="", logo_src=None):
+def email_html(d, inhalt_html, betreff="", logo_src=None, sparte_logo_src=None):
     l = email_layout(d)
     e = html_mod.escape
     logo = ""
-    if l["logo"] and logo_src:
-        logo = f'<img src="{logo_src}" alt="" style="max-height:60px;max-width:220px;display:block;margin:0 auto 8px">'
+    bilder = [x for x in ((logo_src if l["logo"] else None), (sparte_logo_src if l["spartenlogo"] else None)) if x]
+    if len(bilder) == 1:
+        logo = f'<img src="{bilder[0]}" alt="" style="max-height:60px;max-width:220px;display:block;margin:0 auto 8px">'
+    elif bilder:      # Vereinslogo und Spartenlogo nebeneinander (Tabelle – klappt auch in Outlook)
+        logo = ('<table role="presentation" align="center" cellpadding="0" cellspacing="0" style="margin:0 auto 8px"><tr>'
+                + "".join(f'<td style="padding:0 10px"><img src="{b}" alt="" style="max-height:60px;max-width:180px;display:block"></td>' for b in bilder)
+                + "</tr></table>")
     fuss = "<br>".join(e(z) for z in l["fuss"].splitlines())
     inhalt = (inhalt_html.replace("<a ", f'<a style="color:{l["farbe_akzent"]}" ').replace("<h2>", f'<h2 style="color:{l["farbe_akzent"]};font-size:20px;margin:18px 0 8px">')
               .replace("<h3>", '<h3 style="font-size:16px;margin:16px 0 6px">').replace("<p>", '<p style="margin:0 0 12px">'))
@@ -291,7 +301,8 @@ def _passt(regel, typ, daten):
     return True
 
 
-def email_senden(d, an, betreff, text, html=None, anhaenge=None):
+def email_senden(d, an, betreff, text, html=None, anhaenge=None, sparte=None):
+    """sparte: Kürzel für das Spartenlogo im Kopf – ohne Angabe aus der Empfängeradresse (Mitglied) ermittelt"""
     s = smtp_einstellungen(d)
     if not s["host"] or not s["absender"]:
         raise Fehler("E-Mail-Versand ist nicht eingerichtet (Automationen → E-Mail-Versand).")
@@ -306,11 +317,18 @@ def email_senden(d, an, betreff, text, html=None, anhaenge=None):
     m["Message-ID"] = email.utils.make_msgid(domain=s["absender"].split("@")[-1])
     m.set_content(str(text or "") if text else html_zu_text(html or ""))
     if html is not None and email_layout(d)["aktiv"]:
+        from .unterlagen import sparte_aus_email, sparten_logo       # Unterlagen kommen in der Modulkette später
         logo = _logo_teil(d) if email_layout(d)["logo"] else None
-        cid = email.utils.make_msgid(domain="spartenet")
-        m.add_alternative(email_html(d, html, betreff, f"cid:{cid[1:-1]}" if logo else None), subtype="html")
+        sp_logo = None
+        if email_layout(d)["spartenlogo"]:
+            x = sparten_logo(d, sparte or (sparte_aus_email(d, empfaenger[0]) if len(empfaenger) == 1 else ""))
+            sp_logo = (x[0], x[1].split("/", 1)[1]) if x else None
+        cid, cid2 = email.utils.make_msgid(domain="spartenet"), email.utils.make_msgid(domain="spartenet")
+        m.add_alternative(email_html(d, html, betreff, f"cid:{cid[1:-1]}" if logo else None, f"cid:{cid2[1:-1]}" if sp_logo else None), subtype="html")
         if logo:
             m.get_payload()[1].add_related(logo[0], maintype="image", subtype=logo[1], cid=cid)
+        if sp_logo:
+            m.get_payload()[1].add_related(sp_logo[0], maintype="image", subtype=sp_logo[1], cid=cid2)
     for name, daten, typ in anhaenge or []:
         haupt, _, unter = (typ or "application/octet-stream").partition("/")
         m.add_attachment(daten, maintype=haupt, subtype=unter or "octet-stream", filename=name)
@@ -399,7 +417,7 @@ def _hintergrund():
                 if aktion.get("an_kunde") and werte.get("email"):
                     an = ", ".join(x for x in (an, werte["email"]) if x)
                 betreff, inhalt = email_inhalt(d, aktion)
-                gesendet = email_senden(d, an, _ersetzen(betreff, werte), None, _ersetzen(inhalt, werte, html=True))
+                gesendet = email_senden(d, an, _ersetzen(betreff, werte), None, _ersetzen(inhalt, werte, html=True), sparte=daten.get("sparte") or None)
                 verlauf_schreiben({"regel": regel, "aktion": "E-Mail", "ok": True, "text": f"an {gesendet}"})
             elif art == "webhook":
                 st = _webhook(aktion.get("url"), {"ereignis": daten.get("ereignis"), "daten": {k: v for k, v in daten.items() if k != "passwort"},
@@ -647,16 +665,24 @@ def akt_email_vorschau(d, b):
     def _src():
         logo = _logo_teil(d)
         return f"data:image/{logo[1]};base64,{base64.b64encode(logo[0]).decode()}" if logo else None
+
+    def _sp_src():
+        from .unterlagen import sparten_logo_uri
+        for kz in kalk_sparten(d):
+            u = sparten_logo_uri(d, kz)
+            if u:
+                return u
+        return None
     if b.get("layout"):
         alt = d.get("email_layout")
         d["email_layout"] = {**(alt or {}), **{k: v for k, v in b["layout"].items() if k in LAYOUT_STANDARD}}
         try:
             src = _src()
-            h = email_html(d, _ersetzen(inhalt, werte, html=True), _ersetzen(b.get("betreff", ""), werte), src)
+            h = email_html(d, _ersetzen(inhalt, werte, html=True), _ersetzen(b.get("betreff", ""), werte), src, _sp_src())
         finally:
             d["email_layout"] = alt
     else:
-        h = email_html(d, _ersetzen(inhalt, werte, html=True), _ersetzen(b.get("betreff", ""), werte), _src())
+        h = email_html(d, _ersetzen(inhalt, werte, html=True), _ersetzen(b.get("betreff", ""), werte), _src(), _sp_src())
     return {"html": h, "betreff": _ersetzen(b.get("betreff", ""), werte), "log": []}
 
 

@@ -65,7 +65,52 @@ def mitglied_pruefen(d, roh, alt=None):
         x["parzelle"] = int(p)
     else:
         x["parzelle"] = ""
+    if "weitere" in roh:
+        x["weitere"] = weitere_pruefen(roh.get("weitere"), x.get("email", ""))
     return x
+
+
+WEITERE_MAX = 6
+
+
+def weitere_pruefen(liste, haupt_email=""):
+    """weitere Personen derselben Parzelle (Mitpächter, Partner …) – jede mit eigenem Zugang zum Mitgliederbereich"""
+    aus, gesehen = [], {str(haupt_email or "").lower()} - {""}
+    for p in (liste if isinstance(liste, list) else [])[:WEITERE_MAX + 4]:
+        if not isinstance(p, dict):
+            continue
+        e = {k: text_einzeilig(p.get(k) or "", 120).strip() for k in ("vorname", "nachname", "email", "telefon")}
+        if not any(e.values()):
+            continue                                  # leere Zeile
+        if not (e["vorname"] or e["nachname"]):
+            raise Fehler("Weitere Person: Vorname oder Nachname angeben.")
+        if e["email"] and not re.fullmatch(r"[^@\s,;<>]{1,64}@[A-Za-z0-9.-]{1,190}\.[A-Za-z]{2,}", e["email"]):
+            raise Fehler(f"Weitere Person: E-Mail-Adresse „{e['email']}“ ist ungültig.")
+        e["email"] = e["email"].lower()
+        if e["email"] and e["email"] in gesehen:
+            raise Fehler(f"Die E-Mail-Adresse „{e['email']}“ ist bei dieser Parzelle schon eingetragen.")
+        gesehen.add(e["email"])
+        if e["telefon"] and not _TEL_RE.match(e["telefon"]):
+            raise Fehler(f"Weitere Person: Telefonnummer „{e['telefon']}“ ungültig.")
+        aus.append(e)
+    if len(aus) > WEITERE_MAX:
+        raise Fehler(f"Höchstens {WEITERE_MAX} weitere Personen je Parzelle.")
+    return aus
+
+
+def personen(m):
+    """alle Personen eines Mitglieds: zuerst das Mitglied selbst, dann die weiteren Personen der Parzelle"""
+    haupt = {k: m.get(k, "") for k in ("vorname", "nachname", "email", "telefon")}
+    return [{**haupt, "haupt": True}] + [{**p, "haupt": False} for p in (m.get("weitere") or []) if isinstance(p, dict)]
+
+
+def mitglied_emails(m):
+    return [p["email"].lower() for p in personen(m) if p.get("email")]
+
+
+def person_sicht(m, person):
+    """Mitglied aus Sicht einer Person (Name, E-Mail, Telefon der Person) – nur zum Lesen, nicht speichern"""
+    return {**m, **{k: person.get(k, "") for k in ("vorname", "nachname", "email", "telefon")}, "_haupt": bool(person.get("haupt"))}
 
 
 def _suchen(d, x):
@@ -107,7 +152,7 @@ def mitglied_eintragen(d, roh, quelle, mid=None, zusammenfuehren=True):
 def _zeile(d, i, m):
     tarif = ((d.get("buchungen") or {}).get(m.get("sparte")) or {}).get(str(m.get("parzelle")), "") if m.get("parzelle") else ""
     return {"id": i, **{k: m.get(k, "") for k in M_FELDER}, "tarif": tarif, "angelegt": m.get("angelegt", ""), "quelle": m.get("quelle", ""),
-            "geaendert": m.get("geaendert", "")}
+            "geaendert": m.get("geaendert", ""), "weitere": [dict(x) for x in (m.get("weitere") or [])]}
 
 
 def akt_mitglieder(d, erlaubt=None):

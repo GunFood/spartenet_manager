@@ -78,7 +78,7 @@ def _versand(rid, betreff, html, liste):
         try:
             d = lade()
             w = _rs_werte(d, e)
-            email_senden(d, e["email"], _ersetzen(betreff, w), None, _ersetzen(html, w, html=True))
+            email_senden(d, e["email"], _ersetzen(betreff, w), None, _ersetzen(html, w, html=True), sparte=e.get("sparte") or None)
             st["gesendet"] += 1
         except Exception as f:
             st["fehler"] += 1

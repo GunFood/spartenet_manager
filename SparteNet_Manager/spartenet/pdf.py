@@ -28,6 +28,7 @@ def _farbe(f):
 class PDF:
     def __init__(self, breite=210 * MM, hoehe=297 * MM, titel="SparteNet"):
         self.b, self.h, self.titel, self.seiten, self.s = breite, hoehe, titel, [], None
+        self.bilder = []          # [(Name, Bilddaten aus bild_fuer_pdf)]
         self.seite()
 
     def seite(self):
@@ -104,16 +105,48 @@ class PDF:
         teile.append("f")
         self.s.append("\n".join(teile).encode())
 
+    def bild(self, x, y, max_b, max_h, roh, ausrichtung="l"):
+        """Bild (PNG/JPEG) in ein Feld einpassen (Seitenverhältnis bleibt); gibt die gezeichnete Breite zurück, 0 wenn nicht lesbar"""
+        try:
+            b = bild_fuer_pdf(roh) if roh else None
+        except Exception:
+            b = None
+        if not b or not b["breite"] or not b["hoehe"]:
+            return 0
+        f = min(max_b / b["breite"], max_h / b["hoehe"])
+        w, h = b["breite"] * f, b["hoehe"] * f
+        if ausrichtung == "r":
+            x -= w
+        elif ausrichtung == "m":
+            x -= w / 2
+        name = f"Im{len(self.bilder)}"
+        self.bilder.append((name, b))
+        self.s.append(f"q {w:.2f} 0 0 {h:.2f} {x:.2f} {self.h - y - h:.2f} cm /{name} Do Q".encode())
+        return w
+
     def ausgabe(self):
         obj = [b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
                b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>", b""]   # 1, 2, 3 = /Pages
-        kinder = []
+        kinder, xobj = [], []
+        for name, b in self.bilder:
+            maske = ""
+            if b["alpha"] and any(v != 255 for v in b["alpha"]):
+                daten = zlib.compress(b["alpha"])
+                obj.append(f"<< /Type /XObject /Subtype /Image /Width {b['breite']} /Height {b['hoehe']} /ColorSpace /DeviceGray /BitsPerComponent 8 "
+                           f"/Filter /FlateDecode /Length {len(daten)} >>\nstream\n".encode() + daten + b"\nendstream")
+                maske = f" /SMask {len(obj)} 0 R"
+            daten = b["daten"] if b["jpeg"] else zlib.compress(b["daten"])
+            raum = "/DeviceGray" if b["farben"] == 1 else "/DeviceRGB"
+            obj.append(f"<< /Type /XObject /Subtype /Image /Width {b['breite']} /Height {b['hoehe']} /ColorSpace {raum} /BitsPerComponent 8 "
+                       f"/Filter /{'DCTDecode' if b['jpeg'] else 'FlateDecode'} /Length {len(daten)}{maske} >>\nstream\n".encode() + daten + b"\nendstream")
+            xobj.append(f"/{name} {len(obj)} 0 R")
+        xres = f" /XObject << {' '.join(xobj)} >>" if xobj else ""
         for s in self.seiten:
             daten = zlib.compress(b"\n".join(s))
             obj.append(f"<< /Length {len(daten)} /Filter /FlateDecode >>\nstream\n".encode() + daten + b"\nendstream")
             inhalt = len(obj)
             obj.append(f"<< /Type /Page /Parent 3 0 R /MediaBox [0 0 {self.b:.2f} {self.h:.2f}] "
-                       f"/Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents {inhalt} 0 R >>".encode())
+                       f"/Resources << /Font << /F1 1 0 R /F2 2 0 R >>{xres} >> /Contents {inhalt} 0 R >>".encode())
             kinder.append(len(obj))
         obj[2] = f"<< /Type /Pages /Kids [{' '.join(f'{k} 0 R' for k in kinder)}] /Count {len(kinder)} >>".encode()
         obj.append(b"<< /Title (" + self._esc(self.titel) + b") /Producer (SparteNet Manager) >>")
@@ -135,12 +168,24 @@ def geld(betrag):
     return f"{float(betrag):,.2f} €".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+def pdf_logos(d, kz):
+    """(Vereinslogo, Spartenlogo) als Bytes für PDFs – Vereinslogo wie in den E-Mails gewählt"""
+    v = _logo_teil(d)
+    sp = sparten_logo(d, kz) if kz else None
+    return (v[0] if v else None), (sp[0] if sp else None)
+
+
 def zugangskarte_pdf(d, kz, zeile, sparte_name):
-    """eine Zugangskarte als PDF (A5) – für den Versand per E-Mail (Pächter-Seite)"""
+    """eine Zugangskarte als PDF (A5) – für den Versand per E-Mail (Kontakt-Seite)"""
     g = design_pruefen(d.get("design"))
     p = PDF(148 * MM, 210 * MM, f"Zugang Parzelle {zeile['Parzelle']}")
     akz = g["farbe_akzent"]
     b = p.b
+    verein, sparte = pdf_logos(d, kz)
+    if verein:
+        p.bild(12 * MM, 5 * MM, 30 * MM, 12 * MM, verein)
+    if sparte:
+        p.bild(b - 12 * MM, 5 * MM, 30 * MM, 12 * MM, sparte, "r")
     p.text(b / 2, 22 * MM, f"SparteNet.de · {sparte_name}", 12, True, akz, "m")
     p.text(b / 2, 36 * MM, f"Parzelle {zeile['Parzelle']}", 26, True, g["farbe_text"], "m")
     p.text(b / 2, 44 * MM, "Ihr persönlicher WLAN-Zugang", 11, False, g["farbe_hell"], "m")

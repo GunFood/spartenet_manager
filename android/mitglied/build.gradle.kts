@@ -6,7 +6,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-// Optional: Signatur für Release-Builds aus keystore.properties (liegt NICHT im Repo) oder aus Umgebungsvariablen (GitHub Secrets)
+// Mitglieder-App (eigene App, nur für Pächter/Mitglieder). Optional: Signatur für Release-Builds aus keystore.properties (liegt NICHT im Repo) oder aus Umgebungsvariablen (GitHub Secrets)
 val signatur = Properties().apply {
     val f = rootProject.file("keystore.properties")
     if (f.exists()) f.inputStream().use { load(it) }
@@ -14,15 +14,15 @@ val signatur = Properties().apply {
 fun wert(key: String, env: String): String? = signatur.getProperty(key) ?: System.getenv(env)
 
 android {
-    namespace = "de.spartenet.manager"
+    namespace = "de.spartenet.mitglied"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "de.spartenet.manager"
+        applicationId = "de.spartenet.mitglied"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.2 (für Manager 5.3)"
+        versionCode = 1
+        versionName = "1.0 (für Manager 5.5)"
     }
 
     signingConfigs {

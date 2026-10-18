@@ -29,40 +29,83 @@ def _zt_hash(t):
     return hashlib.sha256(("SparteNet-App-Zugang|" + str(t or "")).encode()).hexdigest()
 
 
-def app_zugang(d):
-    z = d.get("app_zugang")
-    return z if isinstance(z, dict) and z.get("hash") else None
+ZT_ALLE = "*"            # alter, gemeinsamer Token aus 5.3/5.4: gilt für alle Konten, bis der Administrator ihn entfernt
 
 
-def app_zugangstoken_ok(d, token):
-    z = app_zugang(d)
-    return bool(z and token and hmac.compare_digest(z["hash"], _zt_hash(str(token).strip())))
+def app_zugangstokens(d):
+    """{id: {hash, konto, name, erstellt, zuletzt, hinweis}} – jeder Benutzer kann beliebig viele eigene Tokens anlegen"""
+    z = d.get("app_zugangstokens")
+    if not isinstance(z, dict):
+        z = {}
+        d["app_zugangstokens"] = z
+    alt = d.get("app_zugang")
+    if isinstance(alt, dict) and alt.get("hash"):          # Übernahme des bisherigen gemeinsamen Tokens
+        z["alt" + alt["hash"][:7]] = {"hash": alt["hash"], "konto": ZT_ALLE, "name": "Bisheriger gemeinsamer Token", "erstellt": alt.get("erstellt", ""),
+                                   "von": alt.get("von", ""), "hinweis": alt.get("hinweis", ""), "zuletzt": ""}
+    d.pop("app_zugang", None)
+    return z
 
 
-def akt_app_zugangstoken(d, b, ich):
-    """Administrator: Zugangstoken für die App erzeugen (wird nur einmal angezeigt) oder App-Zugang sperren"""
-    if b.get("aus"):
-        d["app_zugang"] = {}
-        speichere(d)
-        journal(f"App-Zugang gesperrt (Zugangstoken entfernt) durch {ich}")
-        return {"zugang": None, "log": ["✔ App-Zugang gesperrt – keine App kann sich anmelden oder Daten abrufen, bis ein neuer Zugangstoken erzeugt ist."]}
+def zugangstoken_finden(d, token, konto=None):
+    """Id des Zugangstokens, wenn er gültig ist (und – mit konto – zu diesem Konto gehört), sonst None"""
+    if not token:
+        return None
+    h = _zt_hash(str(token).strip())
+    for i, x in app_zugangstokens(d).items():
+        if hmac.compare_digest(x.get("hash", ""), h):
+            return i if konto is None or x.get("konto") in (konto, ZT_ALLE) else None
+    return None
+
+
+def _zt_zeile(i, x):
+    return {"id": i, **{k: x.get(k, "") for k in ("konto", "name", "erstellt", "zuletzt", "hinweis")}, "alle": x.get("konto") == ZT_ALLE}
+
+
+def akt_app_zugangstoken(d, b, ich, admin=False):
+    """Eigene App-Zugangstokens anlegen ({"neu": true, "name": …} – wird nur einmal angezeigt), entfernen ({"entfernen": id}).
+    Administrator sieht und entfernt die Tokens aller Konten ({"alle_sperren": true} entfernt alle)."""
+    z = app_zugangstokens(d)
+    extra, log = {}, []
     if b.get("neu"):
+        if sum(1 for x in z.values() if x.get("konto") == ich) >= 500:
+            raise Fehler("Sehr viele Zugangstokens – bitte alte entfernen.")
         t = "snz_" + secrets.token_urlsafe(24)
-        d["app_zugang"] = {"hash": _zt_hash(t), "erstellt": time.strftime("%Y-%m-%d %H:%M"), "von": ich, "hinweis": t[:8] + "…"}
+        i = secrets.token_hex(5)
+        z[i] = {"hash": _zt_hash(t), "konto": ich, "name": text_einzeilig(b.get("name") or "App", 60) or "App", "erstellt": time.strftime("%Y-%m-%d %H:%M"),
+                "von": ich, "hinweis": t[:8] + "…", "zuletzt": ""}
         speichere(d)
-        journal(f"App-Zugangstoken neu erzeugt durch {ich} – ältere Tokens gelten nicht mehr")
-        return {"token": t, "zugang": {k: v for k, v in d["app_zugang"].items() if k != "hash"},
-                "log": ["✔ Neuer Zugangstoken erzeugt. Jetzt notieren oder kopieren – er wird nur einmal angezeigt. Apps mit dem alten Token müssen ihn neu eingeben."]}
-    z = app_zugang(d)
-    return {"zugang": {k: v for k, v in z.items() if k != "hash"} if z else None, "log": []}
+        journal(f"App-Zugangstoken „{z[i]['name']}“ angelegt für {ich}")
+        extra = {"token": t, "neu_id": i}
+        log = ["✔ Neuer Zugangstoken erzeugt. Jetzt kopieren und in der App eintragen – er wird nur einmal angezeigt."]
+    elif b.get("entfernen"):
+        x = z.get(str(b["entfernen"]))
+        if not x or (x.get("konto") != ich and not admin):
+            raise Fehler("Zugangstoken nicht gefunden.")
+        z.pop(str(b["entfernen"]))
+        speichere(d)
+        journal(f"App-Zugangstoken „{x.get('name')}“ ({x.get('konto')}) entfernt durch {ich}")
+        log = ["✔ Zugangstoken entfernt – Apps mit diesem Token können sich nicht mehr anmelden oder Daten abrufen."]
+    elif b.get("alle_sperren"):
+        if not admin:
+            raise Fehler("Nur der Administrator kann alle Zugangstokens sperren.")
+        n = len(z)
+        z.clear()
+        speichere(d)
+        journal(f"Alle App-Zugangstokens ({n}) entfernt durch {ich}")
+        log = [f"✔ Alle {n} Zugangstokens entfernt – keine App hat mehr Zugang, bis neue erzeugt sind."]
+    elif "app_zugang" in d:
+        speichere(d)                                         # Übernahme des alten Tokens sichern
+    zeilen = [_zt_zeile(i, x) for i, x in z.items() if admin or x.get("konto") == ich]
+    zeilen.sort(key=lambda x: (x["konto"] != ich, x["konto"], x["erstellt"]))
+    return {"tokens": zeilen, "admin": admin, **extra, "log": log}
 
 
 def app_anmelden(d, b, quelle, zugangstoken=None):
-    if not app_zugang(d):
-        return {"ok": False, "zugangstoken": True, "fehler": "Der App-Zugang ist im Manager noch nicht eingerichtet (Benutzer → Anmeldung und Sicherheit → App-Zugangstoken)."}
-    if not app_zugangstoken_ok(d, zugangstoken):
-        return {"ok": False, "zugangstoken": True, "fehler": "Zugangstoken fehlt oder ist falsch – bitte beim Administrator erfragen."}
+    if not zugangstoken_finden(d, zugangstoken):
+        return {"ok": False, "zugangstoken": True, "fehler": "Zugangstoken fehlt oder ist falsch – im Manager unter Benutzer & Konto → Mein Konto → App-Zugangstokens erzeugen."}
     name = str(b.get("benutzer") or "").strip().lower()
+    if not zugangstoken_finden(d, zugangstoken, name):
+        return {"ok": False, "zugangstoken": True, "fehler": "Dieser Zugangstoken gehört zu einem anderen Benutzerkonto – bitte einen eigenen erzeugen."}
     konto = benutzer_anmelden(d, name, b.get("passwort"), quelle)
     merken = None
     if zweifaktor_aktiv(d, konto) and zweifaktor_gemerkt(d, konto, b.get("merken")):
@@ -94,25 +137,29 @@ def app_token_pruefen(d, kopf, zugangstoken=None):
     roh = str(kopf or "")
     if not roh.lower().startswith("bearer sna_"):
         return None
-    if not app_zugangstoken_ok(d, zugangstoken):
-        return None
     m = _APP_RE.match(roh[7:].strip())
     if not m:
         return None
     g = app_geraete(d).get(m.group(1))
     if not g or not hmac.compare_digest(g.get("hash", ""), _app_hash(m.group(2))) or g.get("gesperrt") or time.time() > float(g.get("ablauf") or 0):
         return None
+    zt = zugangstoken_finden(d, zugangstoken, g["benutzer"])
+    if not zt:
+        return None
     rechte = konto_rechte(d, g["benutzer"])
     if not rechte or rechte["art"] == "gesperrt":
         return None
     jetzt = time.strftime("%Y-%m-%d %H:%M")
-    if g.get("zuletzt", "")[:15] != jetzt[:15]:      # höchstens alle 10 Minuten speichern
+    if g.get("zuletzt", "")[:15] != jetzt[:15] or app_zugangstokens(d)[zt].get("zuletzt", "")[:15] != jetzt[:15]:      # höchstens alle 10 Minuten speichern
         with SCHREIB_SPERRE:
             d2 = lade()
             x = app_geraete(d2).get(m.group(1))
             if x:
                 x["zuletzt"] = jetzt
-                speichere(d2)
+            y = app_zugangstokens(d2).get(zt)
+            if y:
+                y["zuletzt"] = jetzt
+            speichere(d2)
     return g["benutzer"], rechte
 
 

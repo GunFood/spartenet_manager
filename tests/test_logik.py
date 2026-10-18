@@ -564,6 +564,78 @@ class Mitgliederbereich(unittest.TestCase):
             S.mb_webhook(d, roh, "sha256=" + hmac.new(b"g", roh, hashlib.sha256).hexdigest())
 
 
+class AppZugangstokens(unittest.TestCase):
+    def test_alter_gemeinsamer_token_bleibt_gueltig(self):
+        """der eine Token aus 5.3/5.4 wird übernommen und gilt weiter für alle Konten, bis der Administrator ihn entfernt"""
+        d = frisch()
+        d["app_zugang"] = {"hash": S._zt_hash("snz_alt"), "erstellt": "2026-10-01 10:00", "von": "admin", "hinweis": "snz_alt…"}
+        i = S.zugangstoken_finden(d, "snz_alt", "irgendwer")
+        self.assertTrue(i)
+        self.assertNotIn("app_zugang", d)
+        self.assertEqual(S.zugangstoken_finden(dict(d, app_zugang={"hash": S._zt_hash("snz_alt")}), "snz_alt"), i)   # gleiche Id bei jedem Laden
+        x = S.akt_app_zugangstoken(d, {"neu": True, "name": "Handy"}, "peter")
+        self.assertEqual(S.zugangstoken_finden(d, x["token"], "peter"), x["neu_id"])
+        self.assertIsNone(S.zugangstoken_finden(d, x["token"], "admin"))
+        self.assertEqual(len(S.akt_app_zugangstoken(d, {}, "peter")["tokens"]), 1)
+        self.assertEqual(len(S.akt_app_zugangstoken(d, {}, "admin", True)["tokens"]), 2)
+
+
+class MitgliederEinmalcode(unittest.TestCase):
+    def test_ohne_email_versand_klare_meldung_ohne_technik(self):
+        d = frisch()
+        d["mitglieder"] = {"m1": {"vorname": "A", "nachname": "B", "email": "a@example.org", "sparte": "BW", "parzelle": "1"}}
+        for adresse in ("a@example.org", "unbekannt@example.org"):         # gleiche Antwort – verrät nicht, ob es die Adresse gibt
+            with self.assertRaises(S.Fehler) as f:
+                S.mb_code_anfordern(d, {"email": adresse}, "test")
+            self.assertIn("E-Mail-Versand des Vereins", str(f.exception))
+        self.assertFalse(S.mb_versand_bereit(d))
+
+
+class Spartenlogos(unittest.TestCase):
+    def test_erzeugen_erkennen_pdf(self):
+        d = frisch()
+        png = S.vereinslogo_png("Buchenweg", "BW")
+        b = S.bild_fuer_pdf(png)
+        self.assertEqual((b["breite"], b["hoehe"], b["farben"]), (256, 256, 3))
+        self.assertTrue(any(v == 0 for v in b["alpha"]) and any(v == 255 for v in b["alpha"]))     # rund: außen durchsichtig
+        self.assertEqual([S.logo_motiv(n) for n in ("Buchenweg", "Rosengarten", "Am Mühlenteich", "Sonnenhang", "Eintracht")],
+                         ["baum", "bluete", "wellen", "sonne", "blatt"])
+        self.assertEqual(S.logo_farbe("Buchenweg"), S.logo_farbe("Buchenweg"))
+        d["mitglieder"] = {"a": {"email": "x@example.org", "sparte": "BW"}, "b": {"email": "y@example.org", "sparte": "BW"},
+                           "c": {"email": "y@example.org", "sparte": "RG"}}
+        self.assertEqual(S.sparte_aus_email(d, "X@example.org"), "BW")
+        self.assertEqual(S.sparte_aus_email(d, "y@example.org"), "")          # zwei Sparten → nicht eindeutig
+        p = S.PDF()
+        self.assertGreater(p.bild(10, 10, 50, 50, png), 0)
+        self.assertEqual(p.bild(10, 10, 50, 50, b"kein Bild"), 0)
+        roh = p.ausgabe()
+        self.assertIn(b"/XObject", roh)
+        self.assertIn(b"/SMask", roh)
+        h = S.email_html(d, "<p>x</p>", "t", "cid:a", "cid:b")
+        self.assertIn('src="cid:a"', h)
+        self.assertIn('src="cid:b"', h)
+
+
+class StoerungImMitgliederbereich(unittest.TestCase):
+    def test_meldung_je_sparte(self):
+        d = frisch()
+        jetzt = time.time()
+        S.stand_schreiben({"geraete": {"aa": {"name": "AP Festwiese", "model": "U6", "offline_seit": jetzt - 3600, "gemeldet": jetzt - 2000},
+                                       "bb": {"name": "AP Vereinsheim", "offline_seit": jetzt - 60}}})        # bb noch nicht gemeldet
+        e = S.mb_einstellungen(d)
+        m = S.mb_stoerungen(d, e, "BW")
+        self.assertEqual(len(m), 1)
+        self.assertIn("AP Festwiese", m[0]["text"])
+        self.assertTrue(m[0]["text"].startswith("Achtung"))
+        d["geraete_sparten"] = {"aa": "RG"}
+        self.assertEqual(S.mb_stoerungen(d, e, "BW"), [])                      # Gerät gehört zu einer anderen Sparte
+        self.assertEqual(len(S.mb_stoerungen(d, e, "RG")), 1)
+        self.assertEqual(S.mb_stoerungen(d, e, None, nur_alle=True), [])       # Anmeldeseite ohne E-Mail: nur „alle Sparten“
+        d["mitgliederbereich"] = {"stoerung_zeigen": False}
+        self.assertEqual(S.mb_stoerungen(d, S.mb_einstellungen(d), "RG"), [])
+        S.stand_schreiben({})
+
+
 class Modulkette(unittest.TestCase):
     def test_keine_doppelten_namen(self):
         """jede Datei übernimmt alle Namen der vorherigen – gleiche öffentliche Namen würden frühere Funktionen überdecken"""
@@ -588,6 +660,16 @@ class Modulkette(unittest.TestCase):
         from collections import Counter as C
         f = C(rx.findall(r"(?<![\w.])function\s+([A-Za-z_$][\w$]*)\s*\(", S.HTML))
         i = C(rx.findall(r'\sid="([^"$`{]+)"', S.HTML))
+        g = C(rx.findall(r"^(?:let|const|var)\s+([A-Za-z_$][\w$]*)", S.HTML, rx.M))
+        self.assertEqual({k: v for k, v in g.items() if v > 1}, {}, "globale JS-Variable doppelt")
+        import shutil, subprocess, tempfile
+        if shutil.which("node"):                     # vollständige Syntaxprüfung aller Skripte (doppelte let/const sind Syntaxfehler)
+            for skript in rx.findall(r"<script>(.*?)</script>", S.HTML + S.MEIN_HTML + S.PORTAL_HTML + S.LOGIN_HTML, rx.S):
+                with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as datei:
+                    datei.write(skript)
+                r = subprocess.run(["node", "--check", datei.name], capture_output=True, text=True)
+                os.unlink(datei.name)
+                self.assertEqual(r.returncode, 0, r.stderr[:800])
         self.assertEqual({k: v for k, v in f.items() if v > 1}, {})
         self.assertEqual({k: v for k, v in i.items() if v > 1}, {})
 
