@@ -564,6 +564,22 @@ class Mitgliederbereich(unittest.TestCase):
             S.mb_webhook(d, roh, "sha256=" + hmac.new(b"g", roh, hashlib.sha256).hexdigest())
 
 
+class AppZugangstokens(unittest.TestCase):
+    def test_alter_gemeinsamer_token_bleibt_gueltig(self):
+        """der eine Token aus 5.3/5.4 wird übernommen und gilt weiter für alle Konten, bis der Administrator ihn entfernt"""
+        d = frisch()
+        d["app_zugang"] = {"hash": S._zt_hash("snz_alt"), "erstellt": "2026-10-01 10:00", "von": "admin", "hinweis": "snz_alt…"}
+        i = S.zugangstoken_finden(d, "snz_alt", "irgendwer")
+        self.assertTrue(i)
+        self.assertNotIn("app_zugang", d)
+        self.assertEqual(S.zugangstoken_finden(dict(d, app_zugang={"hash": S._zt_hash("snz_alt")}), "snz_alt"), i)   # gleiche Id bei jedem Laden
+        x = S.akt_app_zugangstoken(d, {"neu": True, "name": "Handy"}, "peter")
+        self.assertEqual(S.zugangstoken_finden(d, x["token"], "peter"), x["neu_id"])
+        self.assertIsNone(S.zugangstoken_finden(d, x["token"], "admin"))
+        self.assertEqual(len(S.akt_app_zugangstoken(d, {}, "peter")["tokens"]), 1)
+        self.assertEqual(len(S.akt_app_zugangstoken(d, {}, "admin", True)["tokens"]), 2)
+
+
 class Modulkette(unittest.TestCase):
     def test_keine_doppelten_namen(self):
         """jede Datei übernimmt alle Namen der vorherigen – gleiche öffentliche Namen würden frühere Funktionen überdecken"""

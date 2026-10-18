@@ -53,7 +53,7 @@ VORLAGEN = {
 }
 
 # Was eine Anfrage braucht: ("immer",) · ("admin",) · (Bereich, Stufe)
-_IMMER = {"/api/aktiv", "/api/2fa-vergessen", "/api/app-uebersicht", "/api/app-geraete", "/api/app-geraet-entfernen", "/api/einstellungen", "/api/ansicht", "/api/benutzer-ich", "/api/plan", "/api/pw-regel", "/api/2fa-start", "/api/2fa-bestaetigen", "/api/2fa-aus"}  # nur lesend (GET) bzw. eigene Ansicht
+_IMMER = {"/api/aktiv", "/api/2fa-vergessen", "/api/app-uebersicht", "/api/app-geraete", "/api/app-geraet-entfernen", "/api/app-zugangstoken", "/api/einstellungen", "/api/ansicht", "/api/benutzer-ich", "/api/plan", "/api/pw-regel", "/api/2fa-start", "/api/2fa-bestaetigen", "/api/2fa-aus"}  # nur lesend (GET) bzw. eigene Ansicht
 _NUR_ADMIN = {"/api/benutzer", "/api/benutzer-speichern", "/api/benutzer-loeschen", "/api/beenden"}
 _LESEN = {
     "/api/start": "start", "/api/parzelle": "start",

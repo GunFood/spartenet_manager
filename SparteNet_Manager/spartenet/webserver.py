@@ -630,7 +630,7 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/laufzeit-starten": lambda: akt_laufzeit_starten(d, b or {}, ich, sp_erl),
                 "/api/zugang": lambda: akt_zugang(d, b or {}, ich, sp_erl),
                 "/api/laufzeit-einstellungen": lambda: akt_laufzeit_einstellungen(d, b or {}, ich),
-                "/api/app-zugangstoken": lambda: akt_app_zugangstoken(d, b or {}, ich),
+                "/api/app-zugangstoken": lambda: akt_app_zugangstoken(d, b or {}, ich, rechte["art"] == "admin"),
                 "/api/aktiv": lambda: {"ok": True, "abmelden_minuten": sicherheit(d)["abmelden_minuten"], "log": []},
                 "/api/2fa-vergessen": lambda: akt_2fa_vergessen(d, ich),
                 "/api/app-geraete": lambda: akt_app_geraete(d, ich, rechte["art"] == "admin" and q.get("alle", ["0"])[0] == "1"),

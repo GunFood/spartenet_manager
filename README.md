@@ -1,4 +1,4 @@
-SparteNet Manager 5.3 (Cloud)
+SparteNet Manager 5.5 (Cloud)
 ===============================
 
 Funktioniert komplett über die UniFi-Cloud (api.ui.com). Kein lokaler Zugriff, kein VPN.
@@ -101,6 +101,21 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   Höchstens 120 Anfragen je Minute und Schlüssel (SPARTENET_API_PRO_MINUTE). Zahlungsanbieter über n8n/Zapier/Make
   anbinden. Von außen nur über HTTPS (Reverse-Proxy, dann SPARTENET_PROXY=1).
 
+### APP-ZUGANGSTOKENS JE BENUTZER – neu in 5.5 (seit 5.3 ein gemeinsamer Token)
+  Mein Konto → Apps und Geräte → App-Zugangstokens: jeder Benutzer erzeugt seine eigenen Tokens, beliebig viele
+  (z. B. einen je Handy oder Tablet, mit Namen). Ein Token gilt nur für das eigene Konto, wird nur einmal angezeigt
+  und nur als Prüfsumme gespeichert; die Liste zeigt "zuletzt benutzt". Einzelne Tokens lassen sich entfernen – Apps
+  mit diesem Token haben dann sofort keinen Zugang mehr. Der Administrator sieht die Tokens aller Konten, kann jeden
+  entfernen oder alle auf einmal sperren.
+  Die App fragt den Token beim Einrichten ab und schickt ihn bei jeder Anfrage mit (Header "X-App-Token").
+  Anmeldung und Datenabruf klappen nur, wenn Token, Benutzerkonto und App-Schlüssel zusammengehören.
+  Umstieg: Der bisherige gemeinsame Token aus 5.3/5.4 gilt weiter für alle Konten ("alle Konten (alt)" in der Liste),
+  bis der Administrator ihn entfernt – am besten, sobald jeder seinen eigenen Token eingetragen hat.
+
+### FEHLERBEHEBUNGEN – 5.5
+  App-Zugangstoken wurde nach dem Erzeugen nicht angezeigt; CPU-/RAM-Balken unter System standen fast immer auf 100 %;
+  "Unterschiede ermitteln" schrieb seine Kacheln auf die Startseite. Ein Test verhindert jetzt doppelte Namen in der Oberfläche.
+
 ### MITGLIEDERBEREICH /mein – neu in 5.4
 Eigene Seite für Mitglieder (Reiter "Tickets" → Karte "Mitgliederbereich" einschalten, nur Administrator):
 - Anmeldung mit der beim Mitglied hinterlegten E-Mail-Adresse und einem 6-stelligen Code per E-Mail (10 Minuten gültig, kein Passwort). Abmelden nach einstellbarer Zeit ohne Aktivität.
@@ -134,11 +149,6 @@ Eigene Seite für Mitglieder (Reiter "Tickets" → Karte "Mitgliederbereich" ein
   zusätzlich Sparte und Parzelle); Zugangskarte: alle fünf Angaben. Spamschutz: kleine Rechenaufgabe, Mindestzeit,
   höchstens zwei Links, Honigtopf-Feld. API POST /api/v1/ticket: ebenso Prüfung ("vorname", "nachname", "email",
   "sparte", "parzelle" oder "art": "kein_mitglied"/"interessent"); Recht "tickets_ungeprueft" für eigene, geprüfte Formulare.
-
-### APP-ZUGANGSTOKEN – neu in 5.3
-  Benutzer → Anmeldung und Sicherheit → App-Zugangstoken: einmal erzeugen (nur einmal angezeigt, gespeichert als Prüfsumme)
-  und an die App-Nutzer geben. Die App fragt ihn beim Einrichten ab und schickt ihn bei jeder Anfrage mit
-  (Header "X-App-Token"). Ohne gültigen Token keine App-Anmeldung und kein Datenabruf; neu erzeugen sperrt alle alten.
 
 ### MENÜ (☰) – neu in 5.2
   Knopf ☰ oben links (oder Strg+K): alle Funktionen nach Bereichen geordnet – Übersicht, Einrichtung, WLAN & Zugang,

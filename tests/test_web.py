@@ -218,10 +218,13 @@ class AnmeldungSicherheit(unittest.TestCase):
         self.assertEqual(b.anmelden("merker", "Merker-Passwort-1", code=notfall[0])[0], 200)
         self.assertEqual(b.anmelden("merker", "Merker-Passwort-1")[0], 200)                    # gleicher Browser: ohne Code
         self.assertEqual(Sitzung(SRV.basis).anmelden("merker", "Merker-Passwort-1")[0], 400)   # anderer Browser: Code nötig
-        app_token(a)
-        code, x = api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "merker", "passwort": "Merker-Passwort-1", "code": notfall[1], "geraet": "Test"})
-        self.assertTrue(x["merken"])
-        code, y = api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "merker", "passwort": "Merker-Passwort-1", "merken": x["merken"], "geraet": "Test"})
+        alt, APP_TOKEN["wert"] = APP_TOKEN["wert"], b.req("/api/app-zugangstoken", {"neu": True, "name": "Test"})[1]["token"]   # eigener Token von merker
+        try:
+            code, x = api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "merker", "passwort": "Merker-Passwort-1", "code": notfall[1], "geraet": "Test"})
+            self.assertTrue(x["merken"], x)
+            code, y = api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "merker", "passwort": "Merker-Passwort-1", "merken": x["merken"], "geraet": "Test"})
+        finally:
+            APP_TOKEN["wert"] = alt
         self.assertEqual(code, 200, y)
         b.req("/api/2fa-vergessen", {})
         self.assertEqual(b.anmelden("merker", "Merker-Passwort-1")[0], 400)                    # vergessen → wieder Code
@@ -652,15 +655,36 @@ class Version50(unittest.TestCase):
         app_token(a)
         a.req("/api/benutzer-speichern", {"neu": True, "name": "appnutzer", "passwort": "App-Passwort-123", "passwort2": "App-Passwort-123", "art": "bereiche",
                                           "bereiche": {"tickets": "schreiben", "start": "lesen"}})
-        self.assertEqual(api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "appnutzer", "passwort": "falsch-falsch"})[0], 401)
-        code, x = api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "appnutzer", "passwort": "App-Passwort-123", "geraet": "Pixel 9"})
+        code, x = api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "appnutzer", "passwort": "App-Passwort-123"})
+        self.assertEqual((code, x.get("zugangstoken")), (401, True), x)          # Token des Administrators gilt nicht für andere Konten
+        n = Sitzung(SRV.basis)
+        self.assertEqual(n.anmelden("appnutzer", "App-Passwort-123")[0], 200)
+        code, t1 = n.req("/api/app-zugangstoken", {"neu": True, "name": "Pixel 9"})
+        self.assertEqual(code, 200, t1)
+        code, t2 = n.req("/api/app-zugangstoken", {"neu": True, "name": "Tablet"})
+        self.assertEqual([t["name"] for t in t2["tokens"]], ["Pixel 9", "Tablet"])             # beliebig viele, nur die eigenen
+        self.assertNotIn("token", n.req("/api/app-zugangstoken")[1])                           # nur einmal angezeigt
+        _, alle = a.req("/api/app-zugangstoken")
+        self.assertTrue({"admin", "appnutzer"} <= {t["konto"] for t in alle["tokens"]})          # Administrator sieht alle
+        adm = next(t["id"] for t in alle["tokens"] if t["konto"] == "admin")
+        self.assertEqual(n.req("/api/app-zugangstoken", {"entfernen": adm})[0], 400)           # fremden Token nicht entfernen
+        self.assertEqual(n.req("/api/app-zugangstoken", {"alle_sperren": True})[0], 400)
+        admin_token, APP_TOKEN["wert"] = APP_TOKEN["wert"], t1["token"]
+        try:
+            self.assertEqual(api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "appnutzer", "passwort": "falsch-falsch"})[0], 401)
+            code, x = api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "admin", "passwort": PASSWORT})
+            self.assertEqual((code, x.get("zugangstoken")), (401, True), x)      # Token von appnutzer gilt nicht für admin
+            code, x = api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "appnutzer", "passwort": "App-Passwort-123", "geraet": "Pixel 9"})
+        finally:
+            APP_TOKEN["wert"] = admin_token
         self.assertEqual(code, 200, x)
         tok = x["token"]
+        zt = t1["token"]
         self.assertTrue(tok.startswith("sna_"))
         def mit_app(pfad, body=None):
             r = urllib.request.Request(SRV.basis + pfad, data=json.dumps(body).encode() if body is not None else None, method="POST" if body is not None else "GET")
             r.add_header("Authorization", "Bearer " + tok)
-            r.add_header("X-App-Token", APP_TOKEN["wert"])
+            r.add_header("X-App-Token", zt)
             r.add_header("Content-Type", "application/json")
             try:
                 with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(r) as o:
@@ -676,6 +700,16 @@ class Version50(unittest.TestCase):
         self.assertEqual(mit_app("/api/ticket-speichern", {"ticket": {"betreff": "aus der App"}})[0], 200)
         code, x = mit_app("/api/v1/app/funktionen")
         self.assertTrue(any(f["pfad"] == "/api/tickets" for f in x["funktionen"]))
+        zt, gueltig = APP_TOKEN["wert"], t1["token"]
+        self.assertEqual(mit_app("/api/app-uebersicht")[0], 401)                 # Schlüssel von appnutzer + Token von admin: abgelehnt
+        zt = t2["token"]
+        self.assertEqual(mit_app("/api/app-uebersicht")[0], 200)                 # zweiter eigener Token geht auch
+        n.req("/api/app-zugangstoken", {"entfernen": t2["tokens"][1]["id"]})
+        self.assertEqual(mit_app("/api/app-uebersicht")[0], 401)                 # entfernt: kein Zugang mehr
+        zt = gueltig
+        code, x = mit_app("/api/app-zugangstoken")
+        self.assertEqual(x["tokens"][0]["name"], "Pixel 9")
+        self.assertTrue(x["tokens"][0]["zuletzt"])
         code, x = mit_app("/api/app-geraete")
         gid = x["geraete"][0]["id"]
         mit_app("/api/app-geraet-entfernen", {"id": gid})

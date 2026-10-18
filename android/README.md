@@ -24,9 +24,10 @@ Liste und Detail nebeneinander. Hoch- und Querformat werden unterstützt.
 
 ## Sicherheit
 
-* **App-Zugangstoken:** Beim Einrichten fragt die App nach dem Zugangstoken des Vereins (Manager → Benutzer → Anmeldung und
-  Sicherheit → App-Zugangstoken). Er wird verschlüsselt gespeichert und bei jeder Anfrage als `X-App-Token` mitgeschickt.
-  Erzeugt der Administrator einen neuen Token, fragt die App beim nächsten Anmelden danach.
+* **App-Zugangstoken:** Beim Einrichten fragt die App nach dem Zugangstoken des eigenen Kontos (Manager → Mein Konto →
+  Apps und Geräte → App-Zugangstokens; jeder Benutzer kann beliebig viele anlegen, z. B. einen je Gerät). Er wird
+  verschlüsselt gespeichert und bei jeder Anfrage als `X-App-Token` mitgeschickt. Wird der Token entfernt, fragt die App
+  beim nächsten Anmelden nach einem neuen.
 * Das Passwort wird **nicht** gespeichert. Nach der Anmeldung (mit Zwei-Faktor-Code, falls eingeschaltet) erhält die App einen
   eigenen Geräte-Schlüssel. Er liegt AES-GCM-verschlüsselt in den App-Einstellungen; der Schlüssel dazu steckt im
   **Android Keystore** und ist nicht exportierbar. Sicherung/Geräteübertragung ist für die App ausgeschaltet.
