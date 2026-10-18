@@ -31,6 +31,46 @@ class Speicher(context: Context) {
         get() = prefs.getString("ansicht", "system") ?: "system"
         set(v) = prefs.edit().putString("ansicht", v).apply()
 
+    /** Minuten ohne Aktivität bis zum automatischen Abmelden (vom Manager vorgegeben, 0 = nie) */
+    var abmeldenMinuten: Int
+        get() = prefs.getInt("abmelden_minuten", 0)
+        set(v) = prefs.edit().putInt("abmelden_minuten", v).apply()
+
+    /** letzte Bedienung (Uhrzeit in ms) – damit das Abmelden auch nach einem Neustart der App greift */
+    var zuletztAktiv: Long
+        get() = prefs.getLong("zuletzt_aktiv", 0L)
+        set(v) = prefs.edit().putLong("zuletzt_aktiv", v).apply()
+
+    /** „Zwei-Faktor-Code merken“: Merk-Schlüssel je Server und Konto, verschlüsselt wie der Geräte-Schlüssel */
+    fun merken(server: String, benutzer: String): String? = entschluesseln("merken_" + schluesselName(server, benutzer))
+
+    fun merkenSetzen(server: String, benutzer: String, wert: String?) {
+        val k = "merken_" + schluesselName(server, benutzer)
+        if (wert.isNullOrEmpty()) prefs.edit().remove(k).apply() else prefs.edit().putString(k, verschluesseln(wert)).apply()
+    }
+
+    private fun schluesselName(server: String, benutzer: String): String =
+        java.security.MessageDigest.getInstance("SHA-256").digest("$server|$benutzer".toByteArray()).joinToString("") { "%02x".format(it) }.take(24)
+
+    private fun verschluesseln(v: String): String {
+        val c = Cipher.getInstance(TRANSFORMATION)
+        c.init(Cipher.ENCRYPT_MODE, schluessel())
+        return Base64.encodeToString(c.iv + c.doFinal(v.toByteArray(Charsets.UTF_8)), Base64.NO_WRAP)
+    }
+
+    private fun entschluesseln(name: String): String? {
+        val roh = prefs.getString(name, null) ?: return null
+        return try {
+            val bytes = Base64.decode(roh, Base64.NO_WRAP)
+            val c = Cipher.getInstance(TRANSFORMATION)
+            c.init(Cipher.DECRYPT_MODE, schluessel(), GCMParameterSpec(128, bytes, 0, 12))
+            String(c.doFinal(bytes, 12, bytes.size - 12), Charsets.UTF_8)
+        } catch (e: Exception) {
+            prefs.edit().remove(name).apply()
+            null
+        }
+    }
+
     var token: String?
         get() {
             val roh = prefs.getString("token", null) ?: return null

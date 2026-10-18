@@ -181,6 +181,43 @@ class ZweiFaktor(unittest.TestCase):
         self.assertEqual(Sitzung(SRV.basis).anmelden("zweifa", "Zwei-Faktor-Pw-123", code=notfall[0])[0], 400)   # Notfall-Code nur einmal
 
 
+class AnmeldungSicherheit(unittest.TestCase):
+    def test_login_seite_und_aktiv(self):
+        code, _, html = Sitzung(SRV.basis).roh("/")
+        html = html.decode()
+        self.assertIn('id="bleiben"', html)
+        self.assertIn("automatisch abgemeldet", html)                 # Standard: nach 30 Minuten
+        a = admin()
+        code, x = a.req("/api/aktiv")
+        self.assertEqual((code, x["abmelden_minuten"]), (200, 30))
+        s = Sitzung(SRV.basis)
+        code, kopf, _ = s.roh("/login", json.dumps({"benutzer": "admin", "passwort": PASSWORT, "bleiben": False}).encode(), {"Content-Type": "application/json"})
+        self.assertEqual(code, 200)
+        self.assertNotIn("Max-Age", kopf["Set-Cookie"])               # ohne „Angemeldet bleiben“: Sitzungs-Cookie
+
+    def test_zwei_faktor_merken(self):
+        a = admin()
+        a.req("/api/benutzer-speichern", {"neu": True, "name": "merker", "passwort": "Merker-Passwort-1", "passwort2": "Merker-Passwort-1", "art": "admin"})
+        s = Sitzung(SRV.basis)
+        s.anmelden("merker", "Merker-Passwort-1")
+        _, x = s.req("/api/2fa-start", {})
+        _, x = s.req("/api/2fa-bestaetigen", {"code": totp(x["geheim"].replace(" ", ""))})
+        notfall = x["notfall"]
+        code, x = a.req("/api/sicherheit-einstellungen", {"2fa_merken_stunden": 24, "abmelden_minuten": 30})
+        self.assertEqual((code, x["sicherheit"]["2fa_merken_stunden"]), (200, 24), x)
+        b = Sitzung(SRV.basis)
+        self.assertEqual(b.anmelden("merker", "Merker-Passwort-1", code=notfall[0])[0], 200)
+        self.assertEqual(b.anmelden("merker", "Merker-Passwort-1")[0], 200)                    # gleicher Browser: ohne Code
+        self.assertEqual(Sitzung(SRV.basis).anmelden("merker", "Merker-Passwort-1")[0], 400)   # anderer Browser: Code nötig
+        code, x = api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "merker", "passwort": "Merker-Passwort-1", "code": notfall[1], "geraet": "Test"})
+        self.assertTrue(x["merken"])
+        code, y = api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "merker", "passwort": "Merker-Passwort-1", "merken": x["merken"], "geraet": "Test"})
+        self.assertEqual(code, 200, y)
+        b.req("/api/2fa-vergessen", {})
+        self.assertEqual(b.anmelden("merker", "Merker-Passwort-1")[0], 400)                    # vergessen → wieder Code
+        a.req("/api/sicherheit-einstellungen", {"2fa_merken_stunden": 0})
+
+
 class Unterlagen(unittest.TestCase):
     def test_html_als_pdf_abgelehnt_und_pdf_als_download(self):
         a = admin()

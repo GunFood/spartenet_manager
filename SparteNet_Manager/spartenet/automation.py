@@ -51,6 +51,7 @@ PLATZHALTER = {
     "{vertrag_beginn}": "Vertragsbeginn", "{vertrag_ende}": "Ende der laufenden Vertragsperiode", "{kuendbar_bis}": "Kündigung möglich bis",
     "{rechnung}": "Rechnungsnummer", "{faellig}": "Fälligkeit der Rechnung",
 }
+AKTION_ERWEITERUNG = {}   # Aktionen späterer Module: f(d, daten, aktion, werte, probe, regelname) → Text fürs Protokoll
 LAYOUT_STANDARD = {"aktiv": True, "logo": True, "farbe_kopf": "#1d2f3e", "farbe_kopf_text": "#ffffff", "farbe_akzent": "#3a9a1f",
                    "farbe_hinter": "#f5f7f4", "farbe_text": "#1d2f3e", "schrift": "Arial, Helvetica, sans-serif", "breite": 600,
                    "kopf": "SparteNet.de", "fuss": "SparteNet.de · WLAN für Kleingärten\nDiese E-Mail wurde automatisch versendet."}
@@ -451,6 +452,9 @@ def automation_verarbeiten(typ, daten, d, probe=False):
                         speichere(d)
                         journal(f"Automation „{r['name']}“: {kz} Parzelle {p} → {tarif or 'Buchung entfernt'}")
                     ergebnisse.append({"regel": r["name"], "aktion": AKTIONEN[art], "ok": True, "text": f"{kz} Parzelle {p} → {tarif or 'entfernt'}"})
+                elif art in AKTION_ERWEITERUNG:
+                    text = AKTION_ERWEITERUNG[art](d, daten, a, werte, probe, r["name"])
+                    ergebnisse.append({"regel": r["name"], "aktion": AKTIONEN[art], "ok": True, "text": text})
                 elif art == "protokoll":
                     t = _ersetzen(a.get("text") or "Automation „{ereignis}“", werte)
                     if not probe:

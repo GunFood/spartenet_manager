@@ -96,10 +96,13 @@ fun BuchungenSeite(s: Sitzung) {
                                     Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    Column(Modifier.width(110.dp)) {
+                                    Column(Modifier.width(130.dp)) {
                                         Text("Parzelle $p", fontWeight = if (geaendert) FontWeight.Bold else null,
                                             color = if (geaendert) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
                                         if (z.optBoolean("unbekannt")) Text("Tarif unbekannt", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                                        if (z.optBoolean("gesperrt")) Text("Zugang gesperrt", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                                        else if (z.s("ende").isNotEmpty()) Text((if (z.s("laufzeit_status") == "aktiv") "bis " else "abgelaufen ") + z.s("ende"),
+                                            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                     Auswahl("Tarif", wert, tarife, { it.ifEmpty { "– nicht gebucht –" } }, Modifier.weight(1f), schreiben && !arbeitet) { neu ->
                                         if (neu == z.s("tarif")) aenderungen.remove(p) else aenderungen[p] = neu

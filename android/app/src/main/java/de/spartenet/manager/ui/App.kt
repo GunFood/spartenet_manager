@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Receipt
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.CircularProgressIndicator
@@ -46,6 +47,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -53,6 +55,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -68,6 +74,7 @@ enum class Bereich(val titel: String, val icon: ImageVector, val recht: String?)
     TICKETS("Anfragen", Icons.Filled.Inbox, "tickets"),
     MITGLIEDER("Mitglieder", Icons.Filled.People, "mitglieder"),
     BUCHUNGEN("Buchungen", Icons.Filled.Grass, "buchungen"),
+    LAUFZEITEN("Laufzeiten", Icons.Filled.Timer, "buchungen"),
     PARZELLE("Parzelle / WLAN", Icons.Filled.Wifi, "start"),
     VOUCHER("Gast-Voucher", Icons.Filled.ConfirmationNumber, "voucher"),
     RECHNUNGEN("Rechnungen", Icons.Filled.Receipt, "rechnungen"),
@@ -91,16 +98,24 @@ fun Wurzel(speicher: Speicher, ansicht: String, onAnsicht: (String) -> Unit) {
         hinweis = grund
     }
 
-    fun neueSitzung(api: Api, ich: org.json.JSONObject, version: String) =
+    fun neueSitzung(api: Api, ich: org.json.JSONObject, version: String, minuten: Int) =
         Sitzung(api, ich, version, snackbar) { abmeldenLokal("Die Anmeldung ist abgelaufen oder wurde unter „Mein Konto“ gesperrt.") }
+            .also { it.abmeldenMinuten = minuten; speicher.abmeldenMinuten = minuten }
 
     if (pruefen > 0 && sitzung == null) {
         LaunchedEffect(pruefen) {
             startFehler = null
             val api = Api(speicher.server, speicher.token)
+            val min = speicher.abmeldenMinuten
+            if (min > 0 && speicher.zuletztAktiv > 0 && System.currentTimeMillis() - speicher.zuletztAktiv > min * 60_000L) {
+                geraetEntfernen(api)
+                abmeldenLokal(abgemeldetText(min))
+                return@LaunchedEffect
+            }
             try {
                 val info = api.get("/api/v1/app/info")
-                sitzung = neueSitzung(api, info.o("ich"), info.s("version"))
+                speicher.zuletztAktiv = System.currentTimeMillis()
+                sitzung = neueSitzung(api, info.o("ich"), info.s("version"), info.optInt("abmelden_minuten", 0))
             } catch (e: ApiFehler) {
                 if (e.abgemeldet) abmeldenLokal("Bitte neu anmelden.") else startFehler = e.message
             }
@@ -127,13 +142,58 @@ fun Wurzel(speicher: Speicher, ansicht: String, onAnsicht: (String) -> Unit) {
             speicher.token = antwort.s("token")
             api.token = antwort.s("token")
             hinweis = null
-            sitzung = neueSitzung(api, antwort.o("ich"), antwort.s("version"))
+            sitzung = neueSitzung(api, antwort.o("ich"), antwort.s("version"), antwort.optInt("abmelden_minuten", 0))
         }
         return
     }
 
-    Hauptansicht(s, speicher, ansicht, onAnsicht, snackbar) {
-        abmeldenLokal("Abgemeldet.")
+    // automatisch abmelden: jede Berührung zählt als Aktivität; geprüft wird alle 10 s und beim Zurückkehren in die App
+    var letzte by remember(s) { mutableLongStateOf(System.currentTimeMillis()) }
+    if (s.abmeldenMinuten > 0) {
+        LaunchedEffect(s) {
+            var gespeichert = 0L
+            while (true) {
+                val jetzt = System.currentTimeMillis()
+                if (jetzt - letzte > s.abmeldenMinuten * 60_000L) {
+                    geraetEntfernen(s.api)
+                    abmeldenLokal(abgemeldetText(s.abmeldenMinuten))
+                    break
+                }
+                if (letzte - gespeichert > 30_000L) {
+                    speicher.zuletztAktiv = letzte
+                    gespeichert = letzte
+                }
+                delay(10_000)
+            }
+        }
+    }
+    Box(Modifier.fillMaxSize().pointerInput(s) {
+        awaitPointerEventScope {
+            while (true) {
+                awaitPointerEvent(PointerEventPass.Initial)
+                val jetzt = System.currentTimeMillis()
+                // nach Ablauf zählt die erste Berührung nicht mehr – die Prüfung oben meldet ab
+                if (s.abmeldenMinuten == 0 || jetzt - letzte <= s.abmeldenMinuten * 60_000L) letzte = jetzt
+            }
+        }
+    }) {
+        Hauptansicht(s, speicher, ansicht, onAnsicht, snackbar) {
+            abmeldenLokal("Abgemeldet.")
+        }
+    }
+}
+
+private fun abgemeldetText(min: Int) =
+    "Automatisch abgemeldet nach ${if (min % 60 == 0) "${min / 60} Stunde(n)" else "$min Minuten"} ohne Bedienung (Einstellung im Manager)."
+
+/** Gerät am Manager abmelden – ohne Verbindung trotzdem lokal abmelden */
+private suspend fun geraetEntfernen(api: Api) {
+    val id = Speicher.geraeteId(api.token) ?: return
+    try {
+        api.post("/api/app-geraet-entfernen", org.json.JSONObject().put("id", id))
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
     }
 }
 
@@ -176,6 +236,7 @@ private fun Hauptansicht(
                     Bereich.TICKETS -> TicketSeite(s, breit, auftrag) { auftrag = null }
                     Bereich.MITGLIEDER -> MitgliederSeite(s, breit, auftrag) { auftrag = null }
                     Bereich.BUCHUNGEN -> BuchungenSeite(s)
+                    Bereich.LAUFZEITEN -> LaufzeitenSeite(s)
                     Bereich.PARZELLE -> ParzellenSeite(s, breit)
                     Bereich.VOUCHER -> VoucherSeite(s, breit)
                     Bereich.RECHNUNGEN -> RechnungenSeite(s)

@@ -45,27 +45,94 @@ button{background:#3a9a1f;color:#fff;border:0;border-radius:8px;padding:13px 22p
 <button onclick="location.reload()">Erneut versuchen</button></div></body></html>"""
 
 LOGIN_HTML = """<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>SparteNet Manager – Anmelden</title><meta name="theme-color" content="#1d2f3e"><link rel="manifest" href="/manifest.webmanifest">
+<title>SparteNet Manager – Anmelden</title><meta name="theme-color" content="#14321f"><link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/favicon.png"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="SparteNet">
-<script>try{const f=localStorage.getItem("sn_farbe");if(f=="hell"||f=="dunkel")document.documentElement.dataset.farbe=f}catch(e){}</script><style>@media (prefers-color-scheme:dark){:root:not([data-farbe=hell]) body{background:#0b1218}:root:not([data-farbe=hell]) .k{background:#18222a;color:#e2e8ec}:root:not([data-farbe=hell]) input{background:#0f161c;color:#e2e8ec;border-color:#2e3c46}:root:not([data-farbe=hell]) p{color:#9aa9b3}}:root[data-farbe=dunkel] body{background:#0b1218}:root[data-farbe=dunkel] .k{background:#18222a;color:#e2e8ec}:root[data-farbe=dunkel] input{background:#0f161c;color:#e2e8ec;border-color:#2e3c46}:root[data-farbe=dunkel] p{color:#9aa9b3}</style><style>body{margin:0;font-family:system-ui,Roboto,Arial,sans-serif;background:#1d2f3e;color:#1d2f3e;display:grid;place-items:center;min-height:100vh;padding:20px;box-sizing:border-box}
-.k{background:#fff;border-radius:16px;padding:28px 24px;width:100%;max-width:380px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.3)}img{width:110px}h1{font-size:21px;margin:8px 0 4px}h1 span{color:#3a9a1f}
-p{color:#5d6b75;font-size:14px;margin:4px 0 18px}input{width:100%;box-sizing:border-box;font-size:22px;letter-spacing:4px;text-align:center;padding:13px;border:1px solid #d9e0d6;border-radius:10px}
-button{width:100%;background:#3a9a1f;color:#fff;border:0;border-radius:10px;padding:14px;font-size:17px;margin-top:12px;font-weight:600}button:disabled{opacity:.6}
-.f{color:#b42318;font-size:14px;min-height:20px;margin-top:10px}input.name{font-size:17px;letter-spacing:0;margin-bottom:10px}</style></head><body><div class="k">
-<img src="/icon-192.png" alt=""><h1>Sparte<span>Net</span> Manager</h1>
-__INHALT__
-</div><script>
+<script>try{const f=localStorage.getItem("sn_farbe");if(f=="hell"||f=="dunkel")document.documentElement.dataset.farbe=f}catch(e){}</script>
+<style>
+:root{--grund:#eef3ec;--karte:#fff;--text:#16261c;--leise:#5b6b62;--rand:#d5ded1;--feld:#fbfcfa;--gruen:#2f8a1c;--gruen2:#256f15;--fehler:#b42318;--fehlerg:#fdecea;--info:#e7f2fb;--infot:#0f4d7a;--schatten:0 18px 50px rgba(20,50,31,.18)}
+@media (prefers-color-scheme:dark){:root:not([data-farbe=hell]){--grund:#0c1410;--karte:#16211b;--text:#e3ebe5;--leise:#9db0a4;--rand:#2b3a31;--feld:#101914;--fehlerg:#3a1714;--fehler:#ff9b8f;--info:#12283a;--infot:#9fd0f5;--schatten:0 18px 50px rgba(0,0,0,.5)}}
+:root[data-farbe=dunkel]{--grund:#0c1410;--karte:#16211b;--text:#e3ebe5;--leise:#9db0a4;--rand:#2b3a31;--feld:#101914;--fehlerg:#3a1714;--fehler:#ff9b8f;--info:#12283a;--infot:#9fd0f5;--schatten:0 18px 50px rgba(0,0,0,.5)}
+*{box-sizing:border-box}html,body{height:100%}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;background:var(--grund);color:var(--text);-webkit-font-smoothing:antialiased}
+.seite{min-height:100%;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr)}
+.marke{position:relative;overflow:hidden;color:#eaf6e6;padding:48px clamp(28px,5vw,72px);display:flex;flex-direction:column;justify-content:space-between;
+ background:radial-gradient(1200px 600px at -10% 110%,#3f9a26 0%,transparent 55%),radial-gradient(800px 500px at 110% -10%,#1f5c3a 0%,transparent 60%),linear-gradient(160deg,#14321f,#0d2416)}
+.marke svg.wellen{position:absolute;right:-80px;bottom:-60px;width:520px;opacity:.13}
+.logo{display:flex;align-items:center;gap:14px}.logo img{width:52px;height:52px;border-radius:14px;background:#fff;padding:4px}
+.logo b{font-size:22px;letter-spacing:.2px}.logo b span{color:#9be07f}
+.marke h2{font-size:clamp(26px,3vw,36px);line-height:1.15;margin:0 0 14px;font-weight:700;max-width:16em}
+.marke p{color:#c3dcc0;font-size:16px;line-height:1.5;max-width:30em;margin:0}
+.punkte{list-style:none;padding:0;margin:26px 0 0;display:grid;gap:12px}.punkte li{display:flex;gap:12px;align-items:flex-start;color:#dcebd8;font-size:15px}
+.punkte i{flex:none;width:26px;height:26px;border-radius:8px;background:rgba(155,224,127,.16);display:grid;place-items:center;font-style:normal;color:#9be07f;font-size:14px}
+.fuss{font-size:13px;color:#9fbe9b}
+.form{display:grid;place-items:center;padding:32px 20px}
+.k{width:100%;max-width:400px;background:var(--karte);border:1px solid var(--rand);border-radius:20px;padding:32px 28px;box-shadow:var(--schatten)}
+.k h1{font-size:24px;margin:0 0 6px}.k .unter{color:var(--leise);font-size:14.5px;margin:0 0 22px;line-height:1.45}
+.mlogo{display:none;align-items:center;gap:10px;margin-bottom:18px}.mlogo img{width:40px;height:40px}.mlogo b{font-size:19px}.mlogo b span{color:var(--gruen)}
+label{display:block;font-size:13.5px;font-weight:600;margin:14px 0 6px}
+.feld{position:relative}
+input[type=text],input[type=password],input.t{width:100%;font-size:16px;padding:13px 14px;border:1.5px solid var(--rand);border-radius:12px;background:var(--feld);color:var(--text);outline:none;transition:border-color .15s,box-shadow .15s}
+input.t:focus{border-color:var(--gruen);box-shadow:0 0 0 4px rgba(47,138,28,.15)}
+.auge{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:transparent;color:var(--leise);padding:8px;border-radius:8px;cursor:pointer;line-height:0}
+.auge:hover{background:rgba(127,127,127,.12)}.auge svg{width:20px;height:20px}
+#passwort{padding-right:46px}
+.hinweis{font-size:13px;color:#b45309;margin-top:6px;display:none}
+#codebox{display:none;margin-top:4px;padding:14px;border-radius:12px;background:var(--info);color:var(--infot)}
+#codebox label{margin-top:0;color:var(--infot)}#code{font-size:22px;letter-spacing:6px;text-align:center;font-variant-numeric:tabular-nums}
+#codebox small{display:block;margin-top:8px;font-size:12.5px;line-height:1.4}
+.zeile{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:16px 0 4px;font-size:14px}
+.zeile label{display:flex;align-items:center;gap:8px;margin:0;font-weight:500;cursor:pointer}.zeile input{width:18px;height:18px;accent-color:var(--gruen)}
+button.los{width:100%;margin-top:18px;background:var(--gruen);color:#fff;border:0;border-radius:12px;padding:14px;font-size:16.5px;font-weight:650;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;transition:background .15s}
+button.los:hover{background:var(--gruen2)}button.los:disabled{opacity:.7;cursor:default}
+.dreh{width:18px;height:18px;border:2.5px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;animation:d .8s linear infinite;display:none}button.los:disabled .dreh{display:block}@keyframes d{to{transform:rotate(360deg)}}
+.meldung{border-radius:12px;padding:11px 13px;font-size:14px;line-height:1.4;margin:0 0 16px;display:none}
+.meldung.fehler{display:block;background:var(--fehlerg);color:var(--fehler)}.meldung.info{display:block;background:var(--info);color:var(--infot)}
+.klein{color:var(--leise);font-size:12.5px;line-height:1.45;margin:18px 0 0}.klein a{color:var(--gruen)}
+@media (max-width:860px){.seite{grid-template-columns:1fr}.marke{display:none}.mlogo{display:flex}.form{min-height:100%;align-content:center}}
+@media (max-width:440px){.k{padding:26px 20px;border-radius:16px}.form{padding:18px 12px}}
+</style></head><body><div class="seite">
+<aside class="marke"><svg class="wellen" viewBox="0 0 200 200" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round"><path d="M30 90a100 100 0 0 1 140 0"/><path d="M55 118a64 64 0 0 1 90 0"/><path d="M80 146a28 28 0 0 1 40 0"/><circle cx="100" cy="172" r="7" fill="#fff"/></svg>
+<div class="logo"><img src="/icon-192.png" alt=""><b>Sparte<span>Net</span> Manager</b></div>
+<div><h2>WLAN für die Kleingarten-Sparte – übersichtlich verwaltet.</h2><p>Parzellen, Tarife, Pächter und das Gateway an einem Ort.</p>
+<ul class="punkte"><li><i>✓</i>Eigenes WLAN-Passwort je Parzelle, Zugangskarten mit QR-Code</li><li><i>✓</i>Tarife mit Laufzeit – Zugang wird pünktlich gesperrt und freigegeben</li><li><i>✓</i>Mitglieder, Anfragen, Rechnungen und Störungsmeldungen</li></ul></div>
+<div class="fuss">Version __VERSION__ · __PORTAL__</div></aside>
+<main class="form"><div class="k">
+<div class="mlogo"><img src="/icon-192.png" alt=""><b>Sparte<span>Net</span> Manager</b></div>
+<h1>Anmelden</h1><p class="unter">Mit Benutzername und Passwort. Administrator: Benutzername leer lassen oder „admin“. Auf Handys im Fernzugriff geht ohne Benutzername auch die Handy-PIN.</p>
+<div class="meldung" id="m"></div>
+<form id="fo" novalidate>
+<label for="benutzer">Benutzername</label><input class="t" type="text" id="benutzer" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="leer = admin">
+<label for="passwort">Passwort</label><div class="feld"><input class="t" type="password" id="passwort" autocomplete="current-password" required>
+<button type="button" class="auge" id="auge" aria-label="Passwort anzeigen" title="Passwort anzeigen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+<div class="hinweis" id="caps">⇪ Feststelltaste ist eingeschaltet</div>
+<div id="codebox"><label for="code">Code aus der Authenticator-App</label><input class="t" id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="20" placeholder="123456">
+<small>Oder einen Notfall-Code. __MERKEN__</small></div>
+<div class="zeile"><label><input type="checkbox" id="bleiben"> Angemeldet bleiben</label></div>
+<button class="los" id="b"><span class="dreh"></span><span id="bt">Anmelden</span></button>
+</form>
+<p class="klein">__ABMELDEN_TEXT__</p>
+</div></main></div>
+<script>
 if("serviceWorker" in navigator&&isSecureContext)navigator.serviceWorker.register("/sw.js").catch(()=>{});
-async function an(e){e.preventDefault();const b=document.getElementById("b"),f=document.getElementById("f");b.disabled=true;f.textContent="";
- try{const r=await fetch("/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({benutzer:document.getElementById("benutzer").value.trim(),passwort:document.getElementById("passwort").value,code:document.getElementById("code").value.trim(),geraet:navigator.userAgent})});
-  const d=await r.json();if(d.zweiter_faktor){const c=document.getElementById("code");c.style.display="block";c.value="";c.focus();f.textContent=d.fehler;b.disabled=false;return}
-  if(!r.ok)throw new Error(d.fehler||r.status);location.reload()}catch(x){f.textContent=x.message;b.disabled=false;document.getElementById("passwort").select()}}
+const $=i=>document.getElementById(i),m=$("m");
+function meldung(t,art){m.textContent=t;m.className="meldung "+(t?art:"")}
+const q=new URLSearchParams(location.search);
+if(q.get("abgemeldet")=="zeit")meldung("Sie wurden nach längerer Zeit ohne Aktivität automatisch abgemeldet. Bitte erneut anmelden.","info");
+else if(q.get("abgemeldet"))meldung("Sie haben sich abgemeldet.","info");
+if(q.has("abgemeldet"))history.replaceState(null,"","/");
+try{$("bleiben").checked=localStorage.getItem("sn_bleiben")=="1";const n=localStorage.getItem("sn_benutzer");if(n)$("benutzer").value=n}catch(e){}
+($("benutzer").value?$("passwort"):$("benutzer")).focus();
+$("auge").onclick=()=>{const p=$("passwort"),z=p.type=="password";p.type=z?"text":"password";$("auge").setAttribute("aria-label",z?"Passwort verbergen":"Passwort anzeigen");$("auge").title=$("auge").getAttribute("aria-label");p.focus()};
+["keydown","keyup"].forEach(t=>$("passwort").addEventListener(t,e=>{if(e.getModifierState)$("caps").style.display=e.getModifierState("CapsLock")?"block":"none"}));
+$("fo").addEventListener("submit",async e=>{e.preventDefault();const b=$("b");if(!$("passwort").value){meldung("Bitte das Passwort eingeben.","fehler");$("passwort").focus();return}
+ b.disabled=true;$("bt").textContent="Wird geprüft …";meldung("");
+ try{const r=await fetch("/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({benutzer:$("benutzer").value.trim(),passwort:$("passwort").value,code:$("code").value.trim(),bleiben:$("bleiben").checked,geraet:navigator.userAgent})});
+  const d=await r.json();
+  if(d.zweiter_faktor){$("codebox").style.display="block";const c=$("code");if(c.value)meldung(d.fehler,"fehler");c.value="";c.focus();b.disabled=false;$("bt").textContent="Bestätigen";return}
+  if(!r.ok)throw new Error(d.fehler||("Fehler "+r.status));
+  try{localStorage.setItem("sn_bleiben",$("bleiben").checked?"1":"0");localStorage.setItem("sn_benutzer",$("benutzer").value.trim())}catch(x){}
+  $("bt").textContent="Angemeldet";location.replace("/"+location.hash)}
+ catch(x){meldung(x.message,"fehler");b.disabled=false;$("bt").textContent=$("codebox").style.display=="block"?"Bestätigen":"Anmelden";$("passwort").select()}});
 </script></body></html>"""
-
-LOGIN_FORM = """<p>Mit Benutzername und Passwort anmelden. Administrator: Benutzername leer lassen oder „admin“ und das Manager-Passwort. Auf entfernten Handys funktioniert ohne Benutzername auch die Handy-PIN.</p>
-<form onsubmit="an(event)"><input id="benutzer" class="name" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Benutzername (leer = admin)">
-<input id="passwort" type="password" autocomplete="current-password" placeholder="Passwort" autofocus required>
-<input id="code" class="name" inputmode="numeric" autocomplete="one-time-code" placeholder="Code aus der Authenticator-App" style="display:none;margin-top:10px">
-<button id="b">Anmelden</button><div class="f" id="f"></div></form>"""
 
 __all__ = [_n for _n in dict(globals()) if not _n.startswith("__")]  # alle Namen an die folgenden Module weitergeben

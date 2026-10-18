@@ -27,12 +27,16 @@ def _app_hash(geheim):
 def app_anmelden(d, b, quelle):
     name = str(b.get("benutzer") or "").strip().lower()
     konto = benutzer_anmelden(d, name, b.get("passwort"), quelle)
-    if zweifaktor_aktiv(d, konto):
+    merken = None
+    if zweifaktor_aktiv(d, konto) and zweifaktor_gemerkt(d, konto, b.get("merken")):
+        pass                       # Code auf diesem Gerät noch gemerkt
+    elif zweifaktor_aktiv(d, konto):
         if not str(b.get("code") or "").strip():
             return {"ok": False, "zweiter_faktor": True, "fehler": "Bitte den Code aus der Authenticator-App mitschicken (Feld „code“)."}
         if not zweifaktor_pruefen(d, konto, b.get("code")):
             _konto_sperre(konto, False)
             return {"ok": False, "zweiter_faktor": True, "fehler": "Der Code stimmt nicht."}
+        merken, _ = zweifaktor_merken(d, konto, b.get("geraet") or "App")
     g = app_geraete(d)
     if sum(1 for x in g.values() if x.get("benutzer") == konto) >= 20:
         raise Fehler("Höchstens 20 Geräte je Konto – unter „Mein Konto“ alte Geräte entfernen.")
@@ -43,6 +47,8 @@ def app_anmelden(d, b, quelle):
     journal(f"App angemeldet: {konto} ({g[i]['name']})")
     rechte = konto_rechte(d, konto)
     return {"ok": True, "token": f"sna_{i}_{geheim}", "gueltig_tage": APP_TAGE, "ich": ich_daten(konto, rechte), "version": VERSION,
+            "merken": merken, "merken_stunden": sicherheit(d)["2fa_merken_stunden"] if merken else 0,
+            "abmelden_minuten": sicherheit(d)["app_abmelden_minuten"],
             "hinweis": "Token sicher speichern (z. B. Android Keystore). Bei jeder Anfrage: Authorization: Bearer <token>."}
 
 
@@ -102,6 +108,14 @@ def akt_app_uebersicht(d, ich, rechte):
     if sieht("buchungen") or sieht("kalkulation"):
         buch = {k: v for k, v in (d.get("buchungen") or {}).items() if erl is None or k in erl}
         aus["buchungen"] = sum(1 for v in buch.values() for t in v.values() if t)
+        jetzt = time.time()
+        lz = [e for e in laufzeiten(d).values() if isinstance(e, dict) and (erl is None or e.get("sparte") in erl)]
+        if lz:
+            gesp = zugang_gesperrt(d)
+            aus["laufzeiten"] = {"aktiv": sum(1 for e in lz if e.get("status") == "aktiv"),
+                                 "bald": sum(1 for e in lz if e.get("status") == "aktiv" and e["ende"] - jetzt < 86400),
+                                 "abgelaufen": sum(1 for e in lz if e.get("status") in ("abgelaufen", "ausnahme")),
+                                 "offen": sum(1 for e in lz if (e.get("status") == "abgelaufen") != (_k(e["sparte"], e["parzelle"]) in gesp))}
     if sieht("tickets"):
         t = [x for x in tickets_daten(d)["liste"].values() if x.get("status") != "erledigt" and (erl is None or x.get("sparte") in erl or x.get("zustaendig") == ich)]
         aus["tickets"] = {"offen": len(t), "neu": sum(1 for x in t if x.get("status") == "neu"), "meine": sum(1 for x in t if x.get("zustaendig") == ich),

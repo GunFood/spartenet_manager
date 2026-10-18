@@ -7,7 +7,7 @@ from .sicherung import *  # noqa: F401,F403 – alle Namen der vorherigen Module
 
 TOTP_SCHRITT = 30
 TOTP_STELLEN = 6
-ZWEIFAKTOR_FREI = {"/api/benutzer-ich", "/api/2fa-start", "/api/2fa-bestaetigen", "/api/2fa-aus", "/api/einstellungen", "/api/ansicht", "/api/plan", "/api/pw-regel"}
+ZWEIFAKTOR_FREI = {"/api/aktiv", "/api/benutzer-ich", "/api/2fa-start", "/api/2fa-bestaetigen", "/api/2fa-aus", "/api/einstellungen", "/api/ansicht", "/api/plan", "/api/pw-regel"}
 
 
 def totp_code(geheim_b32, zaehler):
@@ -130,15 +130,96 @@ def akt_2fa_zuruecksetzen(d, name, ich):
     return r
 
 
+# ---- Anmeldung: automatisch abmelden, Zwei-Faktor-Code merken -------------------------------------------------------
+SICHERHEIT_GRENZEN = {"abmelden_minuten": (0, 24 * 60), "app_abmelden_minuten": (0, 7 * 24 * 60), "2fa_merken_stunden": (0, 90 * 24)}
+MERKEN_COOKIE = "sn_2fa"
+
+
+def dauer_text_kurz(stunden):
+    if stunden % 24 == 0:
+        t = stunden // 24
+        return "1 Tag" if t == 1 else f"{t} Tage"
+    return "1 Stunde" if stunden == 1 else f"{stunden} Stunden"
+
+
+def _merken_fp(d, name):
+    """Fingerabdruck des aktuellen 2FA-Geheimnisses – nach Zurücksetzen/Neu-Einrichten gelten gemerkte Geräte nicht mehr"""
+    g = _totp(d, name).get("geheim") or ""
+    return hashlib.sha256(("SparteNet-2FA-FP|" + g).encode()).hexdigest()[:24] if g else ""
+
+
+def _merken_liste(d):
+    m = d.get("zweifaktor_merken")
+    if not isinstance(m, dict):
+        m = {}
+        d["zweifaktor_merken"] = m
+    return m
+
+
+def zweifaktor_gemerkt(d, name, token):
+    """True, wenn dieses Gerät/dieser Browser den Code für das Konto noch nicht erneut eingeben muss"""
+    stunden = sicherheit(d)["2fa_merken_stunden"]
+    if not stunden or not token or not re.fullmatch(r"[A-Za-z0-9_-]{30,80}", str(token)):
+        return False
+    x = _merken_liste(d).get(hashlib.sha256(("SparteNet-2FA-Merken|" + token).encode()).hexdigest())
+    if not x or x.get("konto") != name or time.time() > float(x.get("bis") or 0):
+        return False
+    fp = _merken_fp(d, name)
+    # zusätzlich die aktuelle Höchstdauer beachten (falls sie inzwischen verkürzt wurde)
+    return bool(fp) and hmac.compare_digest(x.get("fp", ""), fp) and time.time() < float(x.get("seit") or 0) + stunden * 3600
+
+
+def zweifaktor_merken(d, name, geraet=""):
+    """neues Merk-Token nach erfolgreicher Code-Eingabe; gibt (token, sekunden) oder (None, 0) zurück"""
+    stunden = sicherheit(d)["2fa_merken_stunden"]
+    fp = _merken_fp(d, name)
+    if not stunden or not fp:
+        return None, 0
+    m = _merken_liste(d)
+    jetzt = time.time()
+    for k in [k for k, v in m.items() if not isinstance(v, dict) or float(v.get("bis") or 0) < jetzt]:
+        del m[k]
+    eigene = sorted((k for k, v in m.items() if v.get("konto") == name), key=lambda k: m[k].get("seit", 0))
+    for k in eigene[:-19]:      # höchstens 20 gemerkte Geräte je Konto
+        del m[k]
+    t = secrets.token_urlsafe(32)
+    m[hashlib.sha256(("SparteNet-2FA-Merken|" + t).encode()).hexdigest()] = {
+        "konto": name, "fp": fp, "seit": jetzt, "bis": jetzt + stunden * 3600, "geraet": text_einzeilig(geraet or "", 80)}
+    return t, stunden * 3600
+
+
+def akt_2fa_vergessen(d, ich):
+    m = _merken_liste(d)
+    weg = [k for k, v in m.items() if v.get("konto") == ich]
+    for k in weg:
+        del m[k]
+    speichere(d)
+    journal(f"Gemerkte Geräte für die Zwei-Faktor-Anmeldung vergessen: {ich} ({len(weg)})")
+    return {"log": [f"✔ {len(weg)} gemerkte(s) Gerät(e) vergessen – beim nächsten Anmelden wird der Code wieder abgefragt."]}
+
+
 def akt_sicherheit_einstellungen(d, b, ich):
-    s = d.get("sicherheit") if isinstance(d.get("sicherheit"), dict) else {}
+    s = sicherheit(d)
     if "2fa_admin" in b:
         s["2fa_admin"] = bool(b["2fa_admin"])
         if s["2fa_admin"] and not zweifaktor_aktiv(d, ich):
             raise Fehler("Bitte zuerst für Ihr eigenes Konto die Zwei-Faktor-Anmeldung einrichten (Mein Konto).")
+    for k, (lo, hi) in SICHERHEIT_GRENZEN.items():
+        if k in b:
+            try:
+                v = int(b[k] or 0)
+            except (TypeError, ValueError):
+                raise Fehler("Bitte ganze Zahlen angeben.")
+            if not lo <= v <= hi:
+                raise Fehler(f"Wert außerhalb des erlaubten Bereichs ({lo}–{hi}).")
+            if k == "abmelden_minuten" and 0 < v < 5:
+                raise Fehler("Automatisch abmelden: mindestens 5 Minuten (oder aus).")
+            s[k] = v
     d["sicherheit"] = s
     speichere(d)
-    journal(f"Sicherheit: Zwei-Faktor-Pflicht für Administratoren {'an' if s.get('2fa_admin') else 'aus'} durch {ich}")
+    journal(f"Sicherheit geändert durch {ich}: 2FA-Pflicht Admins {'an' if s['2fa_admin'] else 'aus'}, Browser abmelden nach "
+            f"{s['abmelden_minuten'] or 'nie'} Min., App nach {s['app_abmelden_minuten'] or 'nie'} Min., 2FA merken "
+            f"{dauer_text_kurz(s['2fa_merken_stunden']) if s['2fa_merken_stunden'] else 'nein'}")
     r = akt_benutzer(d, ich)
     r["log"] = ["✔ Gespeichert."]
     return r

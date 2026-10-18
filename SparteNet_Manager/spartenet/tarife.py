@@ -7,6 +7,17 @@ NETZ_ZWECK_AUS = {"wan", "remote-user-vpn", "site-vpn", "vpn-client", "vlan-only
 TARIF_SICHERUNG = "SparteNet_Sicherung_Tarife_"
 
 
+LAUFZEIT_EINHEITEN = {"stunden": ("Stunden", 24 * 31), "tage": ("Tage", 3650), "wochen": ("Wochen", 520), "monate": ("Monate", 120)}
+
+
+def laufzeit_text(n, einheit):
+    """„1 Tag“, „3 Monate“ … – 0 = unbegrenzt"""
+    if not n:
+        return "unbegrenzt"
+    ein = {"stunden": ("Stunde", "Stunden"), "tage": ("Tag", "Tage"), "wochen": ("Woche", "Wochen"), "monate": ("Monat", "Monate")}.get(einheit, ("Tag", "Tage"))
+    return f"{n} {ein[0] if n == 1 else ein[1]}"
+
+
 def _zahl(x):
     return int(x) if float(x) == int(float(x)) else round(float(x), 1)
 
@@ -64,7 +75,17 @@ def tarife_pruefen(roh):
             raise Fehler(f"Tarif „{name}“: Preis muss eine Zahl sein.")
         if not 0 <= preis <= 100000:
             raise Fehler(f"Tarif „{name}“: Preis 0 bis 100000 € pro Jahr.")
-        aus.append({"name": name, "down": _zahl(down), "up": _zahl(up), "praefix": praefix, "geraete": geraete, "preis": _zahl(preis)})
+        einheit = str(t.get("laufzeit_einheit") or "tage")
+        if einheit not in LAUFZEIT_EINHEITEN:
+            raise Fehler(f"Tarif „{name}“: Laufzeit in Stunden, Tagen, Wochen oder Monaten.")
+        try:
+            laufzeit = int(float(str(t.get("laufzeit") or 0).replace(",", ".")))
+        except ValueError:
+            raise Fehler(f"Tarif „{name}“: Laufzeit muss eine ganze Zahl sein (0 = unbegrenzt).")
+        if not 0 <= laufzeit <= LAUFZEIT_EINHEITEN[einheit][1]:
+            raise Fehler(f"Tarif „{name}“: Laufzeit 0 bis {LAUFZEIT_EINHEITEN[einheit][1]} {LAUFZEIT_EINHEITEN[einheit][0]}.")
+        aus.append({"name": name, "down": _zahl(down), "up": _zahl(up), "praefix": praefix, "geraete": geraete, "preis": _zahl(preis),
+                    "laufzeit": laufzeit, "laufzeit_einheit": einheit})
     return aus
 
 
@@ -358,6 +379,9 @@ def akt_tarife_speichern(d, b):
     zuord = d.get("tarif_zuordnung") or {}
     d["tarif_zuordnung"] = {k: umben.get(v, v) for k, v in zuord.items()}
     d["buchungen"] = {kz: {pz: umben.get(t, t) for pz, t in b.items()} for kz, b in (d.get("buchungen") or {}).items()}
+    for e in (d.get("laufzeiten") or {}).values():
+        if isinstance(e, dict) and e.get("tarif") in umben:
+            e["tarif"] = umben[e["tarif"]]
     d["tarife"], d["tarif_modus"] = tarife, modus
     speichere(d)
     return {"tarife": tarife, "modus": modus, "log": [f"✔ {len(tarife)} Tarife gespeichert"

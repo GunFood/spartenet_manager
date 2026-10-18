@@ -1,6 +1,6 @@
 # SparteNet – Android-App (Handy und Tablet)
 
-Native App (Kotlin, Jetpack Compose, Material 3) für den **SparteNet Manager ab Version 5.0**.
+Native App (Kotlin, Jetpack Compose, Material 3) für den **SparteNet Manager ab Version 5.1** (Grundfunktionen ab 5.0).
 Sie nutzt ausschließlich die App-Schnittstelle des Managers (`/api/v1/app/…` und `/api/…` mit `Authorization: Bearer sna_…`)
 und hat genau die Rechte des Benutzerkontos, mit dem sie angemeldet wird.
 
@@ -14,6 +14,7 @@ und hat genau die Rechte des Benutzerkontos, mit dem sie angemeldet wird.
 | Buchungen | Tarif je Parzelle und Sparte ändern (mit Bestätigung; am Gateway wird nichts direkt geändert) | Buchungen lesen/schreiben |
 | Parzelle / WLAN | WLAN-Name, Passwort (verdeckt), QR-Code zum Scannen, kopieren/teilen | Start lesen |
 | Gast-Voucher | aus Vorlage erstellen (erst Vorschau, dann Bestätigung), Codes kopieren/teilen, Voucher am Gateway ansehen | Voucher lesen/schreiben |
+| Laufzeiten | Tarife mit Laufzeit: Ende je Parzelle, verlängern, Zugang am Gateway sperren/freigeben (mit Vorschau) | Buchungen lesen/schreiben, Gateway: WLAN-Passwörter schreiben |
 | Rechnungen | Liste nach Jahr/Status mit Summen, Rechnung als PDF öffnen | Rechnungen lesen |
 | Störungen | überwachte Geräte, offline seit, Verlauf; „Jetzt prüfen“ (Administrator) | Auslesen lesen |
 | Mein Konto | Ansicht Hell/Dunkel/System, angemeldete Geräte sehen und entfernen, Abmelden | angemeldet |
@@ -29,6 +30,10 @@ Liste und Detail nebeneinander. Hoch- und Querformat werden unterstützt.
 * Jedes Gerät erscheint im Manager unter **Mein Konto → Apps und Geräte** und kann dort gesperrt werden.
   „Abmelden“ in der App entfernt das Gerät auch am Manager.
 * Die App protokolliert weder Schlüssel noch Passwörter.
+* **Automatisch abmelden:** stellt der Administrator im Manager (Benutzer → Anmeldung und Sicherheit) eine Zeit für die App ein,
+  meldet sie sich nach so vielen Minuten ohne Bedienung ab – auch wenn die App zwischendurch geschlossen war.
+* **Zwei-Faktor-Code merken:** ist das im Manager eingeschaltet, fragt die App den Code nach richtiger Eingabe für die eingestellte
+  Zeit nicht erneut ab (Merk-Schlüssel verschlüsselt im Keystore; nach Zurücksetzen der Zwei-Faktor-Anmeldung ungültig).
 * Für den Betrieb über das Internet bitte **https://** verwenden (z. B. hinter einem Reverse-Proxy).
   `http://` ist nur für das eigene Netz gedacht – die App warnt dabei sichtbar. Wer kein http braucht, setzt in
   `app/src/main/res/xml/network_security_config.xml` `cleartextTrafficPermitted="false"`.

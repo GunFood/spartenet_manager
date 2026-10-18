@@ -229,8 +229,16 @@ def akt_wochenbericht(d, b=None, ich=""):
 
 
 # ---- Zeitplan -------------------------------------------------------------------------------------------------------
+ZEITPLAN_AUFGABEN = []   # weitere Aufgaben späterer Module: f(jetzt) – jede Minute, Fehler brechen den Rest nicht ab
+
+
 def zeitplan_lauf(jetzt=None):
     jetzt = jetzt or time.time()
+    for f in list(ZEITPLAN_AUFGABEN):
+        try:
+            f(jetzt)
+        except Exception:
+            LOG.error("Zeitplan-Aufgabe %s:\n%s", getattr(f, "__name__", f), traceback.format_exc())
     lt = time.localtime(jetzt)
     st = stand_lesen()
     d = lade()

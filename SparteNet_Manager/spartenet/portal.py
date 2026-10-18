@@ -4,7 +4,7 @@
 Die Zugangskarte geht nur per E-Mail an die beim Mitglied hinterlegte Adresse; die Seite zeigt nie ein Passwort und verrät nicht,
 ob Angaben stimmen. Ticket-Status nur mit Ticket-Nummer und der E-Mail-Adresse aus der Anfrage.
 """
-from .zeitplan import *  # noqa: F401,F403 – alle Namen der vorherigen Module
+from .laufzeit import *  # noqa: F401,F403 – alle Namen der vorherigen Module
 
 PORTAL_STANDARD = {"aktiv": False, "titel": "SparteNet – Service für Pächter", "text": "Hier können Sie eine Anfrage stellen, den Stand Ihrer Anfrage abfragen oder Ihre WLAN-Zugangskarte erneut anfordern.",
                    "ticket": True, "status": True, "zugang": True, "bestaetigung": True}
