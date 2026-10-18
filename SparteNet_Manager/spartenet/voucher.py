@@ -236,10 +236,10 @@ def akt_voucher_druck(d, b):
     wahl = [x for x in alle if x.get("id") in ids or re.sub(r"\D", "", str(x.get("code", ""))) in codes]
     if not wahl:
         raise Fehler("Die ausgewählten Voucher gibt es am Gateway nicht (mehr) – bitte neu auslesen.")
-    plan = plan_berechnen(d["plan"])
+    plan = plan_aktiv(d)
     pre = plan.get("praefix") or "SparteNet.de"
     sp = next((s for s in plan["sparten"] if s["kz"] == b.get("sparte")), plan["sparten"][0] if plan["sparten"] else {"kz": "", "name": "SparteNet"})
-    ssid = text_einzeilig(b.get("wlan") or "", 32).strip() or WLAN_GAESTE.format(pre=pre, kz=sp["kz"])
+    ssid = text_einzeilig(b.get("wlan") or "", 32).strip() or wlan_ssid(d, sp["kz"], "gaeste")
     nach_einst = {_einstellungen(v): v for v in voucher_vorlagen(d)}
     zeilen, abgelaufen = [], 0
     for x in sorted(wahl, key=lambda x: x.get("code", "")):

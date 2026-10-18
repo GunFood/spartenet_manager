@@ -51,7 +51,7 @@ def kalk_sparten(d):
     extra = k.get("sparten") or {}
     aus = {}
     try:
-        plan = plan_berechnen(d["plan"])
+        plan = plan_aktiv(d)
         for s in plan["sparten"]:
             aus[s["kz"]] = {"kz": s["kz"], "name": s["name"], "n": s["n"], "gateway": plan["gateway"], "quelle": "Planung"}
     except Fehler:

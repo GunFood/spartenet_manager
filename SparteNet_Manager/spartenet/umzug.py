@@ -30,7 +30,7 @@ def _verschieben(alt_netz, neu_netz, ip):
 
 
 def umzug_lage(d):
-    plan = plan_berechnen(d["plan"])
+    plan = plan_aktiv(d)
     if plan["schema"] != "standort":
         raise Fehler("Die aktive Planung nutzt noch das alte Schema. Erst unter „Netzplanung → VLAN-Plan je Gateway“ das Gateway übernehmen – "
                      "die Umzugshilfe stellt dann die vorhandenen Netze auf diese Planung um.")

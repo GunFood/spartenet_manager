@@ -12,6 +12,7 @@ import spartenet.webserver as S   # noqa: E402  (lädt alle Module der Kette)
 import spartenet.zuteilung as Z   # noqa: E402
 import spartenet.umzug as U       # noqa: E402
 import spartenet.voucher as V     # noqa: E402
+import spartenet.ppsk as P        # noqa: E402
 
 
 class FakeGateway:
@@ -319,6 +320,42 @@ class Voucher(unittest.TestCase):
         self.assertTrue(any("in Benutzung" in z for z in v["log"]))
         S.akt_voucher_loeschen(self.d, ["a", "c"], True)
         self.assertEqual([x["id"] for x in FakeVoucherGateway.voucher], ["b"])
+
+
+class WlanZuordnung(unittest.TestCase):
+    def setUp(self):
+        self.d = frisch()
+        P.Gateway = FakeGateway
+        FakeGateway.netze = [{"_id": "n1", "name": "BW-Paz.001"}, {"_id": "n2", "name": "BW-Paz.002"}, {"_id": "x", "name": "Fremd"}]
+        FakeGateway.wlans = [
+            {"_id": "w1", "name": "Buchenweg Pächter", "private_preshared_keys_enabled": True,
+             "private_preshared_keys": [{"networkconf_id": "n1", "password": "SN1111111111"}, {"networkconf_id": "n2", "password": "SN2222222222"}]},
+            {"_id": "w2", "name": "Buchenweg Gast", "is_guest": True},
+            {"_id": "w3", "name": "Anderes", "private_preshared_keys_enabled": True, "private_preshared_keys": [{"networkconf_id": "x", "password": "y"}]},
+        ]
+
+    def test_abrufen_zuordnen_und_passwoerter_holen(self):
+        with self.assertRaises(S.Fehler) as f:                                   # Name nach Schema gibt es am Gateway nicht
+            S.akt_ppsk(self.d, "BW", "gateway")
+        self.assertIn("Schritt 2", str(f.exception))
+        w = S.akt_wlans(self.d, "BW")
+        self.assertEqual(w["vorschlag"]["paechter"], "Buchenweg Pächter")       # PPSK mit Parzellennetzen der Sparte
+        self.assertEqual(w["vorschlag"]["gaeste"], "Buchenweg Gast")
+        self.assertEqual(next(x for x in w["wlans"] if x["name"] == "Buchenweg Pächter")["eigene"], 2)
+        S.akt_wlan_zuordnung(self.d, {"sparte": "BW", "paechter": "Buchenweg Pächter", "gaeste": "Buchenweg Gast"})
+        r = S.akt_ppsk(self.d, "BW", "gateway")
+        self.assertIn("2 vorhandene Passwörter", r["log"][0])
+        self.assertEqual({z["WLAN"] for z in r["zeilen"]}, {"Buchenweg Pächter"})
+        self.assertEqual({z["WLAN"] for z in S.lese_ppsk("BW")}, {"Buchenweg Pächter"})
+        sp = next(x for x in S.plan_aktiv(self.d)["sparten"] if x["kz"] == "BW")
+        self.assertEqual((sp["wlan"]["paechter"], sp["wlan"]["vorstand"], sp["wlan"]["eigen"]), ("Buchenweg Pächter", "SparteNet.de-BW-Vorstand", True))
+        self.assertIn("Buchenweg Pächter", S.akt_karten(self.d, "BW", [1])["html"])
+        self.assertEqual(S.akt_parzelle(self.d, "BW", "1")["wlan"], "Buchenweg Pächter")
+        S.akt_wlan_zuordnung(self.d, {"sparte": "BW"})                           # zurück zum Schema
+        self.assertEqual(S.wlan_ssid(self.d, "BW"), "SparteNet.de-BW-Pächter")
+        self.assertEqual({z["WLAN"] for z in S.lese_ppsk("BW")}, {"SparteNet.de-BW-Pächter"})
+        with self.assertRaises(S.Fehler):
+            S.akt_wlan_zuordnung(self.d, {"sparte": "BW", "paechter": "x" * 33})
 
 
 if __name__ == "__main__":
