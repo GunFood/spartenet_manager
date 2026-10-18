@@ -301,6 +301,9 @@ class Gestaltung(unittest.TestCase):
         a = admin()
         code, g = a.req("/api/gestaltung")
         self.assertEqual(code, 200, g)
+        _, kd = a.req("/api/design")
+        code, x = a.req("/api/design", {"design": {**kd["design"], "farbe_akzent": "#224466"}})   # Kartendesign weiter speicherbar
+        self.assertEqual(code, 200, x)
         code, x = a.req("/api/seiten-design", {"art": "login", "design": {"ueberschrift": "Willkommen <b>KGV</b>", "farbe_knopf": "#123456", "layout": "mittig",
                                                                            "impressum": "https://verein.example/impressum"}})
         self.assertEqual(code, 200, x)

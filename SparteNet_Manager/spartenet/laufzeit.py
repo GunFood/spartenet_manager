@@ -77,7 +77,7 @@ def _zeit(ts):
     return time.strftime("%d.%m.%Y %H:%M", time.localtime(ts)) if ts else ""
 
 
-def _ereignis_daten(d, kz, p, e=None):
+def _lz_ereignis_daten(d, kz, p, e=None):
     e = e or laufzeiten(d).get(_k(kz, p)) or {}
     t = _tarif(d, e.get("tarif")) if e.get("tarif") else None
     try:
@@ -168,7 +168,7 @@ def _zugang_setzen(d, kz, p, freigeben, grund, wer):
     speichere(d)
     if geaendert:
         journal(f"{text} – {('automatisch: ' if wer == 'Zeitplan' else '')}{grund} ({wer})")
-        ereignis("zugang_freigegeben" if freigeben else "zugang_gesperrt", {**_ereignis_daten(d, kz, p), "quelle": wer}, d)
+        ereignis("zugang_freigegeben" if freigeben else "zugang_gesperrt", {**_lz_ereignis_daten(d, kz, p), "quelle": wer}, d)
     return text
 
 
@@ -216,7 +216,7 @@ def _verlaengern(d, kz, p, anzahl=1, wer=""):
                         "quelle": text_einzeilig(wer, 80), "seit": time.strftime("%Y-%m-%d %H:%M")}
     speichere(d)
     journal(f"Laufzeit verlängert: {kz} Parzelle {p}, {tarif} bis {_zeit(ende)} ({wer})")
-    ereignis("laufzeit_verlaengert", {**_ereignis_daten(d, kz, p), "quelle": wer}, d)
+    ereignis("laufzeit_verlaengert", {**_lz_ereignis_daten(d, kz, p), "quelle": wer}, d)
     return laufzeiten(d)[k]
 
 
@@ -248,12 +248,12 @@ def laufzeiten_pruefen(d, jetzt=None):
         if e.get("status") == "aktiv":
             if e_["erinnerung_stunden"] and not e.get("erinnert") and e["ende"] - jetzt <= e_["erinnerung_stunden"] * 3600 and e["ende"] > jetzt:
                 e["erinnert"] = True; geaendert = True
-                ereignis("laufzeit_erinnerung", {**_ereignis_daten(d, e["sparte"], e["parzelle"], e), "quelle": "Zeitplan"}, d)
+                ereignis("laufzeit_erinnerung", {**_lz_ereignis_daten(d, e["sparte"], e["parzelle"], e), "quelle": "Zeitplan"}, d)
             if e["ende"] <= jetzt:
                 e["status"] = "abgelaufen"; e["abgelaufen"] = jetzt; geaendert = True
                 journal(f"Laufzeit abgelaufen: {e['sparte']} Parzelle {e['parzelle']} ({e.get('tarif')}) am {_zeit(e['ende'])}")
                 log.append(f"Laufzeit abgelaufen: {e['sparte']} Parzelle {e['parzelle']}")
-                ereignis("laufzeit_ende", {**_ereignis_daten(d, e["sparte"], e["parzelle"], e), "quelle": "Zeitplan"}, d)
+                ereignis("laufzeit_ende", {**_lz_ereignis_daten(d, e["sparte"], e["parzelle"], e), "quelle": "Zeitplan"}, d)
     if geaendert:
         speichere(d)
     if not e_["gateway_auto"]:

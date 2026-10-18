@@ -535,3 +535,26 @@ class Spamschutz(unittest.TestCase):
     def test_namensvergleich(self):
         self.assertEqual(S.name_norm(" Müller-Lüdenscheidt "), S.name_norm("mueller luedenscheidt"))
         self.assertEqual(S.name_norm("Straß"), S.name_norm("STRASS"))
+
+
+class Modulkette(unittest.TestCase):
+    def test_keine_doppelten_namen(self):
+        """jede Datei übernimmt alle Namen der vorherigen – gleiche öffentliche Namen würden frühere Funktionen überdecken"""
+        import ast, re as rx
+        ordner = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "SparteNet_Manager", "spartenet")
+        kette = rx.search(r"basis →(.*?)\n\n", open(os.path.join(ordner, "__init__.py"), encoding="utf-8").read(), rx.S).group(1)
+        module = ["basis"] + [x.strip() for x in kette.replace("\n", " ").split("→") if x.strip()]
+        erlaubt = {"_schluessel", "_sichtbar", "_zeile", "_holen", "_ereignis", "_hash"}   # nur modulintern benutzt
+        gesehen, doppelt = {}, []
+        for m in module:
+            for n in ast.parse(open(os.path.join(ordner, m + ".py"), encoding="utf-8").read()).body:
+                namen = [n.name] if isinstance(n, (ast.FunctionDef, ast.ClassDef)) else [x.id for x in n.targets if isinstance(x, ast.Name)] if isinstance(n, ast.Assign) else []
+                for x in namen:
+                    if x in gesehen and gesehen[x] != m and x not in erlaubt and x != "__all__":
+                        doppelt.append(f"{x}: {gesehen[x]} / {m}")
+                    gesehen.setdefault(x, m)
+        self.assertEqual(doppelt, [])
+
+    def test_kartendesign_speichern(self):
+        d = frisch()
+        self.assertTrue(S.design_pruefen({**d["design"], "farbe_akzent": "#123456"})["farbe_akzent"] == "#123456")

@@ -69,7 +69,7 @@ def _url_ok(u):
     return u
 
 
-def design_pruefen(d, roh, std, alt=None):
+def seite_pruefen(d, roh, std, alt=None):
     aus = dict(std)
     aus.update({k: v for k, v in (alt or {}).items() if k in std})
     for k, s in std.items():
@@ -313,7 +313,7 @@ def akt_seiten_design(d, b, ich):
         return akt_gestaltung(d, ich, ["✔ Standard wiederhergestellt."])
     std = LOGIN_STANDARD if art == "login" else PORTAL_DESIGN_STANDARD
     alt = (d.get("seiten_design") or {}).get(art) if isinstance(d.get("seiten_design"), dict) else None
-    neu = design_pruefen(d, roh, std, alt)
+    neu = seite_pruefen(d, roh, std, alt)
     d.setdefault("seiten_design", {})[art] = neu
     if art == "portal":
         p = d.get("portal") if isinstance(d.get("portal"), dict) else {}
@@ -332,7 +332,7 @@ def akt_seiten_vorschau(d, b):
     if art not in ("login", "portal"):
         raise Fehler("Seite: login oder portal.")
     std = LOGIN_STANDARD if art == "login" else PORTAL_DESIGN_STANDARD
-    g = design_pruefen(d, b.get("design") or {}, std, seiten_design(d, art))
+    g = seite_pruefen(d, b.get("design") or {}, std, seiten_design(d, art))
     if art == "portal":
         g["titel"], g["text"] = text_einzeilig((b.get("design") or {}).get("titel") or seiten_design(d, art)["titel"], 120), \
             text_einzeilig((b.get("design") or {}).get("text") or seiten_design(d, art)["text"], 1000)
