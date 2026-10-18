@@ -2,12 +2,20 @@
 
 Tickets kommen von Hand, über die API (z. B. Kontaktformular der Webseite) oder später per E-Mail-Weiterleitung herein.
 Jedes Ticket hat eine Nummer (T-0001), Kategorie, Priorität, Status, zuständigen Benutzer und einen Verlauf.
-Antworten an den Kontakt gehen per E-Mail (mit Layout). Ereignisse für Automationen: ticket_neu, ticket_zugewiesen, ticket_erledigt.
+Antworten an den Kontakt gehen per E-Mail (mit Layout). Ereignisse für Automationen: ticket_neu, ticket_zugewiesen, ticket_erledigt, ticket_geschlossen.
+„Geschlossen“ ist endgültig (mit Lösung, nur noch lesbar, „Wieder öffnen“ möglich); erledigte Tickets schließt der Zeitplan nach
+einstellbaren Tagen automatisch. Tickets hängen am Mitglied (Kontakt „mitglied“) – so sieht man frühere Anfragen und die Akte.
 Konten mit Sparten-Beschränkung sehen nur Tickets ihrer Sparten und Tickets, die ihnen zugewiesen sind.
 """
 from .mitglieder import *  # noqa: F401,F403 – alle Namen der vorherigen Module
 
-T_STATUS = {"neu": "neu", "bearbeitung": "in Bearbeitung", "wartet": "wartet auf Rückmeldung", "erledigt": "erledigt"}
+T_STATUS = {"neu": "neu", "bearbeitung": "in Bearbeitung", "wartet": "wartet auf Rückmeldung", "erledigt": "erledigt", "geschlossen": "geschlossen"}
+T_ZU = ("erledigt", "geschlossen")       # nicht mehr offen
+AUSLOESER["ticket_geschlossen"] = "Ticket abgeschlossen (mit Lösung)"
+
+
+def ticket_offen(t):
+    return t.get("status") not in T_ZU
 T_PRIO = {"niedrig": "niedrig", "normal": "normal", "hoch": "hoch", "dringend": "dringend"}
 T_KATEGORIEN = ["Störung / WLAN geht nicht", "Buchung / Tarif", "Rechnung / Zahlung", "Zugangsdaten / Passwort", "Kündigung", "Interessent", "Sonstiges"]
 
@@ -135,7 +143,7 @@ def akt_tickets(d, q, ich, erlaubt=None):
     for tid, t in tk["liste"].items():
         if not _sichtbar(t, ich, erlaubt):
             continue
-        if f_status == "offen" and t.get("status") == "erledigt" or f_status not in ("offen", "alle") and t.get("status") != f_status:
+        if f_status == "offen" and not ticket_offen(t) or f_status not in ("offen", "alle") and t.get("status") != f_status:
             continue
         if f_wer == "ich" and t.get("zustaendig") != ich or f_wer == "niemand" and t.get("zustaendig"):
             continue
@@ -144,11 +152,11 @@ def akt_tickets(d, q, ich, erlaubt=None):
             continue
         zeilen.append(_zeile(t, tid))
     rang = {"dringend": 0, "hoch": 1, "normal": 2, "niedrig": 3}
-    zeilen.sort(key=lambda z: (z["status"] == "erledigt", rang.get(z["prioritaet"], 2), z["erstellt"]), reverse=False)
-    offen = sum(1 for t in tk["liste"].values() if t.get("status") != "erledigt" and _sichtbar(t, ich, erlaubt))
-    meine = sum(1 for t in tk["liste"].values() if t.get("status") != "erledigt" and t.get("zustaendig") == ich)
+    zeilen.sort(key=lambda z: (z["status"] in T_ZU, rang.get(z["prioritaet"], 2), z["erstellt"]), reverse=False)
+    offen = sum(1 for t in tk["liste"].values() if ticket_offen(t) and _sichtbar(t, ich, erlaubt))
+    meine = sum(1 for t in tk["liste"].values() if ticket_offen(t) and t.get("zustaendig") == ich)
     return {"zeilen": zeilen, "status": T_STATUS, "prioritaeten": T_PRIO, "kategorien": ticket_kategorien(d), "konten": _konten(d),
-            "offen": offen, "meine": meine, "log": [f"{len(zeilen)} Ticket(s) angezeigt · {offen} offen · {meine} davon Ihnen zugewiesen"]}
+            "offen": offen, "meine": meine, "einstellungen": ticket_einstellungen(d), "log": [f"{len(zeilen)} Ticket(s) angezeigt · {offen} offen · {meine} davon Ihnen zugewiesen"]}
 
 
 def _holen(d, tid, ich, erlaubt):
@@ -158,10 +166,197 @@ def _holen(d, tid, ich, erlaubt):
     return t
 
 
+def ticket_mitglied_id(d, t):
+    """Mitglied des Tickets: fest zugeordnet oder (ohne Zuordnung) gleiche E-Mail-Adresse"""
+    k = t.get("kontakt") or {}
+    if k.get("mitglied") in mitglieder(d):
+        return k["mitglied"]
+    em = (k.get("email") or "").strip().lower()
+    if em and k.get("art", "mitglied") == "mitglied" and not k.get("geloest"):
+        return next((i for i, m in mitglieder(d).items() if (m.get("email") or "").lower() == em), None)
+    return None
+
+
+def mitglied_tickets(d, mid, ohne=None):
+    """alle Tickets eines Mitglieds (fest zugeordnet oder gleiche E-Mail ohne andere Zuordnung), neueste zuerst"""
+    m = mitglieder(d).get(mid) or {}
+    em = (m.get("email") or "").lower()
+    aus = []
+    for i, t in tickets_daten(d)["liste"].items():
+        if i == ohne:
+            continue
+        k = t.get("kontakt") or {}
+        if k.get("mitglied") == mid or (not k.get("mitglied") and not k.get("geloest") and em and (k.get("email") or "").lower() == em):
+            aus.append((i, t))
+    aus.sort(key=lambda x: x[1].get("erstellt", ""), reverse=True)
+    return aus
+
+
+def _frueher_zeile(i, t):
+    return {"id": i, "nr": t.get("nr"), "betreff": t.get("betreff", ""), "status": t.get("status"), "erstellt": t.get("erstellt", ""),
+            "geaendert": t.get("geaendert", ""), "kategorie": t.get("kategorie", ""), "loesung": t.get("loesung", "")}
+
+
 def akt_ticket(d, q, ich, erlaubt=None):
     tid = q.get("id", [""])[0]
     t = _holen(d, tid, ich, erlaubt)
-    return {"ticket": {**_zeile(t, tid), "text": t.get("text", ""), "verlauf": t.get("verlauf") or []}, "log": []}
+    mid = ticket_mitglied_id(d, t)
+    m = mitglieder(d).get(mid) if mid else None
+    if m and not (erlaubt is None or m.get("sparte") in erlaubt):
+        m = None
+    mitglied = None
+    frueher = []
+    if m:
+        tarif = ((d.get("buchungen") or {}).get(m.get("sparte")) or {}).get(str(m.get("parzelle")), "")
+        mitglied = {"id": mid, "name": f"{m.get('vorname', '')} {m.get('nachname', '')}".strip(), "sparte": m.get("sparte", ""), "parzelle": m.get("parzelle", ""),
+                    "email": m.get("email", ""), "telefon": m.get("telefon", ""), "tarif": tarif, "fest": (t.get("kontakt") or {}).get("mitglied") == mid}
+        frueher = [_frueher_zeile(i, x) for i, x in mitglied_tickets(d, mid, ohne=tid) if _sichtbar(x, ich, erlaubt)]
+    elif (t.get("kontakt") or {}).get("email"):     # Nicht-Mitglieder: frühere Anfragen mit derselben E-Mail
+        em = t["kontakt"]["email"].lower()
+        frueher = [_frueher_zeile(i, x) for i, x in sorted(tickets_daten(d)["liste"].items(), key=lambda y: y[1].get("erstellt", ""), reverse=True)
+                   if i != tid and (x.get("kontakt") or {}).get("email", "").lower() == em and _sichtbar(x, ich, erlaubt)]
+    return {"ticket": {**_zeile(t, tid), "text": t.get("text", ""), "verlauf": t.get("verlauf") or [], "loesung": t.get("loesung", ""),
+                       "geschlossen": t.get("geschlossen", ""), "bezug": t.get("bezug", "")},
+            "mitglied": mitglied, "frueher": frueher[:50], "log": []}
+
+
+def akt_ticket_mitglieder(d, q, erlaubt=None):
+    """schlanke Mitgliederliste zum Zuordnen (nur Name, Sparte, Parzelle) – auch für Konten ohne Recht „Mitglieder“"""
+    such = q.get("q", [""])[0].strip().lower()
+    aus = []
+    for i, m in mitglieder(d).items():
+        if erlaubt is not None and m.get("sparte") not in erlaubt:
+            continue
+        name = f"{m.get('nachname', '')}, {m.get('vorname', '')}".strip(", ")
+        if such and such not in f"{name} {m.get('sparte', '')} {m.get('parzelle', '')} {m.get('email', '')}".lower():
+            continue
+        aus.append({"id": i, "name": name, "sparte": m.get("sparte", ""), "parzelle": m.get("parzelle", "")})
+    aus.sort(key=lambda x: (x["sparte"], int(x["parzelle"] or 0) if str(x["parzelle"]).isdigit() else 0, x["name"].lower()))
+    return {"mitglieder": aus[:300], "log": []}
+
+
+def akt_ticket_zuordnen(d, b, ich, erlaubt=None):
+    tid = str(b.get("id") or "")
+    t = _holen(d, tid, ich, erlaubt)
+    mid = str(b.get("mitglied") or "")
+    k = t.setdefault("kontakt", {})
+    if mid:
+        m = mitglieder(d).get(mid)
+        if not m or (erlaubt is not None and m.get("sparte") not in erlaubt):
+            raise Fehler("Mitglied nicht gefunden.")
+        k.update(mitglied=mid, art="mitglied", zugeordnet=ich)
+        k.pop("geloest", None)
+        k["name"] = k.get("name") or f"{m.get('vorname', '')} {m.get('nachname', '')}".strip()
+        k["email"] = k.get("email") or m.get("email", "")
+        if not t.get("sparte") and m.get("sparte"):
+            t["sparte"], t["parzelle"] = m["sparte"], m.get("parzelle", "")
+        _verlauf(t, ich, "aenderung", f"Mitglied zugeordnet: {m.get('vorname', '')} {m.get('nachname', '')} ({m.get('sparte', '')} {m.get('parzelle', '')})".strip())
+    else:
+        k.pop("mitglied", None)
+        k["geprueft"], k["geloest"] = False, True
+        _verlauf(t, ich, "aenderung", "Zuordnung zum Mitglied gelöst")
+    speichere(d)
+    r = akt_ticket(d, {"id": [tid]}, ich, erlaubt)
+    r["log"] = ["✔ Zuordnung gespeichert."]
+    return r
+
+
+def akt_ticket_schliessen(d, b, ich, erlaubt=None):
+    """Ticket abschließen (mit Lösung, auf Wunsch E-Mail an den Kontakt) oder wieder öffnen"""
+    tid = str(b.get("id") or "")
+    t = _holen(d, tid, ich, erlaubt)
+    if b.get("wieder_oeffnen"):
+        if t.get("status") not in T_ZU:
+            raise Fehler("Das Ticket ist schon offen.")
+        t["status"] = "bearbeitung"
+        t.pop("geschlossen", None)
+        _verlauf(t, ich, "aenderung", "Wieder geöffnet" + (f": {text_einzeilig(b.get('grund'), 300)}" if b.get("grund") else ""))
+        speichere(d)
+        journal(f"Ticket {t['nr']} wieder geöffnet durch {ich}")
+        r = akt_ticket(d, {"id": [tid]}, ich, erlaubt)
+        r["log"] = [f"✔ Ticket {t['nr']} wieder geöffnet."]
+        return r
+    if t.get("status") == "geschlossen":
+        raise Fehler("Das Ticket ist schon geschlossen.")
+    loesung = str(b.get("loesung") or "").replace("\r", "").strip()[:3000]
+    if not loesung:
+        raise Fehler("Bitte kurz die Lösung bzw. den Abschluss beschreiben – so lässt sich später nachvollziehen, was getan wurde.")
+    log = []
+    if b.get("an_kontakt"):
+        an = (t.get("kontakt") or {}).get("email")
+        if not an:
+            raise Fehler("Beim Ticket ist keine E-Mail-Adresse des Kontakts hinterlegt.")
+        k = t.get("kontakt") or {}
+        email_senden(d, an, f"[{t['nr']}] Ihre Anfrage ist abgeschlossen: {t.get('betreff', '')}", None,
+                     f"<p>Hallo {html_mod.escape(k.get('vorname') or k.get('name') or '')},</p><p>Ihre Anfrage <b>{html_mod.escape(t['nr'])}</b> "
+                     f"(„{html_mod.escape(t.get('betreff', ''))}“) ist abgeschlossen.</p>{text_zu_html(loesung)}"
+                     "<p>Wenn noch etwas offen ist, antworten Sie einfach oder stellen Sie auf der Pächter-Seite eine neue Anfrage.</p>")
+        log.append(f"✔ Abschluss per E-Mail an {an} gesendet.")
+    war_offen = ticket_offen(t)
+    t["status"], t["loesung"], t["geschlossen"] = "geschlossen", loesung, time.strftime("%Y-%m-%d %H:%M")
+    _verlauf(t, ich, "abschluss", loesung + (f"\n(Kontakt per E-Mail informiert)" if b.get("an_kontakt") else ""))
+    speichere(d)
+    journal(f"Ticket {t['nr']} geschlossen durch {ich}")
+    if war_offen:
+        ereignis("ticket_erledigt", _ereignis_daten(t), d)
+    ereignis("ticket_geschlossen", {**_ereignis_daten(t), "loesung": loesung}, d)
+    r = akt_ticket(d, {"id": [tid]}, ich, erlaubt)
+    r["log"] = [f"✔ Ticket {t['nr']} geschlossen."] + log
+    return r
+
+
+def tickets_auto_schliessen(d):
+    """erledigte Tickets nach X Tagen ohne Änderung schließen (Einstellung „auto_schliessen_tage“, 0 = nie); gibt die Anzahl zurück"""
+    tage = ticket_einstellungen(d)["auto_schliessen_tage"]
+    if not tage:
+        return 0
+    grenze = time.strftime("%Y-%m-%d %H:%M", time.localtime(time.time() - tage * 86400))
+    n = 0
+    for t in tickets_daten(d)["liste"].values():
+        if t.get("status") == "erledigt" and (t.get("geaendert") or t.get("erstellt") or "") < grenze:
+            t["status"], t["geschlossen"] = "geschlossen", time.strftime("%Y-%m-%d %H:%M")
+            t.setdefault("loesung", "")
+            _verlauf(t, "Zeitplan", "abschluss", f"Automatisch geschlossen ({tage} Tage nach „erledigt“ ohne Änderung)")
+            n += 1
+    if n:
+        speichere(d)
+        journal(f"{n} erledigte(s) Ticket(s) automatisch geschlossen")
+    return n
+
+
+T_EINST_STANDARD = {"auto_schliessen_tage": 14}
+
+
+def ticket_einstellungen(d):
+    tk = tickets_daten(d)
+    e = dict(T_EINST_STANDARD)
+    try:
+        e["auto_schliessen_tage"] = max(0, min(365, int(tk.get("auto_schliessen_tage", e["auto_schliessen_tage"]))))
+    except (TypeError, ValueError):
+        pass
+    return e
+
+
+def _mitglied_neu(typ, daten, d):
+    """neues Mitglied: frühere Tickets mit derselben E-Mail-Adresse (ohne Zuordnung) diesem Mitglied zuordnen"""
+    if typ != "mitglied_neu" or d is None or not daten.get("email"):
+        return
+    em = str(daten["email"]).lower()
+    mid = next((i for i, m in mitglieder(d).items() if (m.get("email") or "").lower() == em), None)
+    if not mid:
+        return
+    n = 0
+    for t in tickets_daten(d)["liste"].values():
+        k = t.get("kontakt") or {}
+        if not k.get("mitglied") and (k.get("email") or "").lower() == em and k.get("art", "mitglied") == "mitglied":
+            k["mitglied"] = mid
+            n += 1
+    if n:
+        speichere(d)
+        journal(f"{n} frühere(s) Ticket(s) dem neuen Mitglied zugeordnet")
+
+
+EREIGNIS_EMPFAENGER.append(_mitglied_neu)
 
 
 def akt_ticket_speichern(d, b, ich, erlaubt=None):
@@ -175,6 +370,10 @@ def akt_ticket_speichern(d, b, ich, erlaubt=None):
         r["log"] = [f"✔ Ticket {t['nr']} angelegt."]
         return r
     t = _holen(d, tid, ich, erlaubt)
+    if t.get("status") == "geschlossen":
+        raise Fehler("Das Ticket ist geschlossen – zum Ändern erst „Wieder öffnen“.")
+    if roh.get("status") == "geschlossen":
+        raise Fehler("Zum Schließen bitte „Abschließen“ verwenden (mit Lösung).")
     vorher = {k: t.get(k) for k in ("status", "zustaendig", "prioritaet", "kategorie")}
     neu = _pruefen(d, {k: v for k, v in roh.items() if k != "id"}, t)
     t.clear(); t.update(neu)
@@ -206,6 +405,8 @@ def akt_ticket_kommentar(d, b, ich, erlaubt=None):
     """interne Notiz oder Antwort an den Kontakt (per E-Mail mit Layout, optional mit E-Mail-Vorlage)"""
     tid = str(b.get("id") or "")
     t = _holen(d, tid, ich, erlaubt)
+    if t.get("status") == "geschlossen":
+        raise Fehler("Das Ticket ist geschlossen – für weitere Antworten erst „Wieder öffnen“ (oder eine neue Anfrage anlegen).")
     html = html_bereinigen(b.get("html") or "") if b.get("html") else text_zu_html(b.get("text") or "")
     if b.get("vorlage"):
         v = next((x for x in email_vorlagen(d) if x["id"] == b["vorlage"]), None)
@@ -249,13 +450,19 @@ def akt_ticket_loeschen(d, b, ich):
 
 def akt_ticket_einstellungen(d, b, ich):
     tk = tickets_daten(d)
-    k = [text_einzeilig(x, 60).strip() for x in (b.get("kategorien") or []) if str(x).strip()]
-    if not k:
-        raise Fehler("Mindestens eine Kategorie.")
-    tk["kategorien"] = list(dict.fromkeys(k))[:30]
+    if "kategorien" in b:
+        k = [text_einzeilig(x, 60).strip() for x in (b.get("kategorien") or []) if str(x).strip()]
+        if not k:
+            raise Fehler("Mindestens eine Kategorie.")
+        tk["kategorien"] = list(dict.fromkeys(k))[:30]
+    if "auto_schliessen_tage" in b:
+        try:
+            tk["auto_schliessen_tage"] = max(0, min(365, int(b.get("auto_schliessen_tage") or 0)))
+        except (TypeError, ValueError):
+            raise Fehler("Tage als Zahl angeben (0 = nie).")
     speichere(d)
-    journal(f"Ticket-Kategorien gespeichert durch {ich}")
-    return {"kategorien": tk["kategorien"], "log": ["✔ Kategorien gespeichert."]}
+    journal(f"Ticket-Einstellungen gespeichert durch {ich}")
+    return {"kategorien": ticket_kategorien(d), "einstellungen": ticket_einstellungen(d), "log": ["✔ Gespeichert."]}
 
 
 __all__ = [_n for _n in dict(globals()) if not _n.startswith("__")]  # alle Namen an die folgenden Module weitergeben

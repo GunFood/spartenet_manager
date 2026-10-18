@@ -37,6 +37,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -137,7 +138,7 @@ fun TicketSeite(s: Sitzung, breit: Boolean, auftrag: String?, auftragErledigt: (
             val meta = liste.daten
             when {
                 neu -> TicketNeu(s, meta, zurueck = if (breit) null else ({ neu = false })) { id -> neu = false; gewaehlt = id; stand++ }
-                gewaehlt != null -> TicketDetail(s, gewaehlt!!, meta, zurueck = if (breit) null else ({ gewaehlt = null })) { stand++ }
+                gewaehlt != null -> TicketDetail(s, gewaehlt!!, meta, zurueck = if (breit) null else ({ gewaehlt = null }), oeffnen = { gewaehlt = it }) { stand++ }
                 else -> Leer("Anfrage links auswählen.")
             }
         }
@@ -191,13 +192,16 @@ fun statusText(st: String) = when (st) {
 }
 
 @Composable
-private fun TicketDetail(s: Sitzung, id: String, meta: JSONObject?, zurueck: (() -> Unit)?, geaendert: () -> Unit) {
+private fun TicketDetail(s: Sitzung, id: String, meta: JSONObject?, zurueck: (() -> Unit)?, oeffnen: (String) -> Unit, geaendert: () -> Unit) {
     val l = rememberLaden(s, id) { s.api.get("/api/ticket", mapOf("id" to id)) }
     val scope = rememberCoroutineScope()
     val ctx = LocalContext.current
     var arbeitet by remember { mutableStateOf(false) }
     var text by rememberSaveable(id) { mutableStateOf("") }
     var anKontakt by rememberSaveable(id) { mutableStateOf(false) }
+    var abschluss by remember(id) { mutableStateOf(false) }
+    var loesung by rememberSaveable(id) { mutableStateOf("") }
+    var abMail by rememberSaveable(id) { mutableStateOf(true) }
     val schreiben = s.darf("tickets", "schreiben")
 
     val status = meta?.textMap("status")?.takeIf { it.isNotEmpty() } ?: linkedMapOf("neu" to "neu", "bearbeitung" to "in Bearbeitung", "wartet" to "wartet auf Rückmeldung", "erledigt" to "erledigt")
@@ -224,6 +228,8 @@ private fun TicketDetail(s: Sitzung, id: String, meta: JSONObject?, zurueck: (()
         Laden(l) { a ->
             val t = a.o("ticket")
             val k = t.o("kontakt")
+            val zu = t.s("status") == "geschlossen"
+            val darf = schreiben && !zu
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(t.s("betreff"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(listOf(t.s("kategorie"), ort(t), "angelegt ${t.s("erstellt")}", t.s("quelle")).filter { it.isNotBlank() }.joinToString(" · "),
@@ -244,16 +250,49 @@ private fun TicketDetail(s: Sitzung, id: String, meta: JSONObject?, zurueck: (()
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Auswahl("Status", t.s("status"), status.keys.toList(), { status[it] ?: it }, Modifier.weight(1f), schreiben && !arbeitet) { speichern("status", it) }
-                    Auswahl("Priorität", t.s("prioritaet"), prios.keys.toList(), { prios[it] ?: it }, Modifier.weight(1f), schreiben && !arbeitet) { speichern("prioritaet", it) }
+                    Auswahl("Status", t.s("status"), status.keys.filter { it != "geschlossen" || zu }, { status[it] ?: it }, Modifier.weight(1f), darf && !arbeitet) { speichern("status", it) }
+                    Auswahl("Priorität", t.s("prioritaet"), prios.keys.toList(), { prios[it] ?: it }, Modifier.weight(1f), darf && !arbeitet) { speichern("prioritaet", it) }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Auswahl("Zuständig", t.s("zustaendig"), konten, { if (it.isEmpty()) "niemand" else if (it == s.name) "$it (ich)" else it },
-                        Modifier.weight(1f), schreiben && !arbeitet) { speichern("zustaendig", it) }
+                        Modifier.weight(1f), darf && !arbeitet) { speichern("zustaendig", it) }
                     if (kategorien.isNotEmpty())
-                        Auswahl("Kategorie", t.s("kategorie"), kategorien, { it }, Modifier.weight(1f), schreiben && !arbeitet) { speichern("kategorie", it) }
+                        Auswahl("Kategorie", t.s("kategorie"), kategorien, { it }, Modifier.weight(1f), darf && !arbeitet) { speichern("kategorie", it) }
                 }
-                if (schreiben && t.s("zustaendig") != s.name) {
+                if (zu) {
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+                        Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                            Text("✔ Geschlossen am ${t.s("geschlossen")}", fontWeight = FontWeight.SemiBold)
+                            if (t.s("loesung").isNotEmpty()) Text("Lösung: ${t.s("loesung")}")
+                            if (schreiben) TextButton(enabled = !arbeitet, onClick = {
+                                s.ausfuehren(scope, { arbeitet = it }) {
+                                    val r = s.api.post("/api/ticket-schliessen", JSONObject().put("id", id).put("wieder_oeffnen", true))
+                                    l.daten = r; s.meldenLog(r); geaendert()
+                                }
+                            }) { Text("Wieder öffnen") }
+                        }
+                    }
+                } else if (schreiben) {
+                    OutlinedButton(onClick = { abschluss = true }, enabled = !arbeitet) { Text("Abschließen …") }
+                }
+                a.optJSONObject("mitglied")?.let { m ->
+                    Text("Mitglied: ${m.s("name")} · ${m.s("sparte")} Parzelle ${m.s("parzelle")}" + (if (m.s("tarif").isNotEmpty()) " · ${m.s("tarif")}" else ""),
+                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                }
+                val frueher = a.liste("frueher")
+                if (frueher.isNotEmpty()) {
+                    Text("Frühere Anfragen (${frueher.size})", style = MaterialTheme.typography.titleSmall)
+                    frueher.take(10).forEach { f ->
+                        Card(onClick = { oeffnen(f.s("id")) }, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+                            Column(Modifier.fillMaxWidth().padding(10.dp)) {
+                                Text("${f.s("nr")} · ${f.s("erstellt").take(10)} · ${statusText(f.s("status"))}", style = MaterialTheme.typography.labelMedium)
+                                Text(f.s("betreff"), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                if (f.s("loesung").isNotEmpty()) Text("Lösung: ${f.s("loesung")}", style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                    }
+                }
+                if (darf && t.s("zustaendig") != s.name) {
                     TextButton(onClick = { speichern("zustaendig", s.name) }, enabled = !arbeitet) { Text("Mir zuweisen") }
                 }
                 if (t.s("text").isNotBlank()) {
@@ -271,7 +310,7 @@ private fun TicketDetail(s: Sitzung, id: String, meta: JSONObject?, zurueck: (()
                     }
                     HorizontalDivider()
                 }
-                if (schreiben) {
+                if (darf) {
                     Text(if (anKontakt) "Antwort per E-Mail an den Kontakt" else "Interne Notiz", style = MaterialTheme.typography.titleSmall)
                     OutlinedTextField(value = text, onValueChange = { text = it }, modifier = Modifier.fillMaxWidth().height(140.dp),
                         placeholder = { Text(if (anKontakt) "Text der E-Mail (Platzhalter wie {name} sind möglich)" else "Notiz – nur intern sichtbar") })
@@ -301,6 +340,35 @@ private fun TicketDetail(s: Sitzung, id: String, meta: JSONObject?, zurueck: (()
             }
         }
     }
+    if (abschluss) {
+        val kontaktMail = l.daten?.o("ticket")?.o("kontakt")?.s("email")?.isNotEmpty() == true
+        AbschlussDialog(loesung, { loesung = it }, abMail && kontaktMail, { abMail = it }, kontaktMail, onJa = {
+            abschluss = false
+            s.ausfuehren(scope, { arbeitet = it }) {
+                val r = s.api.post("/api/ticket-schliessen", JSONObject().put("id", id).put("loesung", loesung).put("an_kontakt", abMail && kontaktMail))
+                l.daten = r; loesung = ""; s.meldenLog(r); geaendert()
+            }
+        }, onNein = { abschluss = false })
+    }
+}
+
+@Composable
+private fun AbschlussDialog(loesung: String, onLoesung: (String) -> Unit, abMail: Boolean, onMail: (Boolean) -> Unit, mailMoeglich: Boolean, onJa: () -> Unit, onNein: () -> Unit) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onNein,
+        title = { Text("Ticket abschließen") },
+        text = {
+            Column {
+                Text("Was wurde getan? Die Lösung sieht der Pächter auch auf der Pächter-Seite.", style = MaterialTheme.typography.bodySmall)
+                OutlinedTextField(loesung, onLoesung, modifier = Modifier.fillMaxWidth().height(130.dp).padding(top = 8.dp), placeholder = { Text("Lösung") })
+                if (mailMoeglich) Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = abMail, onCheckedChange = onMail); Text("Kontakt per E-Mail informieren")
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onJa, enabled = loesung.isNotBlank()) { Text("Abschließen") } },
+        dismissButton = { TextButton(onClick = onNein) { Text("Abbrechen") } },
+    )
 }
 
 @Composable

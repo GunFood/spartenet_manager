@@ -156,7 +156,7 @@ def akt_app_uebersicht(d, ich, rechte):
                                  "abgelaufen": sum(1 for e in lz if e.get("status") in ("abgelaufen", "ausnahme")),
                                  "offen": sum(1 for e in lz if (e.get("status") == "abgelaufen") != (_k(e["sparte"], e["parzelle"]) in gesp))}
     if sieht("tickets"):
-        t = [x for x in tickets_daten(d)["liste"].values() if x.get("status") != "erledigt" and (erl is None or x.get("sparte") in erl or x.get("zustaendig") == ich)]
+        t = [x for x in tickets_daten(d)["liste"].values() if ticket_offen(x) and (erl is None or x.get("sparte") in erl or x.get("zustaendig") == ich)]
         aus["tickets"] = {"offen": len(t), "neu": sum(1 for x in t if x.get("status") == "neu"), "meine": sum(1 for x in t if x.get("zustaendig") == ich),
                           "dringend": sum(1 for x in t if x.get("prioritaet") in ("dringend", "hoch"))}
     if sieht("mitglieder"):

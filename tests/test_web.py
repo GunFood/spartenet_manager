@@ -266,6 +266,36 @@ class Logos(unittest.TestCase):
         a.req("/api/email-layout", {"logo_unterlage": ""})
 
 
+class TicketsAkte(unittest.TestCase):
+    def test_schliessen_frueher_und_akte(self):
+        a = admin()
+        _, m = a.req("/api/mitglied-speichern", {"mitglied": {"vorname": "Tina", "nachname": "Timeline", "email": "tina@example.org", "sparte": "BW", "parzelle": "61"}})
+        mid = m["id"]
+        _, t1 = a.req("/api/ticket-speichern", {"ticket": {"betreff": "WLAN langsam", "email": "tina@example.org", "name": "Tina Timeline"}})
+        t1 = t1["ticket"]["id"]
+        self.assertEqual(a.req("/api/ticket-schliessen", {"id": t1})[0], 400)            # ohne Lösung
+        code, x = a.req("/api/ticket-schliessen", {"id": t1, "loesung": "Kanal am Access Point gewechselt."})
+        self.assertEqual((code, x["ticket"]["status"]), (200, "geschlossen"), x)
+        self.assertEqual(a.req("/api/ticket-kommentar", {"id": t1, "text": "noch was"})[0], 400)   # geschlossen = nur lesen
+        self.assertEqual(a.req("/api/ticket-speichern", {"ticket": {"id": t1, "prioritaet": "hoch"}})[0], 400)
+        _, t2 = a.req("/api/ticket-speichern", {"ticket": {"betreff": "Wieder langsam", "sparte": "BW", "parzelle": "61"}})
+        code, x = a.req("/api/ticket?id=" + t2["ticket"]["id"])
+        self.assertEqual(x["mitglied"]["id"], mid)
+        self.assertEqual([f["id"] for f in x["frueher"]], [t1])                           # frühere Anfrage sichtbar
+        self.assertIn("Kanal", x["frueher"][0]["loesung"])
+        _, o = a.req("/api/tickets?status=offen")
+        self.assertNotIn(t1, [z["id"] for z in o["zeilen"]])
+        code, x = a.req("/api/ticket-schliessen", {"id": t1, "wieder_oeffnen": True})
+        self.assertEqual(x["ticket"]["status"], "bearbeitung")
+        code, ak = a.req("/api/mitglied-akte?id=" + mid)
+        self.assertEqual(code, 200, ak)
+        self.assertEqual(sum(1 for e in ak["zeitleiste"] if e["art"] == "ticket"), 2)
+        _, lst = a.req("/api/ticket-mitglieder?q=timeline")
+        self.assertEqual(lst["mitglieder"][0]["id"], mid)
+        code, x = a.req("/api/ticket-zuordnen", {"id": t2["ticket"]["id"], "mitglied": ""})
+        self.assertIsNone(x["mitglied"])
+
+
 class Gestaltung(unittest.TestCase):
     def test_seiten_und_profile(self):
         a = admin()
@@ -525,6 +555,8 @@ class Version50(unittest.TestCase):
         self.assertEqual(s.req("/portal/status", {"nr": nr, "email": "paul@example.org", "vorname": "Paul", "nachname": "Portal"})[0], 400)  # Mitglied: Sparte/Parzelle fehlen
         code, x = s.req("/portal/status", {"nr": nr, **paul})
         self.assertEqual((code, x["status"]), (200, "neu"))
+        code, x = s.req("/portal/status", {**paul})                                       # ohne Nummer: alle eigenen Anfragen
+        self.assertEqual((code, x["liste"][0]["ticket"]), (200, nr), x)
         code, x = s.req("/portal/zugang", {**paul, "email": "falsch@example.org"})
         self.assertEqual(code, 200)
         code, x = s.req("/portal/zugang", paul)
