@@ -112,8 +112,22 @@ def _mb_hash(x):
 
 
 def mb_mitglieder_von(d, email):
+    """Parzellen, auf die diese E-Mail-Adresse Zugriff hat – als Mitglied oder als weitere Person der Parzelle.
+    Ergebnis: {Mitglied-Id: Mitglied aus Sicht der Person (Name/E-Mail/Telefon der Person)}"""
     e = name_norm(email)
-    return {i: m for i, m in mitglieder(d).items() if e and name_norm(m.get("email")) == e}
+    aus = {}
+    if not e:
+        return aus
+    for i, m in mitglieder(d).items():
+        pe = next((x for x in personen(m) if x.get("email") and name_norm(x["email"]) == e), None)
+        if pe:
+            aus[i] = person_sicht(m, pe)
+    return aus
+
+
+def _parzellen_ids(d, kz, p):
+    """alle Mitglieder-Einträge derselben Parzelle (falls mehrere einzeln angelegt sind)"""
+    return {i for i, m in mitglieder(d).items() if kz and m.get("sparte") == kz and str(m.get("parzelle") or "") == str(p)}
 
 
 def mb_versand_bereit(d):
@@ -330,13 +344,17 @@ def mb_buchbar(d):
 
 
 def mb_tickets(d, mid, m):
-    """nur die Tickets dieses Mitglieds: fest zugeordnet – oder ohne Zuordnung mit gleicher E-Mail UND gleicher Parzelle"""
+    """nur die Tickets dieser Parzelle: fest zugeordnet (an ein Mitglied der Parzelle) – oder ohne Zuordnung mit passender E-Mail und Parzelle"""
     kz, p = m.get("sparte", ""), str(m.get("parzelle") or "")
-    aus = []
-    for i, t in mitglied_tickets(d, mid):
-        k = t.get("kontakt") or {}
-        if k.get("mitglied") == mid or (not k.get("mitglied") and str(t.get("sparte") or "") == kz and str(t.get("parzelle") or "") == p):
-            aus.append((i, t))
+    ids = _parzellen_ids(d, kz, p) | {mid}
+    aus, gesehen = [], set()
+    for x in ids:
+        for i, t in mitglied_tickets(d, x):
+            k = t.get("kontakt") or {}
+            if i not in gesehen and (k.get("mitglied") in ids or (not k.get("mitglied") and str(t.get("sparte") or "") == kz and str(t.get("parzelle") or "") == p)):
+                gesehen.add(i)
+                aus.append((i, t))
+    aus.sort(key=lambda x: x[1].get("erstellt", ""), reverse=True)
     return aus
 
 
@@ -358,7 +376,7 @@ def mb_daten(d, email):
         gesp = zugang_gesperrt(d).get(f"{kz}-{p}") if kz and p.isdigit() else None
         rechn = [{"id": i, "nr": x.get("nr"), "datum": x.get("datum"), "faellig": x.get("faellig"), "brutto": x.get("brutto"), "bezahlt": x.get("bezahlt"),
                   "status": R_STATUS.get(x.get("status"), x.get("status"))} for i, x in rechnungen_daten(d)["liste"].items()
-                 if x.get("mitglied") == mid and x.get("status") != "storniert"]
+                 if x.get("status") != "storniert" and (x.get("mitglied") == mid or (kz and x.get("sparte") == kz and str(x.get("parzelle") or "") == p))]
         rechn.sort(key=lambda x: x.get("datum") or "", reverse=True)
         akt_t = next((t for t in tarife_pruefen(d["tarife"]) if t["name"] == tarif), None)
         antr = [{"nr": t["nr"], "art": t["antrag"]["art"], "tarif": t["antrag"]["tarif"], "erstellt": t.get("erstellt", "")}
@@ -644,7 +662,9 @@ def mb_anfrage(pfad, b, email, quelle, basis):
 
 def mb_rechnung_pdf(d, email, rid):
     x = rechnungen_daten(d)["liste"].get(str(rid or ""))
-    if not x or x.get("mitglied") not in mb_mitglieder_von(d, email):
+    eigene = mb_mitglieder_von(d, email)
+    parzellen = {(m.get("sparte"), str(m.get("parzelle") or "")) for m in eigene.values()}
+    if not x or (x.get("mitglied") not in eigene and (x.get("sparte"), str(x.get("parzelle") or "")) not in parzellen):
         raise Fehler("Rechnung nicht gefunden.")
     return rechnung_pdf(d, x), f"Rechnung_{x['nr']}.pdf"
 

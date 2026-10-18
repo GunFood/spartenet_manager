@@ -256,7 +256,8 @@ def sparte_aus_email(d, adresse):
         return ""
     roh = d.get("mitglieder")
     liste = roh if isinstance(roh, dict) else {}
-    sp = {str(m.get("sparte") or "") for m in liste.values() if isinstance(m, dict) and str(m.get("email") or "").strip().lower() == e}
+    sp = {str(m.get("sparte") or "") for m in liste.values() if isinstance(m, dict)
+          and e in [str(x.get("email") or "").strip().lower() for x in [m] + [w for w in (m.get("weitere") or []) if isinstance(w, dict)]]}
     return sp.pop() if len(sp) == 1 else ""
 
 

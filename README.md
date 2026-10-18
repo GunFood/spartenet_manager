@@ -112,6 +112,13 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   Umstieg: Der bisherige gemeinsame Token aus 5.3/5.4 gilt weiter für alle Konten ("alle Konten (alt)" in der Liste),
   bis der Administrator ihn entfernt – am besten, sobald jeder seinen eigenen Token eingetragen hat.
 
+### MEHRERE PERSONEN JE PARZELLE – neu in 5.5
+  Mitglieder → Bearbeiten → "Weitere Personen dieser Parzelle" (bis 6: Mitpächter, Partner, Familie – Name, E-Mail, Telefon).
+  Jede Person mit E-Mail-Adresse meldet sich selbst im Mitgliederbereich und in der Mitglieder-App an (Einmalcode an die eigene
+  Adresse, Anrede mit eigenem Namen) und sieht dieselbe Parzelle: Tarif, Geräte, Rechnungen, Anfragen; Buchungen und Anfragen
+  laufen auf die Parzelle. Auf der Kontakt-Seite werden weitere Personen genauso erkannt, das Vereinslogo zur E-Mail ebenso.
+  Rechnungen, Verträge und Rundschreiben gehen weiter an das Mitglied selbst. Person entfernen = Zugang sofort weg.
+
 ### KONTAKT-SEITE, MITGLIEDERBEREICH GESTALTEN, VEREINSLOGO – neu in 5.5
   - Die bisherige "Pächter-Seite" heißt jetzt Kontakt-Seite (erreichbar unter /portal und /kontakt).
   - Oberfläche gestalten → "Mitgliederbereich gestalten": eigenes Aussehen für /mein (Farben, Schrift, Logo, Hintergrund, Titel,

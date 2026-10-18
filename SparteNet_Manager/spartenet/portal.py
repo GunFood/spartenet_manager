@@ -56,9 +56,11 @@ def mitglied_passt(d, vorname, nachname, email, kz, p):
     if not (v and n and e and kz and str(p).strip().isdigit()):
         return None, None
     for i, m in mitglieder(d).items():
-        if (m.get("sparte") == str(kz).upper() and str(m.get("parzelle")) == str(int(p)) and name_norm(m.get("vorname")) == v
-                and name_norm(m.get("nachname")) == n and name_norm(m.get("email")) == e):
-            return i, m
+        if m.get("sparte") != str(kz).upper() or str(m.get("parzelle")) != str(int(p)):
+            continue
+        for pe in personen(m):                       # Mitglied oder eine weitere Person der Parzelle
+            if name_norm(pe.get("vorname")) == v and name_norm(pe.get("nachname")) == n and name_norm(pe.get("email")) == e:
+                return i, person_sicht(m, pe)
     return None, None
 
 

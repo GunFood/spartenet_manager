@@ -96,7 +96,7 @@ def _pruefen(d, roh, alt=None):
     if not k.get("mitglied"):
         em = (k.get("email") or "").lower()
         alle_m = mitglieder(d).items()
-        m = (next((i for i, m in alle_m if em and (m.get("email") or "").lower() == em and parzelle_passt(t, m)), None) or
+        m = (next((i for i, m in alle_m if em and em in mitglied_emails(m) and parzelle_passt(t, m)), None) or
              next((i for i, m in alle_m if t.get("parzelle") and parzelle_passt(t, m)), None))
         if m:
             mm = mitglieder(d)[m]
@@ -180,20 +180,20 @@ def ticket_mitglied_id(d, t):
         return k["mitglied"]
     em = (k.get("email") or "").strip().lower()
     if em and k.get("art", "mitglied") == "mitglied" and not k.get("geloest"):
-        return next((i for i, m in mitglieder(d).items() if (m.get("email") or "").lower() == em and parzelle_passt(t, m)), None)
+        return next((i for i, m in mitglieder(d).items() if em in mitglied_emails(m) and parzelle_passt(t, m)), None)
     return None
 
 
 def mitglied_tickets(d, mid, ohne=None):
     """alle Tickets eines Mitglieds (fest zugeordnet oder gleiche E-Mail ohne andere Zuordnung), neueste zuerst"""
     m = mitglieder(d).get(mid) or {}
-    em = (m.get("email") or "").lower()
+    ems = set(mitglied_emails(m))
     aus = []
     for i, t in tickets_daten(d)["liste"].items():
         if i == ohne:
             continue
         k = t.get("kontakt") or {}
-        if k.get("mitglied") == mid or (not k.get("mitglied") and not k.get("geloest") and em and (k.get("email") or "").lower() == em and parzelle_passt(t, m)):
+        if k.get("mitglied") == mid or (not k.get("mitglied") and not k.get("geloest") and (k.get("email") or "").lower() in ems and parzelle_passt(t, m)):
             aus.append((i, t))
     aus.sort(key=lambda x: x[1].get("erstellt", ""), reverse=True)
     return aus

@@ -708,6 +708,30 @@ class Version50(unittest.TestCase):
         self.assertEqual(s.req("/mein/daten", {})[1]["parzellen"][0]["tarif"], "Max")
         s.req("/mein/abmelden", {})
         self.assertEqual(s.req("/mein/daten", {})[0], 401)
+        # weitere Person derselben Parzelle: eigener Einmalcode, gleiche Parzelle, gleiche Rechnungen
+        _, ml = a.req("/api/mitglieder")
+        paul = next(z for z in ml["zeilen"] if z["email"] == "paul@example.org")
+        self.assertEqual(a.req("/api/mitglied-speichern", {"mitglied": {**paul, "weitere": [{"vorname": "Pia", "nachname": "Portal", "email": "paul@example.org"}]}})[0], 400)
+        code, x = a.req("/api/mitglied-speichern", {"mitglied": {**paul, "weitere": [{"vorname": "Pia", "nachname": "Portal", "email": "Pia@Example.org"}, {}]}})
+        self.assertEqual(code, 200, x)
+        self.assertEqual(next(z for z in x["zeilen"] if z["id"] == paul["id"])["weitere"][0]["email"], "pia@example.org")
+        n = len(SMTP.mails)
+        pia = Sitzung(SRV.basis)
+        pia.req("/mein/code", {"email": "pia@example.org"})
+        m = self._mails_seit(n)[0]
+        self.assertIn("pia@example.org", m["an"])
+        teile = [x.get_payload(decode=True).decode("utf-8", "replace") for x in em.message_from_string(m["text"]).walk() if not x.is_multipart()]
+        self.assertIn("Hallo Pia", " ".join(teile))
+        self.assertEqual(pia.req("/mein/anmelden", {"email": "pia@example.org", "code": re.search(r">(\d{6})<", " ".join(teile)).group(1)})[0], 200)
+        code, x = pia.req("/mein/daten", {})
+        pp = x["parzellen"][0]
+        self.assertEqual((code, pp["parzelle"], x["mitglied"]), (200, "42", "Pia Portal"), x)
+        self.assertTrue(pp["rechnungen"])                                          # Rechnungen der Parzelle (laufen auf Paul)
+        self.assertEqual(pia.roh("/mein/rechnung?id=" + pp["rechnungen"][0]["id"])[0], 200)
+        code, x = Sitzung(SRV.basis).req("/portal/status", {"vorname": "Pia", "nachname": "Portal", "email": "pia@example.org", "sparte": "BW", "parzelle": "42"})
+        self.assertEqual(code, 200, x)                                             # Kontakt-Seite erkennt die weitere Person
+        a.req("/api/mitglied-speichern", {"mitglied": {**paul, "weitere": []}})
+        self.assertEqual(pia.req("/mein/daten", {})[1]["parzellen"], [])             # entfernt: kein Zugriff mehr
         # Mitglieder-App: Anmeldung mit Code, dann dauerhafter Schlüssel im Kopf (kein Cookie)
         self.assertEqual(api(SRV.basis, "POST", "/mein/info", {})[1]["titel"], "Mein WLAN")
         code, x = api(SRV.basis, "POST", "/mein/logo", {"email": "Paul@example.org"})        # Vereinslogo nach Eingabe der E-Mail
