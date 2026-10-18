@@ -1,4 +1,4 @@
-SparteNet Manager 5.3 (Cloud)
+SparteNet Manager 5.4 (Cloud)
 ===============================
 
 Funktioniert komplett über die UniFi-Cloud (api.ui.com). Kein lokaler Zugriff, kein VPN.
