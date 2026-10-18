@@ -76,7 +76,8 @@ class Api(basis: String, @Volatile var token: String?) {
     /** prüft, ob unter der Adresse ein eingeschalteter Mitgliederbereich erreichbar ist; liefert den Titel */
     suspend fun info(): JSONObject = post("/mein/info")
 
-    suspend fun codeAnfordern(email: String): String = post("/mein/code", JSONObject().put("email", email.trim())).s("text")
+    /** Einmalcode anfordern – der Manager verschickt ihn über seinen E-Mail-Versand an die beim Verein hinterlegte Adresse */
+    suspend fun codeAnfordern(email: String): String = post("/mein/code", JSONObject().put("email", email.trim()).put("app", true)).s("text")
 
     /** Code aus der E-Mail → dauerhafter Schlüssel für diese App */
     suspend fun anmelden(email: String, code: String, geraet: String): String {

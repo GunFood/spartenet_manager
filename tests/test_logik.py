@@ -580,6 +580,17 @@ class AppZugangstokens(unittest.TestCase):
         self.assertEqual(len(S.akt_app_zugangstoken(d, {}, "admin", True)["tokens"]), 2)
 
 
+class MitgliederEinmalcode(unittest.TestCase):
+    def test_ohne_email_versand_klare_meldung_ohne_technik(self):
+        d = frisch()
+        d["mitglieder"] = {"m1": {"vorname": "A", "nachname": "B", "email": "a@example.org", "sparte": "BW", "parzelle": "1"}}
+        for adresse in ("a@example.org", "unbekannt@example.org"):         # gleiche Antwort – verrät nicht, ob es die Adresse gibt
+            with self.assertRaises(S.Fehler) as f:
+                S.mb_code_anfordern(d, {"email": adresse}, "test")
+            self.assertIn("E-Mail-Versand des Vereins", str(f.exception))
+        self.assertFalse(S.mb_versand_bereit(d))
+
+
 class Modulkette(unittest.TestCase):
     def test_keine_doppelten_namen(self):
         """jede Datei übernimmt alle Namen der vorherigen – gleiche öffentliche Namen würden frühere Funktionen überdecken"""

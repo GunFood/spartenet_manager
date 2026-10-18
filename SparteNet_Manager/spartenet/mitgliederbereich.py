@@ -97,7 +97,7 @@ def akt_mitgliederbereich(d, b=None, ich=""):
         journal(f"Mitgliederbereich-Einstellungen gespeichert durch {ich}" + (" (Webhook-Geheimnis neu)" if extra else ""))
     auf = sorted(zahlungsauftraege(d).items(), key=lambda x: x[1].get("erstellt", ""), reverse=True)[:100]
     return {"einstellungen": mb_einstellungen(d), "alle_tarife": [{"name": t["name"], "preis": t.get("preis", 0)} for t in sorted(tarife_pruefen(d["tarife"]), key=tarif_rang)],
-            "antraege": len(tarif_antraege(d)), "apps": len([x for x in mitglied_apps(d).values() if x.get("ablauf", 0) > time.time()]), "auftraege": [{"referenz": r, **{k: a.get(k) for k in ("sparte", "parzelle", "tarif", "art", "betrag", "status", "erstellt", "bezahlt_am", "name")}}
+            "antraege": len(tarif_antraege(d)), "versand": mb_versand_bereit(d), "apps": len([x for x in mitglied_apps(d).values() if x.get("ablauf", 0) > time.time()]), "auftraege": [{"referenz": r, **{k: a.get(k) for k in ("sparte", "parzelle", "tarif", "art", "betrag", "status", "erstellt", "bezahlt_am", "name")}}
                                                                 for r, a in auf],
             **extra, "log": (["✔ Gespeichert."] + (["Neues Webhook-Geheimnis – jetzt kopieren, es wird nur einmal angezeigt."] if extra else [])) if b is not None else []}
 
@@ -112,11 +112,21 @@ def mb_mitglieder_von(d, email):
     return {i: m for i, m in mitglieder(d).items() if e and name_norm(m.get("email")) == e}
 
 
+def mb_versand_bereit(d):
+    """Einmalcodes gehen über den E-Mail-Versand des Managers (Automationen → E-Mail-Versand)"""
+    s = smtp_einstellungen(d)
+    return bool(s["host"] and s["absender"])
+
+
 def mb_code_anfordern(d, b, quelle):
+    """Einmalcode (6 Ziffern, 10 Minuten, nur einmal gültig) per E-Mail über den E-Mail-Versand des Managers"""
     email = str(b.get("email") or "").strip()
-    antwort = {"ok": True, "text": "Wenn die Adresse bei uns hinterlegt ist, kommt jetzt ein Anmeldecode per E-Mail (10 Minuten gültig)."}
+    antwort = {"ok": True, "text": "Wenn die Adresse bei uns hinterlegt ist, kommt jetzt ein Einmalcode per E-Mail (10 Minuten gültig)."}
     if not re.fullmatch(r"[^@\s,;<>]{1,64}@[A-Za-z0-9.-]{1,190}\.[A-Za-z]{2,}", email):
         raise Fehler("Bitte eine gültige E-Mail-Adresse eingeben.")
+    if not mb_versand_bereit(d):                  # für alle Adressen gleich – verrät nicht, ob es die Adresse gibt
+        LOG.warning("Mitgliederbereich: Einmalcode angefordert, aber der E-Mail-Versand ist nicht eingerichtet")
+        raise Fehler("Die Anmeldung ist gerade nicht möglich (E-Mail-Versand des Vereins nicht eingerichtet) – bitte beim Verein melden.")
     _grenze("mb_code", quelle)
     _grenze("mb_code_mail", name_norm(email))
     treffer = mb_mitglieder_von(d, email)
@@ -124,12 +134,23 @@ def mb_code_anfordern(d, b, quelle):
         LOG.info("Mitgliederbereich: Code für unbekannte Adresse angefordert")
         return antwort
     email = next(iter(treffer.values()))["email"]          # an die hinterlegte Adresse, nicht an die eingetippte
+    m = next(iter(treffer.values()))
     code = f"{secrets.randbelow(1000000):06d}"
     with _MB_LOCK:
         _MB_CODES[name_norm(email)] = {"hash": _mb_hash(code), "bis": time.time() + 600, "versuche": 0}
-    email_senden(d, email, f"Ihr Anmeldecode: {code}", None,
-                 f"<p>Ihr Anmeldecode für den Mitgliederbereich lautet:</p><p style='font-size:28px;letter-spacing:6px;font-weight:bold'>{code}</p>"
-                 "<p>Er gilt 10 Minuten. Haben Sie keinen Code angefordert, können Sie diese E-Mail ignorieren.</p>")
+    wo = "in der App „SparteNet Mitglied“" if b.get("app") else "im " + mb_einstellungen(d)["titel"]
+    try:
+        email_senden(d, email, f"Ihr Einmalcode: {code}", None,
+                     f"<p>Hallo {html_mod.escape(m.get('vorname') or '')},</p><p>Ihr Einmalcode zum Anmelden {html_mod.escape(wo)} lautet:</p>"
+                     f"<p style='font-size:28px;letter-spacing:6px;font-weight:bold'>{code}</p>"
+                     "<p>Er gilt 10 Minuten und nur für eine Anmeldung. Geben Sie ihn nicht weiter – der Verein fragt nie danach.<br>"
+                     "Haben Sie keinen Code angefordert, können Sie diese E-Mail ignorieren.</p>")
+    except Fehler as f:
+        with _MB_LOCK:
+            _MB_CODES.pop(name_norm(email), None)
+        LOG.warning("Mitgliederbereich: Einmalcode nicht gesendet: %s", f)
+        journal("Mitgliederbereich: Einmalcode konnte nicht gesendet werden (E-Mail-Versand prüfen)")
+        raise Fehler("Der Code konnte gerade nicht gesendet werden – bitte später erneut versuchen oder beim Verein melden.")
     return antwort
 
 
@@ -622,7 +643,7 @@ def mein_seite(d):
     header = rest[:rest.index("</header>")].replace('<div id="titel"></div>', f'<div id="titel">{titel}</div>') + "</header>"
     fuss = re.search(r"<footer>.*?</footer>", seite, re.S)
     text = html_mod.escape(e["text_anmeldung"]) if e["text_anmeldung"] else ("Mit der E-Mail-Adresse, die beim Verein für Ihre Parzelle hinterlegt ist. "
-                                                                           "Sie bekommen einen Anmeldecode per E-Mail – ein Passwort ist nicht nötig.")
+                                                                           "Der Verein schickt Ihnen einen Einmalcode per E-Mail – ein Passwort ist nicht nötig.")
     return (MEIN_HTML.replace("__KOPF__", kopf + "<body" + body_tag + ">" + header).replace("__FUSS__", fuss.group(0) if fuss else "")
             .replace("__ANMELDETEXT__", text))
 
@@ -635,7 +656,7 @@ MEIN_HTML = r"""__KOPF__<main>
 .tarif.akt{border-color:var(--a);box-shadow:0 0 0 2px var(--a) inset}.tarif b{font-size:17px}.gesperrt{background:#fde8e6;color:#b42318;border-radius:8px;padding:8px 10px;margin-top:8px}</style>
 <section id="v_login" class="karte" style="display:none"><h2 style="margin-top:0">Anmelden</h2><p class="hint">__ANMELDETEXT__</p>
 <label for="l_email">E-Mail-Adresse</label><input id="l_email" type="email" autocomplete="email" onkeydown="if(event.key=='Enter')codeAnfordern()"><button class="los" id="l_b1" onclick="codeAnfordern()">Code per E-Mail senden</button>
-<div id="l_code_box" style="display:none"><label for="l_code">Anmeldecode aus der E-Mail</label><input id="l_code" onkeydown="if(event.key=='Enter')anmelden()" inputmode="numeric" autocomplete="one-time-code" maxlength="6" style="font-size:22px;letter-spacing:6px;text-align:center"><button class="los" onclick="anmelden()">Anmelden</button></div>
+<div id="l_code_box" style="display:none"><label for="l_code">Einmalcode aus der E-Mail</label><input id="l_code" onkeydown="if(event.key=='Enter')anmelden()" inputmode="numeric" autocomplete="one-time-code" maxlength="6" style="font-size:22px;letter-spacing:6px;text-align:center"><button class="los" onclick="anmelden()">Anmelden</button></div>
 <div class="msg" id="m_login"></div></section>
 <div id="v_daten" style="display:none"><div class="zeile" style="margin-bottom:10px"><p class="hint" id="d_hallo" style="margin:0"></p><div style="flex:none"><select id="d_parz" onchange="zeigen()" style="min-width:200px"></select></div><button class="k2" style="flex:none" onclick="abmelden()">Abmelden</button></div>
 <p class="hint" id="d_hinweis"></p><div class="msg" id="m_daten"></div>

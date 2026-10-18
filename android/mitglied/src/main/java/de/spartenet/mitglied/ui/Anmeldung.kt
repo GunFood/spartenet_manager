@@ -90,7 +90,7 @@ fun Anmeldung(speicher: Speicher, onAngemeldet: (String) -> Unit) {
     fun anmelden() {
         if (laedt) return
         if (code.trim().length != 6) {
-            fehler = "Bitte den 6-stelligen Code aus der E-Mail eingeben."
+            fehler = "Bitte den 6-stelligen Einmalcode aus der E-Mail eingeben."
             return
         }
         scope.launch {
@@ -126,7 +126,7 @@ fun Anmeldung(speicher: Speicher, onAngemeldet: (String) -> Unit) {
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("Anmelden", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                     Text(
-                        "Mit der E-Mail-Adresse, die beim Verein für Ihre Parzelle hinterlegt ist. Sie bekommen einen Code per E-Mail – ein Passwort ist nicht nötig.",
+                        "Mit der E-Mail-Adresse, die beim Verein für Ihre Parzelle hinterlegt ist. Der Verein schickt Ihnen einen Einmalcode per E-Mail – ein Passwort ist nicht nötig.",
                         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     OutlinedTextField(
@@ -144,11 +144,11 @@ fun Anmeldung(speicher: Speicher, onAngemeldet: (String) -> Unit) {
                         keyboardActions = KeyboardActions(onSend = { codeAnfordern() }),
                     )
                     if (!codeGesendet) {
-                        Button(onClick = { codeAnfordern() }, enabled = !laedt, modifier = Modifier.fillMaxWidth()) { Text("Code per E-Mail senden") }
+                        Button(onClick = { codeAnfordern() }, enabled = !laedt, modifier = Modifier.fillMaxWidth()) { Text("Einmalcode per E-Mail senden") }
                     } else {
                         hinweis?.let { Text(it, color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.bodyMedium) }
                         OutlinedTextField(
-                            code, { code = it.filter(Char::isDigit).take(6) }, Modifier.fillMaxWidth(), label = { Text("Code aus der E-Mail") }, singleLine = true,
+                            code, { code = it.filter(Char::isDigit).take(6) }, Modifier.fillMaxWidth(), label = { Text("Einmalcode aus der E-Mail") }, singleLine = true,
                             enabled = !laedt, textStyle = MaterialTheme.typography.headlineSmall,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
                             keyboardActions = KeyboardActions(onDone = { anmelden() }),

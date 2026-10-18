@@ -142,7 +142,9 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
 
 ### MITGLIEDERBEREICH /mein – neu in 5.4
 Eigene Seite für Mitglieder (Reiter "Tickets" → Karte "Mitgliederbereich" einschalten, nur Administrator):
-- Anmeldung mit der beim Mitglied hinterlegten E-Mail-Adresse und einem 6-stelligen Code per E-Mail (10 Minuten gültig, kein Passwort). Abmelden nach einstellbarer Zeit ohne Aktivität.
+- Anmeldung mit der beim Mitglied hinterlegten E-Mail-Adresse und einem 6-stelligen Einmalcode per E-Mail (10 Minuten, nur einmal gültig, kein Passwort).
+  Der Code wird über den E-Mail-Versand des Managers verschickt (Automationen → E-Mail-Versand, mit E-Mail-Layout/Logo) – ohne
+  eingerichteten Versand ist keine Anmeldung möglich; die Karte "Mitgliederbereich" warnt dann. Abmelden nach einstellbarer Zeit ohne Aktivität.
 - Je Parzelle: Tarif mit Laufzeit (Ende, Resttage, Sperre), Rechnungen als PDF, offene Beträge, eigene Anfragen, neue Anfrage, Zugangskarte per E-Mail.
 - Geräte im WLAN: alle gerade angemeldeten Geräte im Netz der Parzelle, erkennbar an der IP 10.<Sparte>.<Parzelle>.<Gerät> (z. B. 10.20.56.121 = Sparte 20, Parzelle 56, Gerät 121). Quelle: Client-Liste des Gateways, MAC nur gekürzt.
 - Tarif wechseln, neu buchen, Laufzeit verlängern – einzeln abschaltbar. Modus "Anfrage" (Wunsch geht als geprüfte Anfrage an den Vorstand) oder "Bezahldienst":
