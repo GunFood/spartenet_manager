@@ -34,6 +34,7 @@ BEREICHE = [
     ("rechnungen", "Rechnungen und Zahlungsabgleich: ansehen (lesen), erstellen, senden, Zahlungen buchen (schreiben)", ("kein", "lesen", "schreiben"), ["rechnungen"]),
     ("tickets", "Anfragen (Tickets): ansehen (lesen), bearbeiten, beantworten, zuweisen (schreiben)", ("kein", "lesen", "schreiben"), ["tickets"]),
     ("verbindung", "Verbindung, Cloud-Key, Handy & Tablet, Protokoll, Diagnose", ("kein", "lesen", "schreiben"), ["verbindung"]),
+    ("gestaltung", "Oberfläche gestalten: Anmeldeseite, Pächter-Seite, Menü und Ansichtsprofile der Konten", ("kein", "lesen", "schreiben"), ["gestaltung"]),
 ]
 BEREICH_TEXT = {k: t for k, t, _, _ in BEREICHE}
 BEREICH_STUFEN = {k: s for k, _, s, _ in BEREICHE}
@@ -44,8 +45,8 @@ def _alle(stufe, **ausnahmen):
 
 
 VORLAGEN = {
-    "lesen": ("Nur lesen", _alle("lesen", verbindung="kein")),
-    "schreiben": ("Lesen und schreiben", _alle("schreiben", verbindung="lesen")),
+    "lesen": ("Nur lesen", _alle("lesen", verbindung="kein", gestaltung="kein")),
+    "schreiben": ("Lesen und schreiben", _alle("schreiben", verbindung="lesen", gestaltung="lesen")),
     "vorstand": ("Vorstand Sparte: lesen + WLAN-Passwörter, Tarif buchen, Karten, Voucher",
                  _alle("lesen", verbindung="kein", wlan_pw="schreiben", buchungen="schreiben", karten="lesen", voucher="schreiben")),
     "kasse": ("Kasse: Tarif buchen und Kalkulation, sonst lesen", _alle("lesen", verbindung="kein", buchungen="schreiben", kalkulation="schreiben")),
@@ -66,12 +67,13 @@ _LESEN = {
     "/api/tickets": "tickets", "/api/ticket": "tickets",
     "/api/rechnungen": "rechnungen", "/api/rechnung-pdf": "rechnungen",
     "/api/vertraege": "mitglieder", "/api/rundschreiben": "mitglieder", "/api/rundschreiben-empfaenger": "mitglieder", "/api/mitglied-auskunft": "mitglieder",
-    "/api/ueberwachung": "auslesen", "/api/laufzeiten": "buchungen", "/api/logos": "karten", "/api/logo-bild": "karten",
+    "/api/ueberwachung": "auslesen", "/api/laufzeiten": "buchungen", "/api/gestaltung": "gestaltung", "/api/logos": "karten", "/api/logo-bild": "karten",
 }
 _GET_LESEN_SONST_SCHREIBEN = {"/api/voucher-vorlagen": "voucher", "/api/tarife": "tarife", "/api/buchungen": "buchungen", "/api/design": "karten", "/api/fern": "verbindung"}
 _VORSCHAU = {"/api/zugang": "wlan_pw", "/api/netze": "netze", "/api/uebertragen": "wlan_pw", "/api/ppsk-hochladen": "wlan_pw", "/api/tarif-uebertragen": "tarife", "/api/voucher": "voucher", "/api/voucher-loeschen": "voucher", "/api/zuteilung-gateway": "netze", "/api/umzug": "netze"}
 _SCHREIBEN = {
     "/api/laufzeit-verlaengern": "buchungen", "/api/laufzeit-starten": "buchungen",
+    "/api/seiten-design": "gestaltung", "/api/seiten-vorschau": "gestaltung", "/api/ansicht-profile": "gestaltung",
     "/api/excel": "planung", "/api/schreibtest": "netze", "/api/umzug-rueckgaengig": "netze",
     "/api/ppsk-speichern": "wlan_pw", "/api/rueckgaengig": "wlan_pw", "/api/wlan-zuordnung": "wlan_pw", "/api/passwort": "wlan_pw",
     "/api/tarif-rueckgaengig": "tarife", "/api/tarif-zuordnung": "buchungen",
@@ -153,7 +155,7 @@ def konto_rechte(d, name):
 # gateway- oder spartenübergreifende Änderungen bleiben Konten ohne Beschränkung vorbehalten
 SPARTE_PFLICHT = {"/api/ppsk", "/api/ppsk-speichern", "/api/wlans", "/api/wlan-zuordnung", "/api/netze", "/api/uebertragen", "/api/rueckgaengig", "/api/vergleich", "/api/abgleich",
                   "/api/ppsk-hochladen", "/api/karten", "/api/buchungen", "/api/parzelle", "/api/kalk-sparte"}
-NUR_OHNE_BESCHRAENKUNG = {"/api/excel", "/api/tarif-zuordnung", "/api/tarif-uebertragen", "/api/tarif-rueckgaengig", "/api/kalk-annahmen",
+NUR_OHNE_BESCHRAENKUNG = {"/api/seiten-design", "/api/ansicht-profile", "/api/excel", "/api/tarif-zuordnung", "/api/tarif-uebertragen", "/api/tarif-rueckgaengig", "/api/kalk-annahmen",
                           "/api/kalk-import", "/api/gwplan-annahmen", "/api/gwplan-zuruecksetzen", "/api/gwplan-import", "/api/gwplan-vlan-uebernehmen",
                           "/api/logo", "/api/logo-loeschen", "/api/logo-waehlen", "/api/schreibtest", "/api/konsolen", "/api/log-loeschen", "/api/tailscale", "/api/diagnose",
                           "/api/zuteilung-einstellen", "/api/zuteilung-gateway", "/api/zuteilung-setzen", "/api/zuteilung-verdichten", "/api/umzug", "/api/umzug-rueckgaengig",

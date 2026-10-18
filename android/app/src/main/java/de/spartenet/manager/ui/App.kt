@@ -105,7 +105,7 @@ fun Wurzel(speicher: Speicher, ansicht: String, onAnsicht: (String) -> Unit) {
     if (pruefen > 0 && sitzung == null) {
         LaunchedEffect(pruefen) {
             startFehler = null
-            val api = Api(speicher.server, speicher.token)
+            val api = Api(speicher.server, speicher.token, speicher.zugangstoken(speicher.server))
             val min = speicher.abmeldenMinuten
             if (min > 0 && speicher.zuletztAktiv > 0 && System.currentTimeMillis() - speicher.zuletztAktiv > min * 60_000L) {
                 geraetEntfernen(api)

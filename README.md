@@ -1,4 +1,4 @@
-SparteNet Manager 5.2 (Cloud)
+SparteNet Manager 5.3 (Cloud)
 ===============================
 
 Funktioniert komplett über die UniFi-Cloud (api.ui.com). Kein lokaler Zugriff, kein VPN.
@@ -100,6 +100,31 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
     POST /api/v1/buchung   {"sparte":"BW","parzelle":12,"tarif":"Basic"}   ("" = Buchung entfernen)
   Höchstens 120 Anfragen je Minute und Schlüssel (SPARTENET_API_PRO_MINUTE). Zahlungsanbieter über n8n/Zapier/Make
   anbinden. Von außen nur über HTTPS (Reverse-Proxy, dann SPARTENET_PROXY=1).
+
+### OBERFLÄCHE GESTALTEN (☰ → System & Konto → Oberfläche gestalten) – neu in 5.3
+  • Anmeldeseite gestalten: Aufbau (zweigeteilt oder mittig), Schrift, Ecken, Farben, Logo und Hintergrundbild aus den
+    Unterlagen (mit Abdunkeln), alle Texte, bis zu 6 Punkte, Kontakt, Impressum/Datenschutz – mit Live-Vorschau PC/Handy.
+  • Pächter-Seite gestalten: ebenso, dazu Namen und Reihenfolge der Funktionen, Hinweise, Danke-Text, Kontakt, Fußzeile.
+    Nur Text und Farben – kein eigenes HTML. Öffentliche Bilder nur über /seitenbild/<seite>/<logo|hintergrund>.
+  • Menü und Ansichtsprofile: je Profil eigener Menübaum mit Nummern (1 · 1.1 · 1.1.1) und festen Kennnummern (B…, R…, K…):
+    Bereiche, Reiter und Karten umbenennen, sortieren, ausblenden; Bereiche anlegen, Reiter verschieben, Startseite,
+    Hinweistexte ändern, Karten eingeklappt zeigen. Jedem Konto ein Profil zuweisen (oder Standardprofil). Vorschau,
+    Export/Import. Ausblenden ist nur Ansicht – die Rechte bleiben maßgeblich. Notausgang: Adresse mit #standardansicht.
+  • Neues Recht „Oberfläche gestalten“ (kein/lesen/schreiben).
+
+### ANFRAGEN NUR MIT PASSENDEN MITGLIEDSDATEN – neu in 5.3
+  Pächter-Seite: Anfrage als Mitglied nur, wenn Vorname, Nachname, E-Mail, Sparte und Parzelle zu einem gespeicherten
+  Mitglied passen (Groß-/Kleinschreibung egal, ä = ae, ß = ss). Die Meldung verrät nicht, welches Feld falsch war; nach
+  5 Fehlversuchen je Parzelle/Absender eine Stunde gesperrt. Auswahl „Ich bin kein Mitglied einer Sparte“ und „Ich bin
+  Interessent“ (abschaltbar) – solche Tickets sind gekennzeichnet. Stand abfragen: Ticket-Nr., Name, E-Mail (Mitglieder
+  zusätzlich Sparte und Parzelle); Zugangskarte: alle fünf Angaben. Spamschutz: kleine Rechenaufgabe, Mindestzeit,
+  höchstens zwei Links, Honigtopf-Feld. API POST /api/v1/ticket: ebenso Prüfung ("vorname", "nachname", "email",
+  "sparte", "parzelle" oder "art": "kein_mitglied"/"interessent"); Recht "tickets_ungeprueft" für eigene, geprüfte Formulare.
+
+### APP-ZUGANGSTOKEN – neu in 5.3
+  Benutzer → Anmeldung und Sicherheit → App-Zugangstoken: einmal erzeugen (nur einmal angezeigt, gespeichert als Prüfsumme)
+  und an die App-Nutzer geben. Die App fragt ihn beim Einrichten ab und schickt ihn bei jeder Anfrage mit
+  (Header "X-App-Token"). Ohne gültigen Token keine App-Anmeldung und kein Datenabruf; neu erzeugen sperrt alle alten.
 
 ### MENÜ (☰) – neu in 5.2
   Knopf ☰ oben links (oder Strg+K): alle Funktionen nach Bereichen geordnet – Übersicht, Einrichtung, WLAN & Zugang,

@@ -61,6 +61,8 @@ fun AnmeldeSeite(speicher: Speicher, hinweis: String?, onAngemeldet: (Api, JSONO
     var passwort by remember { mutableStateOf("") }
     var code by remember { mutableStateOf("") }
     var geraet by remember { mutableStateOf(geraeteName()) }
+    var zugang by remember { mutableStateOf(speicher.zugangstoken(Api.normalisieren(speicher.server)) ?: "") }
+    var zeigeZugang by remember { mutableStateOf(zugang.isBlank()) }
     var zeigeCode by remember { mutableStateOf(false) }
     var zeigePw by remember { mutableStateOf(false) }
     var laedt by remember { mutableStateOf(false) }
@@ -70,20 +72,23 @@ fun AnmeldeSeite(speicher: Speicher, hinweis: String?, onAngemeldet: (Api, JSONO
     val http = Api.normalisieren(server).startsWith("http://")
 
     fun anmelden() {
-        if (server.isBlank() || benutzer.isBlank() || passwort.isEmpty()) {
-            fehler = "Bitte Server, Benutzer und Passwort eingeben."
+        if (server.isBlank() || benutzer.isBlank() || passwort.isEmpty() || zugang.isBlank()) {
+            fehler = if (zugang.isBlank()) "Bitte den Zugangstoken eingeben – den bekommen Sie vom Administrator des Managers."
+            else "Bitte Server, Benutzer und Passwort eingeben."
+            zeigeZugang = zeigeZugang || zugang.isBlank()
             return
         }
         scope.launch {
             laedt = true
             fehler = null
-            val api = Api(server, null)
+            val api = Api(server, null, zugang.trim())
             val name = benutzer.trim().lowercase()
             val gemerkt = speicher.merken(api.basis, name)
             try {
                 val a = api.anmelden(name, passwort, code, geraet.ifBlank { "Android" }, gemerkt)
                 speicher.server = api.basis
                 speicher.benutzer = name
+                speicher.zugangstokenSetzen(api.basis, zugang.trim())
                 a.s("merken").takeIf { it.isNotEmpty() }?.let { speicher.merkenSetzen(api.basis, name, it) }
                 speicher.abmeldenMinuten = a.optInt("abmelden_minuten", 0)
                 speicher.zuletztAktiv = System.currentTimeMillis()
@@ -91,6 +96,7 @@ fun AnmeldeSeite(speicher: Speicher, hinweis: String?, onAngemeldet: (Api, JSONO
                 code = ""
                 onAngemeldet(api, a)
             } catch (e: ApiFehler) {
+                if (e.zugangstoken) zeigeZugang = true
                 if (e.zweiterFaktor) {
                     zeigeCode = true
                     if (gemerkt != null && code.isBlank()) speicher.merkenSetzen(api.basis, name, null)   // gemerkter Code gilt nicht mehr
@@ -144,6 +150,17 @@ fun AnmeldeSeite(speicher: Speicher, hinweis: String?, onAngemeldet: (Api, JSONO
                         { Text("Achtung: http:// ist unverschlüsselt – nur im eigenen Netz verwenden.", color = MaterialTheme.colorScheme.error) }
                     } else null,
                 )
+                if (zeigeZugang) {
+                    OutlinedTextField(
+                        value = zugang, onValueChange = { zugang = it.trim() },
+                        label = { Text("Zugangstoken (vom Administrator)") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("snz_…") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next, autoCorrectEnabled = false),
+                        supportingText = { Text("Steht im Manager unter Benutzer → Anmeldung und Sicherheit → App-Zugangstoken. Wird verschlüsselt gespeichert.") },
+                    )
+                } else {
+                    androidx.compose.material3.TextButton(onClick = { zeigeZugang = true }) { Text("Zugangstoken ändern") }
+                }
                 OutlinedTextField(
                     value = benutzer, onValueChange = { benutzer = it },
                     label = { Text("Benutzername") }, singleLine = true, modifier = Modifier.fillMaxWidth(),

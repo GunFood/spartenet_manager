@@ -515,3 +515,23 @@ class Leerlauf(unittest.TestCase):
         t2 = S.auth_sitzung_neu("Test", "admin")
         S._AUTH_SESSIONS[S._sitzung_hash(t2)]["zuletzt"] -= 99999
         self.assertTrue(S.auth_sitzung_info(t2, 0))                    # 0 = nie abmelden
+
+
+class Spamschutz(unittest.TestCase):
+    def test_rechenaufgabe(self):
+        import hmac, hashlib, time as zeit, re as rx
+        f = S.spam_frage()
+        a, b = map(int, rx.findall(r"\d+", f["frage"]))
+        with self.assertRaises(S.Fehler):                                 # zu schnell
+            S.spam_pruefen({"antwort": str(a + b), "frage_token": f["frage_token"]})
+        ts = str(int(zeit.time()) - 10)
+        tok = ts + "." + hmac.new(S._SPAM_GEHEIM, f"{a + b}|{ts}".encode(), hashlib.sha256).hexdigest()[:24]
+        S.spam_pruefen({"antwort": str(a + b), "frage_token": tok})       # richtig
+        with self.assertRaises(S.Fehler):
+            S.spam_pruefen({"antwort": str(a + b + 1), "frage_token": tok})
+        with self.assertRaises(S.Fehler):
+            S.spam_pruefen({"antwort": str(a + b), "frage_token": tok, "text": "http://a http://b http://c"})
+
+    def test_namensvergleich(self):
+        self.assertEqual(S.name_norm(" Müller-Lüdenscheidt "), S.name_norm("mueller luedenscheidt"))
+        self.assertEqual(S.name_norm("Straß"), S.name_norm("STRASS"))

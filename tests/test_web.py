@@ -3,7 +3,7 @@ API-Schnittstelle, Zwei-Faktor, Unterlagen, Datensicherung"""
 import io, json, os, sys, time, unittest, urllib.parse, zipfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from hilfe import PASSWORT, Sitzung, SmtpEmpfaenger, Testserver, api, totp   # noqa: E402
+from hilfe import APP_TOKEN, PASSWORT, Sitzung, SmtpEmpfaenger, Testserver, api, totp   # noqa: E402
 
 SRV = SMTP = None
 
@@ -24,6 +24,15 @@ def admin():
     code, _ = s.anmelden()
     assert code == 200
     return s
+
+
+def app_token(a):
+    """App-Zugangstoken einmal erzeugen (gilt dann für alle App-Aufrufe der Tests)"""
+    if not APP_TOKEN["wert"]:
+        code, x = a.req("/api/app-zugangstoken", {"neu": True})
+        assert code == 200, x
+        APP_TOKEN["wert"] = x["token"]
+    return APP_TOKEN["wert"]
 
 
 class Grundlagen(unittest.TestCase):
@@ -209,6 +218,7 @@ class AnmeldungSicherheit(unittest.TestCase):
         self.assertEqual(b.anmelden("merker", "Merker-Passwort-1", code=notfall[0])[0], 200)
         self.assertEqual(b.anmelden("merker", "Merker-Passwort-1")[0], 200)                    # gleicher Browser: ohne Code
         self.assertEqual(Sitzung(SRV.basis).anmelden("merker", "Merker-Passwort-1")[0], 400)   # anderer Browser: Code nötig
+        app_token(a)
         code, x = api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "merker", "passwort": "Merker-Passwort-1", "code": notfall[1], "geraet": "Test"})
         self.assertTrue(x["merken"])
         code, y = api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "merker", "passwort": "Merker-Passwort-1", "merken": x["merken"], "geraet": "Test"})
@@ -254,6 +264,43 @@ class Logos(unittest.TestCase):
         pid = next(f["id"] for f in u["dateien"] if f["name"] == "Plan.pdf")
         self.assertEqual(a.req("/api/logo-waehlen", {"id": pid})[0], 400)    # kein Bild
         a.req("/api/email-layout", {"logo_unterlage": ""})
+
+
+class Gestaltung(unittest.TestCase):
+    def test_seiten_und_profile(self):
+        a = admin()
+        code, g = a.req("/api/gestaltung")
+        self.assertEqual(code, 200, g)
+        code, x = a.req("/api/seiten-design", {"art": "login", "design": {"ueberschrift": "Willkommen <b>KGV</b>", "farbe_knopf": "#123456", "layout": "mittig",
+                                                                           "impressum": "https://verein.example/impressum"}})
+        self.assertEqual(code, 200, x)
+        html = Sitzung(SRV.basis).roh("/")[2].decode()
+        self.assertIn("Willkommen &lt;b&gt;KGV&lt;/b&gt;", html)          # kein eigenes HTML
+        self.assertIn("--knopf:#123456", html)
+        self.assertIn('class="mittig"', html)
+        self.assertIn("https://verein.example/impressum", html)
+        self.assertEqual(a.req("/api/seiten-design", {"art": "login", "design": {"farbe_knopf": "rot"}})[0], 400)
+        self.assertEqual(a.req("/api/seiten-design", {"art": "login", "design": {"impressum": "javascript:alert(1)"}})[0], 400)
+        code, _, _ = a.roh("/api/unterlage-hochladen?name=Hinter.png&ordner=Logos", _png(90), {"Content-Type": "application/octet-stream"})
+        bid = next(x["id"] for x in a.req("/api/logos")[1]["logos"] if x["name"] == "Hinter.png")
+        a.req("/api/seiten-design", {"art": "login", "design": {"hintergrund": bid}})
+        code, _, bild = Sitzung(SRV.basis).roh("/seitenbild/login/hintergrund")
+        self.assertTrue(bild.startswith(b"\x89PNG"))                      # öffentlich: nur das gewählte Bild
+        self.assertEqual(Sitzung(SRV.basis).roh("/seitenbild/portal/logo")[0], 404)
+        code, v = a.req("/api/seiten-vorschau", {"art": "portal", "design": {"marke": "KGV Test", "t_ticket": "Störung melden"}})
+        self.assertIn("Störung melden", v["html"])
+        a.req("/api/seiten-design", {"art": "login", "zuruecksetzen": True})
+        a.req("/api/benutzer-speichern", {"neu": True, "name": "kassierer", "passwort": "Kassierer-Pw-123", "passwort2": "Kassierer-Pw-123", "art": "bereiche",
+                                          "bereiche": {"rechnungen": "schreiben"}})
+        code, x = a.req("/api/ansicht-profile", {"profile": {"kasse01": {"name": "Kassierer", "baum": {"tabs": {"benutzer": {"name": "Mein Zugang"}},
+                                                    "karten": {"benutzer/apps-und-geraete": {"aus": True}}, "start": "rechnungen"}}}, "zuordnung": {"kassierer": "kasse01"}})
+        self.assertEqual(code, 200, x)
+        k = Sitzung(SRV.basis)
+        k.anmelden("kassierer", "Kassierer-Pw-123")
+        html = k.roh("/")[2].decode()
+        self.assertIn('"Mein Zugang"', html)
+        self.assertIn('"start": "rechnungen"', html)
+        self.assertEqual(k.req("/api/ansicht-profile", {"profile": {}})[0], 403)     # ohne Recht „Oberfläche gestalten“
 
 
 class Unterlagen(unittest.TestCase):
@@ -357,6 +404,9 @@ class MitgliederTicketsEmail(unittest.TestCase):
             {"typ": "email", "an": "{zustaendig_email}", "betreff": "Ticket {ticket}: {betreff}", "html": "<p>{nachricht}</p>"}]}})
         code, x = api(SRV.basis, "POST", "/api/v1/ticket", {"betreff": "WLAN geht nicht", "text": "Seit gestern kein Netz", "email": "kunde2@example.org", "name": "K. Zwei",
                                                             "sparte": "BW", "parzelle": 9, "prioritaet": "hoch"}, self.key)
+        self.assertEqual(code, 400, x)                                   # ohne Vor-/Nachname und passendes Mitglied abgelehnt
+        code, x = api(SRV.basis, "POST", "/api/v1/ticket", {"betreff": "WLAN geht nicht", "text": "Seit gestern kein Netz", "email": "kunde2@example.org",
+                                                            "vorname": "K.", "nachname": "Zwei", "art": "kein_mitglied", "sparte": "BW", "prioritaet": "hoch"}, self.key)
         self.assertEqual(code, 200, x)
         nr = x["ticket"]
         self.assertEqual(api(SRV.basis, "GET", "/api/v1/ticket?nr=" + nr, schluessel=self.key)[1]["status"], "neu")
@@ -457,16 +507,27 @@ class Version50(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertIn(b"Zugangskarte", html)
         a.req("/api/ppsk", {"sparte": "BW", "art": "fehlende"})
+        a.req("/api/seiten-design", {"art": "portal", "design": {"spamschutz": False}})     # Rechenaufgabe: eigener Test (Zeit)
         n = len(SMTP.mails)
-        code, x = s.req("/portal/ticket", {"betreff": "Frage", "text": "Hallo", "email": "paul@example.org", "sparte": "BW", "parzelle": "42"})
-        self.assertEqual(code, 200, x)
+        paul = {"vorname": "Paul", "nachname": "Portal", "email": "paul@example.org", "sparte": "BW", "parzelle": "42"}
+        code, x = s.req("/portal/ticket", {"betreff": "Frage", "text": "Hallo", **paul, "nachname": "Falsch"})
+        self.assertEqual(code, 400)                                      # Name passt nicht zum Mitglied
+        self.assertNotIn("Portal", x["fehler"])
+        code, x = s.req("/portal/ticket", {"betreff": "Frage", "text": "Hallo", **paul, "vorname": "PAUL "})
+        self.assertEqual(code, 200, x)                                   # Groß-/Kleinschreibung und Leerzeichen egal
         nr = x["ticket"]
-        self.assertEqual(s.req("/portal/status", {"nr": nr, "email": "falsch@example.org"})[0], 400)
-        code, x = s.req("/portal/status", {"nr": nr, "email": "paul@example.org"})
+        code, x = s.req("/portal/ticket", {"betreff": "WLAN buchen?", "art": "interessent", "vorname": "Ina", "nachname": "Neu", "email": "ina@example.org", "sparte": "BW", "parzelle": "77"})
+        self.assertEqual(code, 200, x)
+        _, tl = a.req("/api/tickets?status=alle")
+        ina = next(z for z in tl["zeilen"] if z["nr"] == x["ticket"])
+        self.assertEqual((ina["kontakt"]["art"], ina["parzelle"]), ("interessent", ""))
+        self.assertEqual(s.req("/portal/status", {"nr": nr, "email": "falsch@example.org", "vorname": "Paul", "nachname": "Portal"})[0], 400)
+        self.assertEqual(s.req("/portal/status", {"nr": nr, "email": "paul@example.org", "vorname": "Paul", "nachname": "Portal"})[0], 400)  # Mitglied: Sparte/Parzelle fehlen
+        code, x = s.req("/portal/status", {"nr": nr, **paul})
         self.assertEqual((code, x["status"]), (200, "neu"))
-        code, x = s.req("/portal/zugang", {"sparte": "BW", "parzelle": "42", "email": "falsch@example.org"})
+        code, x = s.req("/portal/zugang", {**paul, "email": "falsch@example.org"})
         self.assertEqual(code, 200)
-        code, x = s.req("/portal/zugang", {"sparte": "BW", "parzelle": "42", "email": "paul@example.org"})
+        code, x = s.req("/portal/zugang", paul)
         self.assertEqual(code, 200)
         mails = self._mails_seit(n, 2)
         karte = [m for m in mails if "Zugangskarte" in m["text"]]
@@ -475,11 +536,17 @@ class Version50(unittest.TestCase):
         self.assertIn("application/pdf", karte[0]["text"])
         self.assertNotIn("SN", json.dumps(x))                       # kein Passwort in der Antwort
         for _ in range(6):
-            code, x = s.req("/portal/zugang", {"sparte": "BW", "parzelle": "42", "email": "paul@example.org"})
+            code, x = s.req("/portal/zugang", paul)
         self.assertEqual(code, 400)                                  # Grenze
 
     def test_app_zugang(self):
         a = self.a
+        alt, APP_TOKEN["wert"] = APP_TOKEN["wert"], None
+        code, x = api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "admin", "passwort": PASSWORT})
+        if not alt:
+            self.assertTrue(x.get("zugangstoken"), x)                  # ohne eingerichteten Token keine App-Anmeldung
+        APP_TOKEN["wert"] = alt
+        app_token(a)
         a.req("/api/benutzer-speichern", {"neu": True, "name": "appnutzer", "passwort": "App-Passwort-123", "passwort2": "App-Passwort-123", "art": "bereiche",
                                           "bereiche": {"tickets": "schreiben", "start": "lesen"}})
         self.assertEqual(api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "appnutzer", "passwort": "falsch-falsch"})[0], 401)
@@ -490,6 +557,7 @@ class Version50(unittest.TestCase):
         def mit_app(pfad, body=None):
             r = urllib.request.Request(SRV.basis + pfad, data=json.dumps(body).encode() if body is not None else None, method="POST" if body is not None else "GET")
             r.add_header("Authorization", "Bearer " + tok)
+            r.add_header("X-App-Token", APP_TOKEN["wert"])
             r.add_header("Content-Type", "application/json")
             try:
                 with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(r) as o:
@@ -512,6 +580,13 @@ class Version50(unittest.TestCase):
 
     def test_android_app_ablauf(self):
         """genau die Aufrufe, die die Android-App macht"""
+        app_token(self.a)
+        self.assertEqual(api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "admin", "passwort": PASSWORT, "geraet": "x"})[0], 200)
+        t = APP_TOKEN["wert"]; APP_TOKEN["wert"] = "snz_falsch"
+        code, x = api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "admin", "passwort": PASSWORT, "geraet": "x"})
+        APP_TOKEN["wert"] = t
+        self.assertEqual(code, 401)
+        self.assertTrue(x["zugangstoken"])
         code, x = api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "admin", "passwort": PASSWORT, "geraet": "Tablet Test"})
         self.assertEqual(code, 200, x)
         tok = x["token"]

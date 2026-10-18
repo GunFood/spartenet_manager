@@ -17,7 +17,8 @@ API_RECHTE = {"ereignis": "Ereignisse melden (startet Automationen, z. B. Zahlun
               "buchen": "Tarif buchen / Buchung entfernen (im Manager)",
               "lesen": "Buchungen und Tarife lesen",
               "mitglieder": "Mitglieder anlegen/ändern und lesen",
-              "tickets": "Anfragen (Tickets) anlegen und Status abfragen"}
+              "tickets": "Anfragen (Tickets) anlegen und Status abfragen – nur mit passenden Mitgliedsdaten (Vorname, Nachname, E-Mail, Sparte, Parzelle) oder als „kein_mitglied“/„interessent“",
+              "tickets_ungeprueft": "Anfragen ohne Mitglieds-Prüfung anlegen (z. B. eigenes geprüftes Kontaktformular)"}
 API_PRO_MINUTE = max(10, int(os.environ.get("SPARTENET_API_PRO_MINUTE", "120") or 120))
 API_MAX_BYTES = 64_000
 _API_ZAEHLER = {}
@@ -147,9 +148,31 @@ def api_anfrage(methode, pfad, q, roh, kopf):
             roh_t = {k: b[k] for k in ("betreff", "text", "kategorie", "prioritaet", "sparte", "parzelle", "name", "email", "telefon") if k in b}
             if roh_t.get("prioritaet") not in (None, *T_PRIO):
                 raise ApiFehler(400, "„prioritaet“: niedrig, normal, hoch oder dringend.")
+            art = str(b.get("art") or "mitglied")
+            if art not in KONTAKT_ARTEN:
+                raise ApiFehler(400, "„art“: mitglied, kein_mitglied oder interessent.")
+            vorname, nachname = str(b.get("vorname") or "").strip(), str(b.get("nachname") or "").strip()
+            if vorname or nachname:
+                roh_t["name"] = f"{vorname} {nachname}".strip()
+            mid = None
+            if "tickets_ungeprueft" not in (s.get("rechte") or []):
+                if not (vorname and nachname and str(b.get("email") or "").strip()):
+                    raise ApiFehler(400, "Pflicht: „vorname“, „nachname“ und „email“ (Mitglieder zusätzlich „sparte“ und „parzelle“).")
+                if art == "mitglied":
+                    mid, _m = mitglied_passt(d, vorname, nachname, b.get("email"), str(b.get("sparte") or "").upper(), str(b.get("parzelle") or ""))
+                    if not mid:
+                        raise ApiFehler(400, "Die Angaben passen zu keinem Mitglied (Vorname, Nachname, E-Mail, Sparte, Parzelle). "
+                                             "Für Nicht-Mitglieder „art“: „kein_mitglied“ oder „interessent“ mitschicken.")
+                else:
+                    roh_t.pop("parzelle", None)
             with SCHREIB_SPERRE:
                 d = lade()
                 tid, t = ticket_anlegen(d, roh_t, f"API:{s.get('name') or i}", f"API:{s.get('name') or i}")
+                k = t.setdefault("kontakt", {})
+                k.update(art=art, geprueft=bool(mid), **({"vorname": vorname, "nachname": nachname} if vorname or nachname else {}))
+                if mid:
+                    k["mitglied"] = mid
+                speichere(d)
             antwort = {"ok": True, "ticket": t["nr"], "status": T_STATUS[t["status"]]}
         elif (pfad, methode) == ("/api/v1/ticket", "GET"):
             _recht(s, "tickets")

@@ -9,19 +9,6 @@ CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 
 
 
 
-def login_seite(d):
-    """Anmeldeseite mit Hinweisen zu automatischem Abmelden und gemerktem Zwei-Faktor-Code"""
-    s = sicherheit(d)
-    ab = s["abmelden_minuten"]
-    merken = s["2fa_merken_stunden"]
-    try:
-        portal = '<a href="/portal" style="color:#cfe9c6">Pächter-Seite</a>' if portal_einstellungen(d)["aktiv"] else "Kleingarten-WLAN"
-    except Exception:
-        portal = "Kleingarten-WLAN"
-    return (LOGIN_HTML.replace("__VERSION__", VERSION).replace("__PORTAL__", portal)
-            .replace("__MERKEN__", f"Dieses Gerät fragt danach {dauer_text_kurz(merken)} lang nicht erneut." if merken else "")
-            .replace("__ABMELDEN_TEXT__", (f"Aus Sicherheitsgründen werden Sie nach {ab} Minuten ohne Aktivität automatisch abgemeldet. " if ab else "")
-                     + "Ohne „Angemeldet bleiben“ endet die Anmeldung beim Schließen des Browsers."))
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
@@ -112,7 +99,7 @@ class Handler(BaseHTTPRequestHandler):
             return None
         if self._fern() and sitzung_ok(d, self._sitzung()):
             return HANDY_NAME, konto_rechte(d, HANDY_NAME)
-        app = app_token_pruefen(d, self.headers.get("Authorization"))
+        app = app_token_pruefen(d, self.headers.get("Authorization"), self.headers.get("X-App-Token"))
         if app:
             self._app_zugang = True
             return app
@@ -129,7 +116,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if not portal_einstellungen(d)["aktiv"]:
                 return self._send(404, b"<!doctype html><meta charset='utf-8'><title>Nicht gefunden</title><p style='font-family:sans-serif;padding:24px'>Diese Seite ist nicht eingeschaltet.</p>", "text/html")
-            return self._send(200, PORTAL_HTML.encode("utf-8"), "text/html")
+            return self._send(200, portal_seite(d).encode("utf-8"), "text/html")
         b = None
         if methode == "POST":
             try:
@@ -187,7 +174,7 @@ class Handler(BaseHTTPRequestHandler):
                 b = json.loads(roh or b"{}")
                 d = lade()
                 with SCHREIB_SPERRE:
-                    antwort = app_anmelden(d, b if isinstance(b, dict) else {}, self._quelle())
+                    antwort = app_anmelden(d, b if isinstance(b, dict) else {}, self._quelle(), self.headers.get("X-App-Token"))
                 return self._send(200 if antwort.get("ok") else 401, antwort)
             except (ValueError, UnicodeDecodeError):
                 return self._send(400, {"ok": False, "fehler": "Ungültiges JSON."})
@@ -195,9 +182,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(401, {"ok": False, "fehler": str(e)})
         if u.path.rstrip("/") in ("/api/v1/app/funktionen", "/api/v1/app/info") and methode == "GET":
             d = lade()
-            wer = app_token_pruefen(d, self.headers.get("Authorization"))
+            wer = app_token_pruefen(d, self.headers.get("Authorization"), self.headers.get("X-App-Token"))
             if not wer:
-                return self._send(401, {"ok": False, "fehler": "App-Schlüssel fehlt oder ist ungültig (Authorization: Bearer sna_…)."}, extra={"WWW-Authenticate": "Bearer"})
+                return self._send(401, {"ok": False, "fehler": "App-Schlüssel oder Zugangstoken fehlt bzw. ist ungültig (Authorization: Bearer sna_… und X-App-Token)."}, extra={"WWW-Authenticate": "Bearer"})
             if u.path.rstrip("/").endswith("info"):
                 return self._send(200, {"ok": True, "version": VERSION, "ich": ich_daten(*wer), "uebersicht": akt_app_uebersicht(d, *wer),
                                         "abmelden_minuten": sicherheit(d)["app_abmelden_minuten"]})
@@ -220,6 +207,15 @@ class Handler(BaseHTTPRequestHandler):
             return self._api_v1("GET", u)
         if u.path == "/portal" or u.path.startswith("/portal/"):
             return self._portal("GET", u)
+        if u.path.startswith("/seitenbild/"):     # öffentlich: nur die für Anmelde-/Pächter-Seite gewählten Bilder
+            d = self._lade()
+            if d is None:
+                return
+            teile = u.path.split("/")
+            bild = seitenbild(d, teile[2], teile[3]) if len(teile) == 4 else None
+            if not bild:
+                return self._send(404, {"fehler": "nicht gefunden"})
+            return self._send(200, bild[0], bild[1])
         d = self._lade()
         if d is None:
             return
@@ -231,7 +227,7 @@ class Handler(BaseHTTPRequestHandler):
             ich = json.dumps(ich_daten(*wer)).replace("<", "\\u003c")
             return self._send(200, HTML.replace("__TOKEN__", TOKEN).replace("__VERSION__", VERSION).replace("__FERN__", "1" if fern_nur else "0")
                               .replace("__SITZUNG_TAGE__", str(SITZUNG_TAGE)).replace("__ABMELDEN__", str(0 if fern_nur else sicherheit(d)["abmelden_minuten"]))
-                              .replace("__ICH__", ich).encode("utf-8"), "text/html")
+                              .replace("__ICH__", ich).replace("__PROFIL__", json.dumps(konto_profil(d, wer[0]), ensure_ascii=False).replace("<", "\\u003c")).encode("utf-8"), "text/html")
         if not wer:
             return self._send(401, {"fehler": "anmelden"})
         if not self._token_ok():
@@ -546,6 +542,10 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/wochenbericht": lambda: akt_wochenbericht(d, b, ich),
                 "/api/portal-einstellungen": lambda: akt_portal_einstellungen(d, b, ich),
                 "/api/app-uebersicht": lambda: akt_app_uebersicht(d, ich, rechte),
+                "/api/gestaltung": lambda: akt_gestaltung(d, ich),
+                "/api/seiten-design": lambda: akt_seiten_design(d, b or {}, ich),
+                "/api/seiten-vorschau": lambda: akt_seiten_vorschau(d, b or {}),
+                "/api/ansicht-profile": lambda: akt_ansicht_profile(d, b or {}, ich),
                 "/api/logos": lambda: akt_logos(d, sp_erl),
                 "/api/logo-bild": lambda: akt_logo_bild(d, q, sp_erl),
                 "/api/logo-waehlen": lambda: akt_logo_waehlen(d, b or {}, ich, sp_erl),
@@ -554,6 +554,7 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/laufzeit-starten": lambda: akt_laufzeit_starten(d, b or {}, ich, sp_erl),
                 "/api/zugang": lambda: akt_zugang(d, b or {}, ich, sp_erl),
                 "/api/laufzeit-einstellungen": lambda: akt_laufzeit_einstellungen(d, b or {}, ich),
+                "/api/app-zugangstoken": lambda: akt_app_zugangstoken(d, b or {}, ich),
                 "/api/aktiv": lambda: {"ok": True, "abmelden_minuten": sicherheit(d)["abmelden_minuten"], "log": []},
                 "/api/2fa-vergessen": lambda: akt_2fa_vergessen(d, ich),
                 "/api/app-geraete": lambda: akt_app_geraete(d, ich, rechte["art"] == "admin" and q.get("alle", ["0"])[0] == "1"),

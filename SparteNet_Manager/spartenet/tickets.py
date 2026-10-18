@@ -9,7 +9,7 @@ from .mitglieder import *  # noqa: F401,F403 – alle Namen der vorherigen Modul
 
 T_STATUS = {"neu": "neu", "bearbeitung": "in Bearbeitung", "wartet": "wartet auf Rückmeldung", "erledigt": "erledigt"}
 T_PRIO = {"niedrig": "niedrig", "normal": "normal", "hoch": "hoch", "dringend": "dringend"}
-T_KATEGORIEN = ["Störung / WLAN geht nicht", "Buchung / Tarif", "Rechnung / Zahlung", "Zugangsdaten / Passwort", "Kündigung", "Sonstiges"]
+T_KATEGORIEN = ["Störung / WLAN geht nicht", "Buchung / Tarif", "Rechnung / Zahlung", "Zugangsdaten / Passwort", "Kündigung", "Interessent", "Sonstiges"]
 
 
 def tickets_daten(d):

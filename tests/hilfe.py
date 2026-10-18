@@ -105,10 +105,15 @@ class Sitzung:
         return 200, json.loads(re.search(r"const ICH=(\{.*?\});", html).group(1))
 
 
+APP_TOKEN = {"wert": None}   # App-Zugangstoken für Aufrufe der App-Schnittstelle (wird in den Tests erzeugt)
+
+
 def api(basis, methode, pfad, body=None, schluessel=None):
     r = urllib.request.Request(basis + pfad, data=json.dumps(body).encode() if body is not None else None, method=methode)
     if schluessel:
         r.add_header("Authorization", "Bearer " + schluessel)
+    if APP_TOKEN["wert"] and (pfad.startswith("/api/v1/app/") or (schluessel or "").startswith("sna_")):
+        r.add_header("X-App-Token", APP_TOKEN["wert"])
     r.add_header("Content-Type", "application/json")
     try:
         with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(r, timeout=30) as a:

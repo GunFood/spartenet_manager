@@ -49,6 +49,14 @@ class Speicher(context: Context) {
         if (wert.isNullOrEmpty()) prefs.edit().remove(k).apply() else prefs.edit().putString(k, verschluesseln(wert)).apply()
     }
 
+    /** App-Zugangstoken des Managers (vom Administrator), verschlüsselt je Server */
+    fun zugangstoken(server: String): String? = entschluesseln("zugang_" + schluesselName(server, ""))
+
+    fun zugangstokenSetzen(server: String, wert: String?) {
+        val k = "zugang_" + schluesselName(server, "")
+        if (wert.isNullOrBlank()) prefs.edit().remove(k).apply() else prefs.edit().putString(k, verschluesseln(wert.trim())).apply()
+    }
+
     private fun schluesselName(server: String, benutzer: String): String =
         java.security.MessageDigest.getInstance("SHA-256").digest("$server|$benutzer".toByteArray()).joinToString("") { "%02x".format(it) }.take(24)
 

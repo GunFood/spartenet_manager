@@ -40,7 +40,23 @@ nav .nkat i{font-style:normal}
 .mpunkt{padding:8px 10px;font-size:14.5px}.mpunkt.aktiv{background:var(--lgreen);font-weight:600}
 .munter{padding:5px 10px 5px 22px;font-size:13px;color:var(--muted);position:relative}.munter::before{content:"";position:absolute;left:10px;top:50%;width:5px;height:5px;border-radius:50%;background:var(--line);transform:translateY(-50%)}
 .mtreffer{font-size:12px;color:var(--muted);padding:2px 10px 6px}
-.karte.blink{animation:kblink 1.8s ease}@keyframes kblink{0%,60%{box-shadow:0 0 0 3px var(--green)}100%{box-shadow:none}}
+.karte.blink{animation:kblink 1.8s ease}
+.p-zu>*:not(.p-kopf){display:none!important}
+.gs-raster{display:grid;grid-template-columns:minmax(300px,420px) minmax(0,1fr);gap:16px;align-items:start}@media (max-width:980px){.gs-raster{grid-template-columns:1fr}}
+.gs-vor{position:sticky;top:60px}.gs-rahmen{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--bg2);height:620px;position:relative}
+.gs-rahmen iframe{border:0;width:1280px;height:900px;transform-origin:0 0;background:#fff}
+.gs-gr.aktiv{border-color:var(--green);font-weight:600}
+.gs-gruppe{border:1px solid var(--line);border-radius:10px;margin:0 0 10px;padding:0 12px}.gs-gruppe>summary{cursor:pointer;font-weight:600;padding:10px 0}
+.gs-gruppe .gs-f{margin:0 0 10px}.gs-gruppe .gs-f label{font-size:13px}.gs-f input[type=color]{width:60px;height:34px;padding:2px}
+.gs-zeile2{display:flex;gap:8px;align-items:center}.gs-zeile2 input[type=range]{flex:1}
+.ap-baum{margin-top:12px;border:1px solid var(--line);border-radius:10px;padding:6px}
+.ap-z{display:grid;grid-template-columns:70px 46px 44px minmax(120px,1fr) 360px;gap:6px;align-items:center;padding:4px 6px;border-radius:8px}
+.ap-z:hover{background:var(--hover)}.ap-nr{font-variant-numeric:tabular-nums;font-weight:600}.ap-kn{color:var(--muted);font-size:12px}
+.ap-z input[type=text]{min-height:32px;padding:5px 8px}.ap-z .ak{display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:flex-start}
+.ap-z button.mini{padding:4px 8px;min-height:30px}.ap-z label{display:flex;gap:4px;align-items:center;margin:0;font-size:12.5px;white-space:nowrap}.ap-z label input{width:auto;min-height:0}
+.ap-b{background:var(--bg2);margin-top:6px}.ap-r{margin-left:22px}.ap-k{margin-left:44px}.ap-t{margin-left:66px}.ap-aus{opacity:.5}
+.ap-hint{margin:2px 6px 8px 160px}.ap-hint textarea{width:100%;font:inherit;font-size:13px}
+@media (max-width:900px){.ap-z{grid-template-columns:62px 1fr}.ap-kn,.ap-z .ic{display:none}.ap-z .ak{grid-column:1/-1}.ap-r,.ap-k,.ap-t{margin-left:8px}.ap-hint{margin-left:8px}}.p-klapp{cursor:pointer}.p-klapp::after{content:" ▾";color:var(--muted);font-size:.8em}.p-zu .p-klapp::after{content:" ▸"}@keyframes kblink{0%,60%{box-shadow:0 0 0 3px var(--green)}100%{box-shadow:none}}
 @media (pointer:coarse){.mpunkt{padding:12px 10px}.munter{padding:9px 10px 9px 22px}}
 main{max-width:var(--main-b,1200px);margin:0 auto;padding:22px;position:relative}
 #griff{position:absolute;top:0;right:0;width:12px;height:100%;cursor:ew-resize;z-index:5}#griff::after{content:"";position:absolute;top:calc(var(--vh,100vh) / 2);left:4px;width:4px;height:60px;margin-top:-30px;border-radius:3px;background:#c5cec1;opacity:.6}
@@ -583,16 +599,16 @@ nav{position:sticky;top:0;z-index:20}
 
 <section id="benutzer"><div class="karte"><h2>Mein Konto</h2><div class="kacheln" id="bn_ich"></div>
 <div class="tab" id="bn_ich_liste" style="--tab-h:420px"></div>
-<div id="bn_ich_pw"><h3>Eigenes Passwort ändern</h3><div class="reihe" style="max-width:820px"><div><label for="bn_alt">Bisheriges Passwort</label><input id="bn_alt" type="password" autocomplete="current-password"></div>
+<div id="bn_ich_pw" data-teil="1"><h3>Eigenes Passwort ändern</h3><div class="reihe" style="max-width:820px"><div><label for="bn_alt">Bisheriges Passwort</label><input id="bn_alt" type="password" autocomplete="current-password"></div>
 <div><label for="bn_neu1">Neues Passwort (mind. 12 Zeichen)</label><input id="bn_neu1" type="password" autocomplete="new-password"></div><div><label for="bn_neu2">Neues Passwort wiederholen</label><input id="bn_neu2" type="password" autocomplete="new-password"></div></div>
 <div class="knoepfe"><button class="k p" onclick="bnEigenesPw()">Passwort ändern</button></div></div>
-<div id="bn_2fa"><h3>Zwei-Faktor-Anmeldung</h3><p class="hint" id="bn_2fa_st"></p>
+<div id="bn_2fa" data-teil="1"><h3>Zwei-Faktor-Anmeldung</h3><p class="hint" id="bn_2fa_st"></p>
 <div class="knoepfe"><button class="k p" id="bn_2fa_ein" onclick="zfStart()">Einrichten</button><button class="k" id="bn_2fa_aus" onclick="zfAus()">Ausschalten</button><button class="k" id="bn_2fa_vergessen" onclick="zfVergessen()" title="Alle Browser und Apps, die sich den Code gemerkt haben, fragen beim nächsten Anmelden wieder danach">Gemerkte Geräte vergessen</button></div>
 <div id="bn_2fa_neu" hidden><div style="display:flex;gap:18px;flex-wrap:wrap;align-items:center"><div id="bn_2fa_qr" style="width:200px;background:#fff;padding:8px;border:1px solid var(--line);border-radius:8px"></div>
 <div><p class="hint">1. QR-Code mit der Authenticator-App scannen (z. B. Google/Microsoft Authenticator, Aegis, 2FAS) – oder den Schlüssel eintippen:<br><b class="mono" id="bn_2fa_geheim"></b></p>
 <label for="bn_2fa_code">2. Angezeigten Code eingeben</label><div style="display:flex;gap:8px"><input id="bn_2fa_code" inputmode="numeric" maxlength="6" style="max-width:140px"><button class="k p" onclick="zfBestaetigen()">Bestätigen</button></div></div></div></div>
 <div id="bn_2fa_notfall" hidden></div></div>
-<div id="bn_app"><h3>Apps und Geräte</h3><p class="hint">Eine App (z. B. eine eigene Android-App) meldet sich mit Ihrem Benutzernamen und Passwort an (<span class="mono">POST /api/v1/app/anmelden</span>) und bekommt einen eigenen Schlüssel – mit genau Ihren Rechten. Verlorenes Handy? Hier das Gerät entfernen.</p><div class="tab" id="bn_app_tab"></div><div class="log" id="log_app"></div></div>
+<div id="bn_app" data-teil="1"><h3>Apps und Geräte</h3><p class="hint">Eine App (z. B. eine eigene Android-App) meldet sich mit Ihrem Benutzernamen und Passwort an (<span class="mono">POST /api/v1/app/anmelden</span>) und bekommt einen eigenen Schlüssel – mit genau Ihren Rechten. Verlorenes Handy? Hier das Gerät entfernen.</p><div class="tab" id="bn_app_tab"></div><div class="log" id="log_app"></div></div>
 <p class="hint" id="bn_admin_hint" hidden>Das Konto „admin“ meldet sich mit dem Manager-Passwort an. Geändert wird es in der Docker-Konfiguration (Secret spartenet_password) – danach den Manager neu starten.</p>
 <div class="knoepfe"><button class="k" onclick="abmelden()">Abmelden</button></div><div class="log" id="log_bni"></div></div>
 <div class="karte bn-admin"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h3 style="margin:0;flex:1">Benutzerkonten</h3><button class="k" onclick="bnLaden()">Aktualisieren</button></div>
@@ -604,7 +620,10 @@ nav{position:sticky;top:0;z-index:20}
 <div class="reihe"><div><label for="si_ab">Browser automatisch abmelden</label><select id="si_ab"><option value="0">nie</option><option value="10">nach 10 Minuten</option><option value="15">nach 15 Minuten</option><option value="30">nach 30 Minuten</option><option value="60">nach 1 Stunde</option><option value="120">nach 2 Stunden</option><option value="240">nach 4 Stunden</option><option value="480">nach 8 Stunden</option></select></div>
 <div><label for="si_app">Android-App automatisch abmelden</label><select id="si_app"><option value="0">nie</option><option value="15">nach 15 Minuten</option><option value="30">nach 30 Minuten</option><option value="60">nach 1 Stunde</option><option value="240">nach 4 Stunden</option><option value="1440">nach 1 Tag</option><option value="10080">nach 7 Tagen</option></select></div>
 <div><label for="si_merk">Zwei-Faktor-Code merken</label><select id="si_merk"><option value="0">nein – immer abfragen</option><option value="8">8 Stunden</option><option value="12">12 Stunden</option><option value="24">1 Tag</option><option value="72">3 Tage</option><option value="168">7 Tage</option><option value="336">14 Tage</option><option value="720">30 Tage</option></select></div></div>
-<div class="knoepfe"><button class="k p" onclick="siSpeichernAnmeldung()">Speichern</button></div><div class="log" id="log_sian"></div></div>
+<div class="knoepfe"><button class="k p" onclick="siSpeichernAnmeldung()">Speichern</button></div><div class="log" id="log_sian"></div>
+<h3 style="margin-top:18px">App-Zugangstoken</h3><p class="hint">Schützt die Schnittstelle der Android-App zusätzlich: Die App fragt beim Einrichten nach diesem Token und schickt ihn bei jeder Anfrage mit. Ohne gültigen Token kann sich keine App anmelden oder Daten abrufen. Neu erzeugen macht den alten ungültig – alle Apps müssen den neuen eingeben. Gespeichert wird nur eine Prüfsumme; der Token wird nur einmal angezeigt.</p>
+<p id="zt_st" class="status"></p><div id="zt_neu" hidden style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input id="zt_wert" readonly class="mono" style="max-width:420px"><button class="k" onclick="navigator.clipboard&&navigator.clipboard.writeText($('zt_wert').value).then(()=>$('log_zt').textContent='✔ Kopiert.')">Kopieren</button></div>
+<div class="knoepfe"><button class="k" onclick="ztNeu()">Neuen Zugangstoken erzeugen</button><button class="k" onclick="ztAus()">App-Zugang sperren</button></div><div class="log" id="log_zt"></div></div>
 <div class="karte bn-admin"><h3>Neues Benutzerkonto</h3>
 <div class="reihe"><div><label for="bn_name">Benutzername</label><input id="bn_name" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="z. B. vorstand.buchenweg"></div>
 <div><label for="bn_anz">Name (Anzeige, optional)</label><input id="bn_anz" placeholder="z. B. Maria Muster, Vorstand Buchenweg"></div>
@@ -614,6 +633,25 @@ nav{position:sticky;top:0;z-index:20}
 <div class="knoepfe"><button class="k p" onclick="bnAnlegen()">Konto anlegen</button><button class="k" onclick="bnVorschlag()">Passwort vorschlagen</button><span id="bn_vorschlag" class="mono"></span></div><div class="log" id="log_bnn"></div></div>
 </section>
 
+<section id="gestaltung">
+<div class="karte" data-bereich="gestaltung"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0;flex:1">Anmeldeseite gestalten</h2><span class="status" id="gs_login_st"></span></div>
+<p class="hint">Texte, Farben, Schrift, Logo und Hintergrundbild der Anmeldeseite. Bilder kommen aus den <b>Unterlagen</b> (am besten Ordner „Logos“). Nur Text – kein eigenes HTML. Rechts die Vorschau.</p>
+<div class="gs-raster"><div id="gs_login_form"></div><div class="gs-vor"><div class="knoepfe" style="margin-top:0"><button class="k gs-gr aktiv" data-art="login" data-b="1280">PC</button><button class="k gs-gr" data-art="login" data-b="390">Handy</button></div><div class="gs-rahmen"><iframe id="gs_login_vor" sandbox="allow-scripts" title="Vorschau Anmeldeseite"></iframe></div></div></div>
+<div class="knoepfe gs-schreib"><button class="k p" onclick="gsSpeichern('login')">Speichern</button><button class="k" onclick="gsStandard('login')">Standard wiederherstellen</button></div><div class="log" id="log_gs_login"></div></div>
+<div class="karte" data-bereich="gestaltung"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0;flex:1">Pächter-Seite gestalten</h2><a class="k" href="/portal" target="_blank" rel="noopener" id="gs_portal_link">Pächter-Seite öffnen</a></div>
+<p class="hint">Aussehen und Texte der öffentlichen Seite <span class="mono">/portal</span>. Einschalten und die einzelnen Funktionen freigeben: <b>Anfragen → Pächter-Seite</b>. Anfragen als Mitglied gehen nur mit Vorname, Nachname, E-Mail, Sparte und Parzelle, die zu einem gespeicherten Mitglied passen.</p>
+<div class="gs-raster"><div id="gs_portal_form"></div><div class="gs-vor"><div class="knoepfe" style="margin-top:0"><button class="k gs-gr aktiv" data-art="portal" data-b="1280">PC</button><button class="k gs-gr" data-art="portal" data-b="390">Handy</button></div><div class="gs-rahmen"><iframe id="gs_portal_vor" sandbox="allow-scripts" title="Vorschau Pächter-Seite"></iframe></div></div></div>
+<div class="knoepfe gs-schreib"><button class="k p" onclick="gsSpeichern('portal')">Speichern</button><button class="k" onclick="gsStandard('portal')">Standard wiederherstellen</button></div><div class="log" id="log_gs_portal"></div></div>
+<div class="karte" data-bereich="gestaltung"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0;flex:1">Menü und Ansichtsprofile</h2></div>
+<p class="hint">Jedes Profil hat einen eigenen Menübaum: <b>Bereiche</b> (1), <b>Reiter</b> (1.1) und <b>Karten</b> auf der Seite (1.1.1) umbenennen, mit ↑ ↓ sortieren, ausblenden; bei Karten auch den Hinweistext ändern und „eingeklappt“ zeigen. Die Kennnummer (B…, R…, K…) bleibt immer gleich. Unten jedem Konto ein Profil zuweisen. <b>Ausblenden ist nur Ansicht</b> – was ein Konto darf, regeln weiter die Rechte. „Mein Konto“ und „Eigenes Passwort ändern“ bleiben immer sichtbar. Notausgang: Adresse mit <span class="mono">#standardansicht</span> öffnen.</p>
+<div class="reihe"><div><label for="ap_wahl">Profil</label><select id="ap_wahl" onchange="apWahl(this.value)"></select></div>
+<div><label for="ap_std">Standard für Konten ohne Profil</label><select id="ap_std"></select></div></div>
+<div class="knoepfe gs-schreib"><button class="k" onclick="apNeu(false)">+ Neues Profil</button><button class="k" onclick="apNeu(true)">Kopieren</button><button class="k" onclick="apUmbenennen()">Umbenennen</button><button class="k" onclick="apLoeschen()">Löschen</button><button class="k" onclick="apZurueck()">Menübaum auf Standard</button><button class="k" onclick="apExport()">Export</button><label class="k" style="margin:0;cursor:pointer">Import …<input type="file" accept=".json,application/json" style="display:none" onchange="apImport(this)"></label></div>
+<div id="ap_baum" class="ap-baum"></div>
+<div class="knoepfe gs-schreib"><button class="k" onclick="apBereichNeu()">+ Bereich</button></div>
+<h3 style="margin-top:18px">Konten und Profile</h3><div class="tab" id="ap_konten"></div>
+<div class="knoepfe gs-schreib"><button class="k p" onclick="apSpeichern()">Profile und Zuordnung speichern</button><button class="k" onclick="apVorschau()">Vorschau in diesem Fenster</button></div><div class="log" id="log_ap"></div></div>
+</section>
 <section id="hilfe"><div class="karte"><h2>Hilfe</h2><p class="hint">
 <b>Schema:</b> Parzelle p auf Steckplatz n → VLAN 1000 + n·100 + p (Buchenweg: Parzelle 25 = VLAN 1125), Netz 10.&lt;Sparten-ID&gt;.p.0/24, Router .1, Geräte .10–.250. Vorstand 2000+n·10+1, Gäste +2, Technik +9. Namen BW-Paz.025, BW-Vorstand, BW-Gäste, BW-Technik.<br><br>
 <b>Neue Sparte:</b> „Planung“ → Zeile anhängen, speichern · „Abgleich“ · „Einrichten“ Schritt 1–4 · Zugangskarten drucken · mit Handy testen.<br><br>
@@ -628,9 +666,9 @@ nav{position:sticky;top:0;z-index:20}
 </main>
 <script>
 const T="__TOKEN__";let LETZT=null,PLAN=null,PLANZ=null,PPSK=null,PPSKSP=null,CODES=[],VMIN=0,EINST={};
-const TABS=[["start","Start"],["verbindung","Verbindung"],["lesen","Auslesen"],["planung","Planung"],["abgleich","Abgleich"],["einrichten","Einrichten"],["uebertragen","Übertragen"],["tarife","Tarife"],["kalkulation","Kalkulation"],["netzplanung","Netzplanung"],["kartendesign","Kartendesign"],["voucher","Gast-Voucher"],["system","Systeminfo"],["daten","Alle Daten"],["unterlagen","Unterlagen"],["mitglieder","Mitglieder"],["rechnungen","Rechnungen"],["tickets","Tickets"],["automationen","Automationen"],["benutzer","Benutzer"],["hilfe","Hilfe"]];
+const TABS=[["start","Start"],["verbindung","Verbindung"],["lesen","Auslesen"],["planung","Planung"],["abgleich","Abgleich"],["einrichten","Einrichten"],["uebertragen","Übertragen"],["tarife","Tarife"],["kalkulation","Kalkulation"],["netzplanung","Netzplanung"],["kartendesign","Kartendesign"],["voucher","Gast-Voucher"],["system","Systeminfo"],["daten","Alle Daten"],["unterlagen","Unterlagen"],["mitglieder","Mitglieder"],["rechnungen","Rechnungen"],["tickets","Tickets"],["automationen","Automationen"],["benutzer","Benutzer"],["gestaltung","Oberfläche gestalten"],["hilfe","Hilfe"]];
 const $=id=>document.getElementById(id);const nav=$("nav");TABS.forEach(([id,t])=>{const b=document.createElement("button");b.textContent=t;b.onclick=()=>zeige(id);b.id="n_"+id;nav.appendChild(b)});
-function zeige(id){if(!reiterErlaubt(id))id=startReiter();rechteHinweis(id);if(id=="start"&&!$("st_k").innerHTML&&typeof EINST!="undefined"&&EINST.konsole_id)startLaden().catch(()=>{});if(id=="verbindung")fernLaden().catch(()=>{});if(location.hash!="#"+id)history.replaceState(null,"","#"+id);setTimeout(()=>{const b=document.querySelector("nav button.aktiv");if(b&&b.scrollIntoView)b.scrollIntoView({inline:"center",block:"nearest"})},0);if(id=="kalkulation"&&!KK)kkLaden().catch(()=>{});if(id=="netzplanung"&&!GP)gpLaden().catch(()=>{});if(id=="netzplanung")ztLaden().catch(()=>{});if(id=="benutzer")bnStart();if(id=="unterlagen")ulLaden().catch(()=>{});if(id=="voucher"&&!VV)vvLaden().catch(()=>{});if(id=="automationen")auLaden().catch(()=>{});if(id=="mitglieder"){mgLaden().catch(()=>{});vtLaden().catch(()=>{});rsLaden().catch(()=>{})}if(id=="tickets"){tkLaden().catch(()=>{});if(ICH.admin)poLaden().catch(()=>{})}if(id=="rechnungen")reLaden().catch(()=>{});if(id=="start")ueLaden().catch(()=>{});if(id=="system")owLaden().catch(()=>{});if(id=="system"&&ICH.admin){upLaden(true).catch(()=>{});siLaden().catch(()=>{})}if(id=="kartendesign"&&!DESIGN)designLaden();if(id=="tarife"&&!TF)tfLaden();if(id=="tarife"&&bereichStufe("buchungen")!="kein")lzLaden().catch(()=>{});if(id=="system"&&!SYS)sysLaden();if(id=="daten"&&!DLISTE)datenListe();document.querySelectorAll("section").forEach(s=>s.classList.toggle("aktiv",s.id==id));document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("aktiv",b.id=="n_"+id));if(typeof navAktualisieren=="function")navAktualisieren(id)}
+function zeige(id){if(!reiterErlaubt(id))id=startReiter();rechteHinweis(id);if(id=="start"&&!$("st_k").innerHTML&&typeof EINST!="undefined"&&EINST.konsole_id)startLaden().catch(()=>{});if(id=="verbindung")fernLaden().catch(()=>{});if(location.hash!="#"+id)history.replaceState(null,"","#"+id);setTimeout(()=>{const b=document.querySelector("nav button.aktiv");if(b&&b.scrollIntoView)b.scrollIntoView({inline:"center",block:"nearest"})},0);if(id=="kalkulation"&&!KK)kkLaden().catch(()=>{});if(id=="netzplanung"&&!GP)gpLaden().catch(()=>{});if(id=="netzplanung")ztLaden().catch(()=>{});if(id=="benutzer")bnStart();if(id=="unterlagen")ulLaden().catch(()=>{});if(id=="voucher"&&!VV)vvLaden().catch(()=>{});if(id=="automationen")auLaden().catch(()=>{});if(id=="mitglieder"){mgLaden().catch(()=>{});vtLaden().catch(()=>{});rsLaden().catch(()=>{})}if(id=="tickets"){tkLaden().catch(()=>{});if(ICH.admin)poLaden().catch(()=>{})}if(id=="rechnungen")reLaden().catch(()=>{});if(id=="start")ueLaden().catch(()=>{});if(id=="system")owLaden().catch(()=>{});if(id=="system"&&ICH.admin){upLaden(true).catch(()=>{});siLaden().catch(()=>{})}if(id=="kartendesign"&&!DESIGN)designLaden();if(id=="gestaltung")gsLaden().catch(()=>{});if(id=="tarife"&&!TF)tfLaden();if(id=="tarife"&&bereichStufe("buchungen")!="kein")lzLaden().catch(()=>{});if(id=="system"&&!SYS)sysLaden();if(id=="daten"&&!DLISTE)datenListe();document.querySelectorAll("section").forEach(s=>s.classList.toggle("aktiv",s.id==id));document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("aktiv",b.id=="n_"+id));if(typeof navAktualisieren=="function")navAktualisieren(id)}
 async function api(pfad,body,logid){const el=logid&&$(logid);const kn=[...document.querySelectorAll("button")].filter(b=>!b.disabled);kn.forEach(b=>b.disabled=true);if(el)el.textContent="… bitte warten (über die Cloud kann das einige Sekunden dauern)";
  try{const r=await fetch(pfad,{method:body===undefined?"GET":"POST",headers:{"X-Token":T,"Content-Type":"application/json"},body:body===undefined?undefined:(body instanceof Blob?body:JSON.stringify(body))});
  if(r.status==401){location.replace(typeof AB_MIN!="undefined"&&AB_MIN>0?"/?abgemeldet=zeit":"/");return new Promise(()=>{})}const d=await r.json().catch(()=>({}));if(d.zweiter_faktor_fehlt&&typeof zeige=="function"&&!document.querySelector("#benutzer.aktiv"))zeige("benutzer");if(r.status==403&&!d.recht){location.reload();return new Promise(()=>{})}if(!r.ok)throw new Error(d.fehler||r.status);if(el)el.textContent=d.log?d.log.join("\n"):"";return d}
@@ -947,6 +985,118 @@ function tfZeigen(){$("tf_tab").innerHTML="<tr><th>Tarif</th><th>Download Mbit/s
  document.querySelectorAll(".tf_in").forEach(e=>e.oninput=e.onchange=()=>{const t=TFL[e.dataset.i];t[e.dataset.k]=(e.dataset.k=="name"||e.dataset.text)?e.value:e.value===""?"":+e.value;const b=tfBereich(t.praefix,t.geraete);
   document.querySelector(`.tf_erg[data-i="${e.dataset.i}"]`).innerHTML=b.fehler?'<span class="fehler">'+esc(b.fehler)+"</span>":esc(b.text)})}
 function tfModusHint(){$("tf_modus_hint").textContent=$("tf_modus").value=="tarif"?"Wie in UniFi unter Einstellungen → QoS: eine Regel „SparteNet-Tarif-Basic“ mit allen Basic-Netzen. Bitte einmal prüfen, ob das Limit dann für jedes Netz einzeln oder für alle zusammen gilt (Geschwindigkeitstest in zwei Basic-Parzellen gleichzeitig). Teilen sich alle die Bandbreite, „eine Regel je Netz“ wählen.":"Jede Parzelle bekommt eine eigene Regel „SparteNet-Netz-BW-Paz.067“ – die Bandbreite ist sicher je Parzelle getrennt, dafür gibt es viele Regeln."}
+/* ---- Oberfläche gestalten: Anmeldeseite, Pächter-Seite, Ansichtsprofile ---- */
+let GS=null;const GSD={login:null,portal:null},GST={},GSB={login:1280,portal:1280};
+const GS_FELDER={
+ login:[["Aufbau",[["layout","Aufbau","sel",[["geteilt","Zweigeteilt – Fläche/Bild links, Anmeldung rechts"],["mittig","Anmeldekarte in der Mitte"]]],["schrift","Schrift","schrift"],["ecken","Ecken-Rundung (px)","zahl",0,32],["dunkel","Dunkelmodus erlauben (folgt dem Gerät)","chk"]]],
+  ["Marke, Logo und Bild",[["marke","Name (Marke)","txt"],["marke_hervor","Hervorgehobener Teil des Namens","txt"],["logo","Logo","bild",1],["hintergrund","Hintergrundbild","bild"],["abdunkeln","Bild abdunkeln (%)","zahl",0,90]]],
+  ["Farben",[["farbe_marke1","Fläche links – oben","farbe"],["farbe_marke2","Fläche links – unten","farbe"],["farbe_glanz","Lichtschein links unten","farbe"],["farbe_knopf","Knopf und Akzent","farbe"],["farbe_grund","Seitenhintergrund","farbe"],["farbe_karte","Anmeldekarte","farbe"],["farbe_text","Schrift","farbe"]]],
+  ["Texte",[["ueberschrift","Überschrift (links)","txt"],["untertitel","Untertitel (links)","area"],["punkte","Punkte links – eine Zeile je Punkt, höchstens 6","liste"],["titel","Titel der Anmeldekarte","txt"],["text","Text der Anmeldekarte","area"],["fuss","Zusätzlicher Hinweis unten","area"],["kontakt","Kontakt bei Problemen","txt"]]],
+  ["Links",[["impressum","Impressum (https://…)","txt"],["datenschutz","Datenschutz (https://…)","txt"],["portal_link","Link zur Pächter-Seite zeigen (wenn eingeschaltet)","chk"]]]],
+ portal:[["Aufbau",[["schrift","Schrift","schrift"],["ecken","Ecken-Rundung (px)","zahl",0,32],["breite","Breite des Inhalts (px)","zahl",480,1100],["dunkel","Dunkelmodus erlauben (folgt dem Gerät)","chk"],["reihenfolge","Reihenfolge der Funktionen","reihe"]]],
+  ["Marke, Logo und Bild",[["marke","Name im Kopf","txt"],["marke_hervor","Hervorgehobener Teil","txt"],["logo","Logo","bild",0],["hintergrund","Hintergrundbild","bild"],["abdunkeln","Bild abdunkeln (%)","zahl",0,90]]],
+  ["Farben",[["farbe_kopf","Kopfzeile","farbe"],["farbe_kopf_text","Schrift in der Kopfzeile","farbe"],["farbe_knopf","Knöpfe und Akzent","farbe"],["farbe_grund","Seitenhintergrund","farbe"],["farbe_karte","Karten","farbe"],["farbe_text","Schrift","farbe"]]],
+  ["Texte",[["titel","Titel","txt"],["text","Einleitung","area"],["t_ticket","Name: Anfrage","txt"],["h_ticket","Hinweis: Anfrage","area"],["t_status","Name: Stand abfragen","txt"],["h_status","Hinweis: Stand abfragen","area"],["t_zugang","Name: Zugangskarte","txt"],["h_zugang","Hinweis: Zugangskarte","area"],["danke","Danke-Text ({nr} = Ticket-Nummer)","txt"]]],
+  ["Anfragen",[["t_mitglied","Auswahl: Mitglied","txt"],["art_kein_mitglied","Auch Nicht-Mitglieder dürfen anfragen","chk"],["t_kein_mitglied","Auswahl: kein Mitglied","txt"],["art_interessent","Auch Interessenten dürfen anfragen","chk"],["t_interessent","Auswahl: Interessent","txt"],["spamschutz","Spamschutz: kleine Rechenaufgabe vor dem Absenden","chk"]]],
+  ["Kontakt und Links",[["kontakt","Kontakt (z. B. Vorstand, E-Mail, Telefon)","txt"],["fuss","Zusätzlicher Text unten","area"],["impressum","Impressum (https://…)","txt"],["datenschutz","Datenschutz (https://…)","txt"]]]]};
+const GS_FUNK={ticket:"Anfrage",status:"Stand abfragen",zugang:"Zugangskarte"};
+function gsDarf(){return ICH.admin||ICH.bereiche.gestaltung=="schreiben"}
+async function gsLaden(){GS=await api("/api/gestaltung");["login","portal"].forEach(a=>{GSD[a]=JSON.parse(JSON.stringify(GS[a]));gsForm(a);gsVorschau(a)});
+ document.querySelectorAll(".gs-schreib").forEach(e=>e.hidden=!gsDarf());$("gs_portal_link").hidden=!GS.portal_aktiv;apStart()}
+function gsBildOpt(art,k,std){return(std?'<option value="standard">SparteNet-Symbol</option>':"")+'<option value="">– kein Bild –</option>'+GS.logos.map(x=>`<option value="${esc(x.id)}">${esc(x.ordner+" / "+x.name)}</option>`).join("")}
+function gsForm(art){const D=GSD[art],id=k=>`gs_${art}_${k}`;
+ $("gs_"+art+"_form").innerHTML=GS_FELDER[art].map(([g,fs],gi)=>`<details class="gs-gruppe"${gi<2?" open":""}><summary>${esc(g)}</summary>`+fs.map(([k,l,t,a,b])=>{const v=D[k];
+  if(t=="chk")return `<div class="gs-f"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="${id(k)}" data-k="${k}" style="width:auto"${v?" checked":""}> ${esc(l)}</label></div>`;
+  if(t=="farbe")return `<div class="gs-f gs-zeile2"><input type="color" id="${id(k)}" data-k="${k}" value="${esc(v)}"><label for="${id(k)}" style="margin:0">${esc(l)}</label></div>`;
+  if(t=="zahl")return `<div class="gs-f"><label for="${id(k)}">${esc(l)}: <b id="${id(k)}_w">${esc(v)}</b></label><input type="range" id="${id(k)}" data-k="${k}" min="${a}" max="${b}" value="${esc(v)}"></div>`;
+  if(t=="sel")return `<div class="gs-f"><label for="${id(k)}">${esc(l)}</label><select id="${id(k)}" data-k="${k}">${a.map(([w,x])=>`<option value="${w}"${w==v?" selected":""}>${esc(x)}</option>`).join("")}</select></div>`;
+  if(t=="schrift")return `<div class="gs-f"><label for="${id(k)}">${esc(l)}</label><select id="${id(k)}" data-k="${k}">${Object.entries(GS.schriften).map(([w,x])=>`<option value="${w}"${w==v?" selected":""}>${esc(x)}</option>`).join("")}</select></div>`;
+  if(t=="bild")return `<div class="gs-f"><label for="${id(k)}">${esc(l)}</label><div style="display:flex;gap:6px"><select id="${id(k)}" data-k="${k}">${gsBildOpt(art,k,a)}</select><button class="k" type="button" onclick="gsBildWahl('${art}','${k}',${a?1:0})" title="Aus den Unterlagen wählen">…</button></div></div>`;
+  if(t=="area")return `<div class="gs-f"><label for="${id(k)}">${esc(l)}</label><textarea id="${id(k)}" data-k="${k}" rows="3" style="width:100%;font:inherit">${esc(v)}</textarea></div>`;
+  if(t=="liste")return `<div class="gs-f"><label for="${id(k)}">${esc(l)}</label><textarea id="${id(k)}" data-k="${k}" data-liste="1" rows="4" style="width:100%;font:inherit">${esc((v||[]).join("\n"))}</textarea></div>`;
+  if(t=="reihe")return `<div class="gs-f"><label>${esc(l)}</label><div style="display:flex;gap:6px">${[0,1,2].map(i=>`<select data-reihe="${i}" data-k="${k}">${Object.entries(GS_FUNK).map(([w,x])=>`<option value="${w}"${(v||[])[i]==w?" selected":""}>${i+1}. ${esc(x)}</option>`).join("")}</select>`).join("")}</div></div>`;
+  return `<div class="gs-f"><label for="${id(k)}">${esc(l)}</label><input type="text" id="${id(k)}" data-k="${k}" value="${esc(v)}"></div>`}).join("")+"</details>").join("");
+ const box=$("gs_"+art+"_form");box.querySelectorAll("select[data-k]:not([data-reihe])").forEach(e=>{if(e.querySelector(`option[value="${CSS.escape(String(D[e.dataset.k]??""))}"]`))e.value=D[e.dataset.k]??""});
+ box.querySelectorAll("[data-k]").forEach(e=>e.oninput=e.onchange=()=>{const k=e.dataset.k;
+  if(e.dataset.reihe!==undefined)D[k]=[...box.querySelectorAll(`[data-reihe][data-k="${k}"]`)].map(x=>x.value);
+  else if(e.type=="checkbox")D[k]=e.checked;else if(e.type=="range"){D[k]=+e.value;$(e.id+"_w").textContent=e.value}else if(e.dataset.liste)D[k]=e.value.split("\n").map(x=>x.trim()).filter(Boolean).slice(0,6);else D[k]=e.value;
+  $("gs_"+art+"_st").textContent="● nicht gespeichert";clearTimeout(GST[art]);GST[art]=setTimeout(()=>gsVorschau(art),350)});
+ if(!gsDarf())box.querySelectorAll("input,select,textarea,button").forEach(e=>e.disabled=true)}
+async function gsBildWahl(art,k,std){const w=await logoWahlFenster(k=="logo"?"Logo wählen":"Hintergrundbild wählen",GSD[art][k],"– kein Bild –");if(w===null)return;
+ const sel=$(`gs_${art}_${k}`);if(![...sel.options].some(o=>o.value==w)){const d=await api("/api/logos");GS.logos=d.logos;sel.innerHTML=gsBildOpt(art,k,std)}sel.value=w;sel.dispatchEvent(new Event("change"))}
+async function gsVorschau(art){try{const r=await fetch("/api/seiten-vorschau",{method:"POST",headers:{"X-Token":T,"Content-Type":"application/json"},body:JSON.stringify({art,design:GSD[art]})});const d=await r.json();
+ if(!r.ok){$("log_gs_"+art).textContent="✖ "+(d.fehler||r.status);return}$("gs_"+art+"_vor").srcdoc=d.html;gsSkalieren(art)}catch(e){}}
+function gsSkalieren(art){const f=$("gs_"+art+"_vor"),rahmen=f.parentElement,b=GSB[art],sk=Math.min(1,rahmen.clientWidth/b);f.style.width=b+"px";f.style.height=(rahmen.clientHeight/sk)+"px";f.style.transform=`scale(${sk})`}
+document.addEventListener("click",e=>{const b=e.target.closest(".gs-gr");if(!b)return;GSB[b.dataset.art]=+b.dataset.b;document.querySelectorAll(`.gs-gr[data-art="${b.dataset.art}"]`).forEach(x=>x.classList.toggle("aktiv",x===b));gsSkalieren(b.dataset.art)});
+addEventListener("resize",()=>{if(GS&&$("gestaltung").classList.contains("aktiv")){gsSkalieren("login");gsSkalieren("portal")}});
+async function gsSpeichern(art){const d=await api("/api/seiten-design",{art,design:GSD[art]},"log_gs_"+art);GS=d;GSD[art]=JSON.parse(JSON.stringify(d[art]));gsForm(art);gsVorschau(art);$("gs_"+art+"_st").textContent="✔ gespeichert"}
+async function gsStandard(art){if(!confirm("Alle Einstellungen dieser Seite auf den Standard zurücksetzen?"))return;const d=await api("/api/seiten-design",{art,zuruecksetzen:true},"log_gs_"+art);GS=d;GSD[art]=JSON.parse(JSON.stringify(d[art]));gsForm(art);gsVorschau(art)}
+
+/* Ansichtsprofile */
+let APROF={},APA="",AZU={},APHINT=null;
+function apId(){const a=new Uint8Array(6);crypto.getRandomValues(a);return [...a].map(x=>x.toString(36).padStart(2,"0")).join("").slice(0,10)}
+function apNorm(b){b=b||{};const n={bereiche:(b.bereiche&&b.bereiche.length)?JSON.parse(JSON.stringify(b.bereiche)):MENUE_BASIS.map(c=>({id:c.k,name:"",icon:"",aus:false,tabs:c.tabs.map(t=>t[0])})),
+ tabs:JSON.parse(JSON.stringify(b.tabs||{})),karten:JSON.parse(JSON.stringify(b.karten||{})),reihenfolge:JSON.parse(JSON.stringify(b.reihenfolge||{})),start:b.start||""};
+ const da=new Set(n.bereiche.flatMap(x=>x.tabs));MENUE_BASIS.forEach(c=>c.tabs.forEach(([t])=>{if(!da.has(t)){(n.bereiche.find(x=>x.id==c.k)||n.bereiche[0]).tabs.push(t)}}));return n}
+function apStart(){APROF={};Object.entries(GS.profile||{}).forEach(([i,p])=>APROF[i]={name:p.name,baum:apNorm(p.baum)});AZU={};GS.konten.forEach(k=>AZU[k.name]=k.profil||"");
+ if(!APROF[APA])APA=Object.keys(APROF)[0]||"";apListe();$("ap_std").value=GS.standardprofil||"";apZeigen();apKonten()}
+function apListe(){const o=Object.entries(APROF).sort((a,b)=>a[1].name.localeCompare(b[1].name)).map(([i,p])=>`<option value="${i}">${esc(p.name)}</option>`).join("");
+ $("ap_wahl").innerHTML=o||'<option value="">– noch kein Profil –</option>';$("ap_wahl").value=APA;$("ap_std").innerHTML='<option value="">Standardansicht (ohne Profil)</option>'+o}
+function apWahl(i){APA=i;APHINT=null;apZeigen()}
+function apEinh(t,B){const ord=(B.reihenfolge||{})[t]||[];return EINH.filter(u=>u.tab==t).sort((a,b)=>{const ia=ord.indexOf(a.id),ib=ord.indexOf(b.id);return(ia<0?1e6+a.pos:ia)-(ib<0?1e6+b.pos:ib)})}
+function apTabStd(t){return(MENUE_BASIS.flatMap(c=>c.tabs).find(x=>x[0]==t)||[t,t])[1]}
+function apKarteZeile(u,B,nr,kl){const x=B.karten[u.id]||{};return `<div class="ap-z ${kl}${x.aus?" ap-aus":""}"><span class="ap-nr">${nr}</span><span class="ap-kn">${u.nr}</span><span class="ic"></span><input type="text" maxlength="80" value="${esc(x.name||"")}" placeholder="${esc(u.std)}" data-a="k-name" data-u="${esc(u.id)}">`
+ +`<span class="ak"><button class="k mini" data-a="k-hoch" data-u="${esc(u.id)}" title="nach oben">↑</button><button class="k mini" data-a="k-runter" data-u="${esc(u.id)}" title="nach unten">↓</button><label title="${u.pflicht?"bleibt immer sichtbar":""}"><input type="checkbox" data-a="k-aus" data-u="${esc(u.id)}"${x.aus?" checked":""}${u.pflicht?" disabled":""}> aus</label><label><input type="checkbox" data-a="k-zu" data-u="${esc(u.id)}"${x.zu?" checked":""}> eingeklappt</label>`
+ +(u.hint?`<button class="k mini" data-a="k-hint" data-u="${esc(u.id)}">Hinweis${x.hint!==undefined?" ✎":""}</button>`:"")+"</span></div>"
+ +(APHINT==u.id?`<div class="ap-hint"><textarea rows="3" maxlength="600" data-a="k-hinttext" data-u="${esc(u.id)}">${esc(x.hint??u.hintStd)}</textarea><div class="knoepfe" style="margin-top:4px"><button class="k mini" data-a="k-hintstd" data-u="${esc(u.id)}">Original-Hinweis</button><button class="k mini" data-a="k-hintleer" data-u="${esc(u.id)}">Hinweis ausblenden</button></div></div>`:"")}
+function apZeigen(){const box=$("ap_baum");if(!APA||!APROF[APA]){box.innerHTML='<p class="hint" style="padding:8px">Noch kein Profil – mit „+ Neues Profil“ anlegen (z. B. „Kassierer“).</p>';return}
+ const B=APROF[APA].baum;let h="";
+ B.bereiche.forEach((b,bi)=>{const g=MENUE_BASIS.find(c=>c.k==b.id),bnr=bi+1,kn=g?"B"+(MENUE_BASIS.indexOf(g)+1):"B+";
+  h+=`<div class="ap-z ap-b${b.aus?" ap-aus":""}"><span class="ap-nr">${bnr}</span><span class="ap-kn">${kn}</span><input type="text" class="ic" maxlength="8" value="${esc(b.icon)}" placeholder="${esc(g?g.i:"📁")}" data-a="b-icon" data-i="${bi}" title="Symbol (z. B. ein Emoji)"><input type="text" maxlength="40" value="${esc(b.name)}" placeholder="${esc(g?g.t:"Neuer Bereich")}" data-a="b-name" data-i="${bi}">`
+   +`<span class="ak"><button class="k mini" data-a="b-hoch" data-i="${bi}">↑</button><button class="k mini" data-a="b-runter" data-i="${bi}">↓</button><label><input type="checkbox" data-a="b-aus" data-i="${bi}"${b.aus?" checked":""}> aus</label>${g?"":`<button class="k mini" data-a="b-weg" data-i="${bi}" title="Bereich löschen – seine Reiter wandern in den ersten Bereich">✕</button>`}</span></div>`;
+  b.tabs.forEach((t,ti)=>{const tn=TABS.findIndex(x=>x[0]==t),tx=B.tabs[t]||{},pf=PFLICHT_TABS.includes(t)||t=="gestaltung";
+   h+=`<div class="ap-z ap-r${tx.aus?" ap-aus":""}"><span class="ap-nr">${bnr}.${ti+1}</span><span class="ap-kn">R${tn+1}</span><span class="ic"></span><input type="text" maxlength="40" value="${esc(tx.name||"")}" placeholder="${esc(apTabStd(t))}" data-a="t-name" data-t="${t}">`
+    +`<span class="ak"><button class="k mini" data-a="t-hoch" data-i="${bi}" data-j="${ti}">↑</button><button class="k mini" data-a="t-runter" data-i="${bi}" data-j="${ti}">↓</button><select data-a="t-bereich" data-i="${bi}" data-j="${ti}" style="max-width:160px;min-height:30px;padding:3px 6px" title="in einen anderen Bereich verschieben">${B.bereiche.map((x,xi)=>`<option value="${xi}"${xi==bi?" selected":""}>→ ${esc(x.name||(MENUE_BASIS.find(c=>c.k==x.id)||{}).t||"Bereich "+(xi+1))}</option>`).join("")}</select>`
+    +`<label title="${pf?"bleibt immer sichtbar":""}"><input type="checkbox" data-a="t-aus" data-t="${t}"${tx.aus?" checked":""}${pf?" disabled":""}> aus</label><label title="Startseite nach dem Anmelden"><input type="radio" name="ap_start" data-a="t-start" data-t="${t}"${B.start==t?" checked":""}> Start</label></span></div>`;
+   let ki=0;const us=apEinh(t,B);us.filter(u=>!u.teil).forEach(u=>{ki++;h+=apKarteZeile(u,B,`${bnr}.${ti+1}.${ki}`,"ap-k");let tj=0;us.filter(x=>x.teil&&x.el.parentElement.closest(".karte")===u.el).forEach(x=>{tj++;h+=apKarteZeile(x,B,`${bnr}.${ti+1}.${ki}.${tj}`,"ap-t")})})})});
+ box.innerHTML=h;if(!gsDarf())box.querySelectorAll("input,select,button").forEach(e=>e.disabled=true)}
+function apKarte(B,id){return B.karten[id]||(B.karten[id]={})}
+function apVerschiebe(B,id,richtung){const u=EINH.find(x=>x.id==id),ord=apEinh(u.tab,B).map(x=>x.id),gleich=ord.filter(i=>EINH.find(x=>x.id==i).parent===u.parent),p=gleich.indexOf(id),q=p+richtung;
+ if(q<0||q>=gleich.length)return;const a=ord.indexOf(id),b=ord.indexOf(gleich[q]);[ord[a],ord[b]]=[ord[b],ord[a]];B.reihenfolge[u.tab]=ord}
+$("ap_baum").addEventListener("input",e=>{const el=e.target,a=el.dataset.a;if(!a||!APROF[APA])return;const B=APROF[APA].baum;
+ if(a=="b-icon")B.bereiche[el.dataset.i].icon=el.value;else if(a=="b-name")B.bereiche[el.dataset.i].name=el.value;
+ else if(a=="t-name")(B.tabs[el.dataset.t]=B.tabs[el.dataset.t]||{}).name=el.value;else if(a=="k-name")apKarte(B,el.dataset.u).name=el.value;else if(a=="k-hinttext")apKarte(B,el.dataset.u).hint=el.value});
+$("ap_baum").addEventListener("change",e=>{const el=e.target,a=el.dataset.a;if(!a||!APROF[APA])return;const B=APROF[APA].baum;
+ if(a=="b-aus")B.bereiche[el.dataset.i].aus=el.checked;else if(a=="t-aus")(B.tabs[el.dataset.t]=B.tabs[el.dataset.t]||{}).aus=el.checked;else if(a=="t-start")B.start=el.dataset.t;
+ else if(a=="k-aus")apKarte(B,el.dataset.u).aus=el.checked;else if(a=="k-zu")apKarte(B,el.dataset.u).zu=el.checked;
+ else if(a=="t-bereich"){const t=B.bereiche[el.dataset.i].tabs.splice(+el.dataset.j,1)[0];B.bereiche[+el.value].tabs.push(t)}else return;apZeigen()});
+$("ap_baum").addEventListener("click",e=>{const el=e.target.closest("button[data-a]");if(!el||!APROF[APA])return;const B=APROF[APA].baum,a=el.dataset.a,i=+el.dataset.i,j=+el.dataset.j;
+ const tausch=(arr,x,y)=>{if(y<0||y>=arr.length)return;[arr[x],arr[y]]=[arr[y],arr[x]]};
+ if(a=="b-hoch")tausch(B.bereiche,i,i-1);else if(a=="b-runter")tausch(B.bereiche,i,i+1);
+ else if(a=="b-weg"){const weg=B.bereiche.splice(i,1)[0];(B.bereiche[0]||{tabs:[]}).tabs.push(...weg.tabs)}
+ else if(a=="t-hoch")tausch(B.bereiche[i].tabs,j,j-1);else if(a=="t-runter")tausch(B.bereiche[i].tabs,j,j+1);
+ else if(a=="k-hoch")apVerschiebe(B,el.dataset.u,-1);else if(a=="k-runter")apVerschiebe(B,el.dataset.u,1);
+ else if(a=="k-hint")APHINT=APHINT==el.dataset.u?null:el.dataset.u;else if(a=="k-hintstd")delete apKarte(B,el.dataset.u).hint;else if(a=="k-hintleer")apKarte(B,el.dataset.u).hint="";else return;apZeigen()});
+function apNeu(kopie){const name=prompt(kopie?"Name der Kopie:":"Name des neuen Profils (z. B. Kassierer, Technik, Spartenleitung):",kopie&&APROF[APA]?APROF[APA].name+" (Kopie)":"");if(!name)return;
+ const i=apId();APROF[i]={name:name.trim().slice(0,40),baum:kopie&&APROF[APA]?JSON.parse(JSON.stringify(APROF[APA].baum)):apNorm({})};APA=i;apListe();apZeigen();apKonten()}
+function apBereichNeu(){if(!APROF[APA])return;const n=prompt("Name des neuen Bereichs:","Neuer Bereich");if(!n)return;APROF[APA].baum.bereiche.push({id:"eigen-"+apId(),name:n.trim().slice(0,40),icon:"📁",aus:false,tabs:[]});apZeigen();
+ $("log_ap").textContent="ℹ Reiter über die Auswahl „→ …“ in den neuen Bereich verschieben."}
+function apUmbenennen(){if(!APROF[APA])return;const n=prompt("Neuer Name:",APROF[APA].name);if(!n)return;APROF[APA].name=n.trim().slice(0,40);apListe();apKonten()}
+function apLoeschen(){if(!APROF[APA]||!confirm("Profil „"+APROF[APA].name+"“ löschen? Konten mit diesem Profil bekommen die Standardansicht (erst nach „Speichern“)."))return;
+ Object.keys(AZU).forEach(k=>{if(AZU[k]==APA)AZU[k]=""});delete APROF[APA];APA=Object.keys(APROF)[0]||"";apListe();apZeigen();apKonten()}
+function apZurueck(){if(!APROF[APA]||!confirm("Menübaum dieses Profils auf den Standard zurücksetzen (Namen, Reihenfolge, Ausblendungen)?"))return;APROF[APA].baum=apNorm({});apZeigen()}
+function apKonten(){const o='<option value="">– Standard –</option>'+Object.entries(APROF).map(([i,p])=>`<option value="${i}">${esc(p.name)}</option>`).join("");
+ $("ap_konten").innerHTML="<table><tr><th>Konto</th><th>Name</th><th>Ansichtsprofil</th></tr>"+GS.konten.map(k=>`<tr><td>${esc(k.name)}</td><td>${esc(k.anzeige||"")}</td><td><select data-konto="${esc(k.name)}" style="min-width:200px"${gsDarf()?"":" disabled"}>${o}</select></td></tr>`).join("")+"</table>";
+ $("ap_konten").querySelectorAll("select").forEach(s=>{s.value=AZU[s.dataset.konto]||"";s.onchange=()=>AZU[s.dataset.konto]=s.value})}
+function apSauber(B){const k={};Object.entries(B.karten).forEach(([i,x])=>{const y={};if(x.name&&x.name.trim())y.name=x.name.trim();if(x.aus)y.aus=true;if(x.zu)y.zu=true;if(x.hint!==undefined)y.hint=x.hint;if(Object.keys(y).length)k[i]=y});
+ const t={};Object.entries(B.tabs).forEach(([i,x])=>{if((x.name&&x.name.trim())||x.aus)t[i]={name:(x.name||"").trim(),aus:!!x.aus}});return{...B,karten:k,tabs:t}}
+async function apSpeichern(){const profile={};Object.entries(APROF).forEach(([i,p])=>profile[i]={name:p.name,baum:apSauber(p.baum)});
+ GS=await api("/api/ansicht-profile",{profile,standard:$("ap_std").value,zuordnung:AZU},"log_ap");apStart()}
+function apVorschau(){if(!APROF[APA])return;try{sessionStorage.setItem("sn_profil_vorschau",JSON.stringify({id:APA,name:APROF[APA].name,...apSauber(APROF[APA].baum)}))}catch(e){alert("Vorschau nicht möglich (Browser-Speicher gesperrt).");return}location.reload()}
+function apExport(){if(!APROF[APA])return;const b=new Blob([JSON.stringify({sparteNetProfil:1,name:APROF[APA].name,baum:apSauber(APROF[APA].baum)},null,1)],{type:"application/json"}),u=URL.createObjectURL(b),a=document.createElement("a");
+ a.href=u;a.download="Ansichtsprofil_"+APROF[APA].name.replace(/[^A-Za-z0-9äöüÄÖÜß_-]+/g,"_")+".json";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),30000)}
+function apImport(inp){const f=inp.files[0];if(!f)return;f.text().then(t=>{const x=JSON.parse(t);if(!x.baum)throw new Error("Keine Profil-Datei.");const i=apId();APROF[i]={name:String(x.name||"Import").slice(0,40),baum:apNorm(x.baum)};APA=i;apListe();apZeigen();apKonten();
+ $("log_ap").textContent="✔ Importiert – zum Übernehmen „Profile und Zuordnung speichern“."}).catch(e=>{$("log_ap").textContent="✖ "+e.message}).finally(()=>inp.value="")}
 let LZ=null;
 async function lzLaden(){LZ=await api("/api/laufzeiten",undefined,"log_lz");lzZeigen()}
 function lzZeigen(){const d=LZ;if(!d)return;const e=d.einstellungen,adm=ICH.admin,schr=bereichStufe("buchungen")=="schreiben",gw=ICH.admin||(ICH.bereiche||{}).wlan_pw=="schreiben";
@@ -1104,7 +1254,7 @@ const ICH=__ICH__;setTimeout(farbeZeigen,0);
 function bereichStufe(k){return ICH.admin?"schreiben":(ICH.bereiche||{})[k]||"kein"}
 function reiterErlaubt(id){return ICH.admin||!(id in ICH.reiter)||ICH.reiter[id]!="kein"}
 /* ---- Menü (☰): Bereiche mit Reitern und Unterpunkten (springen zur Karte im Reiter) ---- */
-const MENUE=[
+const MENUE_BASIS=[
  {k:"uebersicht",t:"Übersicht",i:"🏠",tabs:[["start","Start",["Auf einen Blick","Überblick","Parzelle nachschlagen","Gast-Voucher schnell","Schnellzugriff"]]],extra:[["system","Störungsüberwachung","Störungsüberwachung"]]},
  {k:"einrichtung",t:"Einrichtung",i:"🛠️",tabs:[["verbindung","Verbindung",["Verbindung über die UniFi-Cloud","Handy & Tablet","Datenspeicher","Protokoll zur Fehlersuche","Diagnose-Datei"]],["planung","Planung",["Sparten am Gateway","IP-Plan"]],["netzplanung","Netzplanung",["Netzplanung","Einnahmen nach Tarif","Gateway-Zuteilung nach Buchung","VLAN-Plan","Gateway-Standorte","Einstellungen"]],["abgleich","Abgleich",["Abgleich","Umzugshilfe"]]]},
  {k:"wlan",t:"WLAN & Zugang",i:"📶",tabs:[["einrichten","Netze, WLANs & Passwörter",["Sparte einrichten","Netze nach Buchungen","Fehlende Netze anlegen","WLANs der Sparte","Passwörter je Parzelle","Zugangskarten mit WLAN-QR-Code","Passwörter ins Pächter-WLAN laden"]],["uebertragen","Übertragen",["Änderungen an das Gateway übertragen","Unterschiede zwischen Manager und Gateway","Änderungsprotokoll"]],["kartendesign","Zugangskarten-Design",["Zugangskarten gestalten","Logo"]],["voucher","Gast-Voucher",["Gast-Voucher erstellen","Vorlagen","Voucher am Gateway"]]]},
@@ -1112,8 +1262,41 @@ const MENUE=[
  {k:"verein",t:"Pächter & Verein",i:"👥",tabs:[["mitglieder","Mitglieder",["Mitglieder","Verträge","Rundschreiben","Import aus Excel"]],["tickets","Anfragen",["Anfragen","Pächter-Seite"]],["rechnungen","Rechnungen",["Rechnungen","Rechnungslauf","Zahlungsabgleich","Einstellungen für Rechnungen"]]]},
  {k:"dokumente",t:"Dokumente & Automatik",i:"📁",tabs:[["unterlagen","Unterlagen",["Unterlagen","Hochladen"]],["automationen","Automationen & E-Mail",["Automationen","Verlauf","E-Mail-Layout und Vorlagen","E-Mail-Versand","Wochenbericht","API-Schnittstelle"]]]},
  {k:"daten",t:"Daten & Auswertung",i:"📊",tabs:[["lesen","Auslesen",["Auslesen"]],["daten","Alle Daten",["Alle Daten"]]],extra:[["uebertragen","Änderungsprotokoll","Änderungsprotokoll"]]},
- {k:"verwaltung",t:"System & Konto",i:"⚙️",tabs:[["system","System",["Störungsüberwachung","Datensicherung","Aktualisierung","Systeminfo","Internet – letzte 24 Stunden","Geräte – Auslastung"]],["benutzer","Benutzer & Konto",["Mein Konto","Zwei-Faktor-Anmeldung","Apps und Geräte","Benutzerkonten","Anmeldung und Sicherheit","Neues Benutzerkonto"]],["hilfe","Hilfe",["Hilfe"]]]}];
-const MKAT={};MENUE.forEach(c=>c.tabs.forEach(([id])=>MKAT[id]=c));
+ {k:"verwaltung",t:"System & Konto",i:"⚙️",tabs:[["system","System",["Störungsüberwachung","Datensicherung","Aktualisierung","Systeminfo","Internet – letzte 24 Stunden","Geräte – Auslastung"]],["benutzer","Benutzer & Konto",["Mein Konto","Zwei-Faktor-Anmeldung","Apps und Geräte","Benutzerkonten","Anmeldung und Sicherheit","Neues Benutzerkonto"]],["gestaltung","Oberfläche gestalten",[]],["hilfe","Hilfe",["Hilfe"]]]}];
+/* ---- Ansichtsprofil: Karten (Einheiten) erfassen, Profil anwenden (umbenennen, ausblenden, sortieren, Hinweise, eingeklappt) ---- */
+let PROFIL=__PROFIL__;
+try{const v=sessionStorage.getItem("sn_profil_vorschau");if(v)PROFIL={...JSON.parse(v),vorschau:true}}catch(e){}
+if(location.hash=="#standardansicht")PROFIL={};
+const PFLICHT_TABS=["benutzer"],PFLICHT_EINH=["benutzer/mein-konto","benutzer/eigenes-passwort-aendern"];
+function slug(t){return String(t).toLowerCase().replace(/ä/g,"ae").replace(/ö/g,"oe").replace(/ü/g,"ue").replace(/ß/g,"ss").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,60)||"karte"}
+const EINH=[];
+(function(){let nr=0;TABS.forEach(([tab])=>{const sec=$(tab);if(!sec)return;const ids={};
+ sec.querySelectorAll(".karte,[data-teil]").forEach(el=>{if(el.closest("#kd_form")||el.parentElement.closest(".karte")&&!el.dataset.teil)return;const h=el.querySelector("h2,h3");if(!h)return;
+  const std=h.textContent.replace(/\s+/g," ").trim();let id=tab+"/"+slug(std);if(ids[id])id+="-"+(++ids[id]);else ids[id]=1;
+  const hint=[...el.querySelectorAll("p.hint")].find(p=>p.closest(".karte,[data-teil]")===el)||null;nr++;
+  EINH.push({id,nr:"K"+nr,tab,el,h,std,hint,hintStd:hint?hint.textContent.trim():"",parent:el.parentElement,teil:!!el.dataset.teil,pflicht:PFLICHT_EINH.includes(id),pos:EINH.length})})})})();
+function einhTitel(u,name){const tn=[...u.h.childNodes].find(n=>n.nodeType==3&&n.textContent.trim());if(tn)tn.textContent=name+(tn.textContent.endsWith(" ")?" ":"");else u.h.prepend(document.createTextNode(name+" "))}
+function einhZu(u,zu){const kopf=[...u.el.children].find(c=>c.contains(u.h));u.el.classList.toggle("p-zu",zu);if(kopf)kopf.classList.add("p-kopf");u.h.classList.add("p-klapp");u.h.onclick=()=>u.el.classList.toggle("p-zu")}
+function sortiereEinh(liste,ordnung){const rang=id=>{const i=ordnung.indexOf(id);return i<0?1e6+liste.findIndex(x=>x.id==id):i};
+ const gruppen=new Map();liste.forEach(u=>{if(!gruppen.has(u.parent))gruppen.set(u.parent,[]);gruppen.get(u.parent).push(u)});
+ gruppen.forEach(us=>{const marken=us.map(u=>{const c=document.createComment("p");u.el.before(c);return c});[...us].sort((a,b)=>rang(a.id)-rang(b.id)).forEach((u,i)=>marken[i].replaceWith(u.el))})}
+function tabVerborgen(t){if(PFLICHT_TABS.includes(t)||(t=="gestaltung"&&(ICH.admin||ICH.bereiche.gestaltung=="schreiben")))return false;return !!(((PROFIL||{}).tabs||{})[t]||{}).aus}
+function reiterSichtbar(t){return reiterErlaubt(t)&&!tabVerborgen(t)}
+function einhSichtbar(u){if(u.el.dataset.pAus)return false;const c=u.el;return !(c.hidden||getComputedStyle(c).display=="none"||(c.closest("[hidden]")&&c.closest("[hidden]")!==$(u.tab)))}
+(function profilAnwenden(){const P=PROFIL||{};if(!P.id&&!P.vorschau)return;const k=P.karten||{};
+ EINH.forEach(u=>{const x=k[u.id];if(!x)return;if(x.name)einhTitel(u,x.name);if(x.hint!==undefined&&u.hint){if(x.hint==="")u.hint.style.display="none";else u.hint.textContent=x.hint}
+  if(x.aus&&!u.pflicht){u.el.dataset.pAus="1";u.el.style.display="none"}if(x.zu)einhZu(u,true)});
+ Object.entries(P.reihenfolge||{}).forEach(([tab,ord])=>sortiereEinh(EINH.filter(u=>u.tab==tab),ord));
+ if(P.vorschau){const b=document.createElement("div");b.style.cssText="position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:950;background:#1d2f3e;color:#fff;padding:10px 14px;border-radius:10px;display:flex;gap:10px;align-items:center;box-shadow:0 8px 24px rgba(0,0,0,.3)";
+  b.innerHTML='Vorschau des Profils „'+esc(P.name||"")+'“ <button class="k" style="background:#fff">Vorschau beenden</button>';b.querySelector("button").onclick=()=>{try{sessionStorage.removeItem("sn_profil_vorschau")}catch(e){}location.reload()};document.body.appendChild(b)}})();
+function menueAusProfil(P){const info={};MENUE_BASIS.forEach(c=>c.tabs.forEach(t=>info[t[0]]=t));
+ if(!P||!P.bereiche||!P.bereiche.length)return MENUE_BASIS;
+ const kat=P.bereiche.map(b=>{const g=MENUE_BASIS.find(c=>c.k==b.id);return{k:b.id,t:b.name||(g?g.t:"Bereich"),i:b.icon||(g?g.i:"📁"),aus:b.aus,extra:g?g.extra||[]:[],tabs:(b.tabs||[]).filter(t=>info[t]).map(t=>info[t])}});
+ Object.keys(info).forEach(t=>{if(!kat.some(c=>c.tabs.some(x=>x[0]==t))){const g=MENUE_BASIS.find(c=>c.tabs.some(x=>x[0]==t));const z=kat.find(c=>c.k==g.k&&!c.aus)||kat.find(c=>!c.aus)||kat[0];if(z)z.tabs.push(info[t])}});
+ kat.forEach(c=>{if(c.aus)c.tabs.filter(t=>PFLICHT_TABS.includes(t[0])||t[0]=="gestaltung").forEach(t=>{const z=kat.find(x=>!x.aus);if(z&&z!==c)z.tabs.push(t)})});
+ return kat.filter(c=>!c.aus)}
+const MENUE=menueAusProfil(PROFIL);
+const MKAT={};MENUE.forEach(c=>c.tabs.forEach(([id])=>{if(!MKAT[id])MKAT[id]=c}));
 const MWORT={start:"überblick dashboard parzelle passwort qr",verbindung:"cloud api key konsole handy pin tailscale protokoll diagnose datenbank",planung:"ip-plan sparten excel vlan",netzplanung:"vlan gateway standort einnahmen zuteilung",abgleich:"umzug vergleich clients",
  einrichten:"netze wlan ppsk passwort zugangskarten karten drucken qr",uebertragen:"gateway änderungen protokoll rückgängig",kartendesign:"logo karte design farben schrift qr druck",voucher:"gast code gäste",tarife:"laufzeit sperren freigeben qos bandbreite preis zugang ablauf verlängern",
  kalkulation:"buchung buchen excel annahmen",mitglieder:"pächter verträge kündigung rundschreiben import excel datenschutz dsgvo",tickets:"anfragen ticket portal pächter-seite selbstauskunft",rechnungen:"zahlung kontoauszug girocode pdf",
@@ -1125,29 +1308,33 @@ function mKarte(tab,h){const sec=$(tab);if(!sec||!h)return null;const k=[...sec.
  return(c.hidden||getComputedStyle(c).display=="none"||(c.closest("[hidden]")&&c.closest("[hidden]")!==sec))?null:c}
 function springe(tab,h){menue(false);zeige(tab);if(!h)return;let n=0;const ver=()=>{const c=mKarte(tab,h);if(!c){if(++n<15)setTimeout(ver,150);return}   // Inhalte, die erst geladen werden (z. B. Kartendesign)
  c.scrollIntoView({behavior:"smooth",block:"start"});c.classList.remove("blink");void c.offsetWidth;c.classList.add("blink")};setTimeout(ver,80)}
-function mName(id){if(id=="benutzer"&&!ICH.admin)return"Mein Konto";for(const c of MENUE)for(const t of c.tabs)if(t[0]==id)return t[1];const x=TABS.find(t=>t[0]==id);return x?x[1]:id}
+function mName(id){const pn=((((PROFIL||{}).tabs||{})[id])||{}).name;if(pn)return pn;if(id=="benutzer"&&!ICH.admin)return"Mein Konto";for(const c of MENUE)for(const t of c.tabs)if(t[0]==id)return t[1];const x=TABS.find(t=>t[0]==id);return x?x[1]:id}
+function einhName(u){return(((PROFIL||{}).karten||{})[u.id]||{}).name||u.std}
 function menueBauen(){const q=$("menue_suche").value.trim().toLowerCase(),akt=(location.hash.slice(1)||startReiter()),box=$("menue_liste");
- const unter=(tab,liste)=>(liste||[]).filter(h=>!mVerborgen(tab,h)).map(h=>`<button class="munter" data-tab="${tab}" data-h="${esc(h)}">${esc(h)}</button>`).join("");
- if(q){let h="",n=0;MENUE.forEach(c=>{let teil="";c.tabs.concat((c.extra||[]).map(([t,l,z])=>[t,l,[],z])).forEach(([id,l,subs,ziel])=>{if(!reiterErlaubt(id))return;const pt=(l+" "+c.t+" "+(ziel?"":MWORT[id]||"")).toLowerCase().includes(q);
-   const s=(subs||[]).filter(x=>x.toLowerCase().includes(q)&&!mVerborgen(id,x));if(pt||s.length){n+=1+s.length;teil+=`<button class="mpunkt" data-tab="${id}" data-h="${esc(ziel||"")}">${esc(l)}</button>`+(s.length?unter(id,s):"")}});
+ const einh=tab=>EINH.filter(u=>u.tab==tab&&!u.teil&&einhSichtbar(u)).sort((a,b)=>[...a.parent.children].indexOf(a.el)-[...b.parent.children].indexOf(b.el));
+ const unter=(tab,liste)=>liste.map(u=>`<button class="munter" data-tab="${tab}" data-u="${esc(u.id)}">${esc(einhName(u))}</button>`).join("");
+ if(q){let h="";MENUE.forEach(c=>{let teil="";c.tabs.concat((c.extra||[]).map(([t,l,z])=>[t,l,[],z])).forEach(([id,l,subs,ziel])=>{if(!reiterSichtbar(id))return;const pt=(mName(id)+" "+c.t+" "+(ziel?"":MWORT[id]||"")).toLowerCase().includes(q);
+   const s=ziel?[]:einh(id).filter(u=>einhName(u).toLowerCase().includes(q));if(pt||s.length){teil+=`<button class="mpunkt" data-tab="${id}" data-h="${esc(ziel||"")}">${esc(ziel?l:mName(id))}</button>`+unter(id,s)}});
    if(teil)h+=`<div class="mkat msuche"><div class="mtreffer">${c.i} ${esc(c.t)}</div><div class="minhalt" style="padding-left:6px">${teil}</div></div>`});
   box.innerHTML=h||'<p class="hint" style="padding:10px">Nichts gefunden.</p>'}
  else{const auf=MAUF||(MKAT[akt]||MENUE[0]).k;
-  box.innerHTML=MENUE.map(c=>{const tabs=c.tabs.filter(([id])=>reiterErlaubt(id));const ex=(c.extra||[]).filter(([id,,z])=>reiterErlaubt(id)&&mKarte(id,z));if(!tabs.length&&!ex.length)return"";
-   return `<div class="mkat${c.k==auf?" auf":""}" data-k="${c.k}"><button class="mkb" aria-expanded="${c.k==auf}"><i>${c.i}</i>${esc(c.t)}<em>›</em></button><div class="minhalt">`
-    +tabs.map(([id,l,subs])=>`<button class="mpunkt${id==akt?" aktiv":""}" data-tab="${id}">${esc(mName(id)||l)}</button>`+unter(id,subs)).join("")
+  box.innerHTML=MENUE.map(c=>{const tabs=c.tabs.filter(([id])=>reiterSichtbar(id));const ex=(c.extra||[]).filter(([id,,z])=>reiterSichtbar(id)&&mKarte(id,z));if(!tabs.length&&!ex.length)return"";
+   return `<div class="mkat${c.k==auf?" auf":""}" data-k="${c.k}"><button class="mkb" aria-expanded="${c.k==auf}"><i>${esc(c.i)}</i>${esc(c.t)}<em>›</em></button><div class="minhalt">`
+    +tabs.map(([id])=>`<button class="mpunkt${id==akt?" aktiv":""}" data-tab="${id}">${esc(mName(id))}</button>`+unter(id,einh(id))).join("")
     +ex.map(([id,l,z])=>`<button class="mpunkt" data-tab="${id}" data-h="${esc(z)}">${esc(l)} <small style="color:var(--muted)">→ ${esc(mName(id))}</small></button>`).join("")+"</div></div>"}).join("")}
  box.querySelectorAll(".mkb").forEach(b=>b.onclick=()=>{const k=b.parentElement.dataset.k;MAUF=b.parentElement.classList.contains("auf")?"-":k;menueBauen()});
- box.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>springe(b.dataset.tab,b.dataset.h||""))}
+ box.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>b.dataset.u?springeEinh(b.dataset.tab,b.dataset.u):springe(b.dataset.tab,b.dataset.h||""))}
+function springeEinh(tab,id){menue(false);zeige(tab);const u=EINH.find(x=>x.id==id);if(!u)return;setTimeout(()=>{u.el.classList.remove("p-zu");const c=u.el;c.scrollIntoView({behavior:"smooth",block:"start"});c.classList.remove("blink");void c.offsetWidth;c.classList.add("blink")},80)}
 function menue(an){const m=$("menue"),offen=an===undefined?!m.classList.contains("offen"):an;m.classList.toggle("offen",offen);m.setAttribute("aria-hidden",String(!offen));$("menue_hg").hidden=!offen;$("burger").setAttribute("aria-expanded",String(offen));
  if(offen){MAUF=null;$("menue_suche").value="";menueBauen();setTimeout(()=>{if(matchMedia("(pointer:fine)").matches)$("menue_suche").focus();else{const a=m.querySelector(".mpunkt.aktiv");if(a)a.scrollIntoView({block:"center"})}},50)}}
 addEventListener("keydown",e=>{if(e.key=="Escape"&&$("menue").classList.contains("offen"))menue(false);if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()=="k"){e.preventDefault();menue(true)}});
 function navAktualisieren(id){id=id||location.hash.slice(1)||startReiter();const c=MKAT[id],alle=!!ANS.reiter;let kb=$("n_kat");
  if(!kb){kb=document.createElement("button");kb.id="n_kat";kb.className="nkat";kb.onclick=()=>menue(true);$("nav").prepend(kb)}
- kb.hidden=alle||!c;if(c)kb.innerHTML=`<i>${c.i}</i>${esc(c.t)}`;kb.title="Bereich wechseln (Menü)";
- TABS.forEach(([t])=>{const b=$("n_"+t);if(!b)return;b.hidden=!reiterErlaubt(t)||(!alle&&!!c&&MKAT[t]!==c);if(!alle)b.textContent=mName(t)})
+ kb.hidden=alle||!c;if(c)kb.innerHTML=`<i>${esc(c.i)}</i>${esc(c.t)}`;kb.title="Bereich wechseln (Menü)";
+ TABS.forEach(([t])=>{const b=$("n_"+t);if(!b)return;b.hidden=!reiterSichtbar(t)||(!alle&&!!c&&MKAT[t]!==c);if(!alle)b.textContent=mName(t)})
  if(alle)TABS.forEach(([t,l])=>{const b=$("n_"+t);if(b)b.textContent=t=="benutzer"&&!ICH.admin?"Mein Konto":l})}
-function startReiter(){const h=location.hash.slice(1);if(TABS.some(t=>t[0]==h)&&reiterErlaubt(h))return h;const t=TABS.find(t=>reiterErlaubt(t[0]));return t?t[0]:"benutzer"}
+function startReiter(){const h=location.hash.slice(1);if(TABS.some(t=>t[0]==h)&&reiterErlaubt(h))return h;const ps=(typeof PROFIL!="undefined"&&PROFIL&&PROFIL.start)||"";
+ if(ps&&reiterSichtbar(ps))return ps;const t=TABS.find(t=>reiterSichtbar(t[0]))||TABS.find(t=>reiterErlaubt(t[0]));return t?t[0]:"benutzer"}
 function rechteHinweis(id){const e=$("nurlesen");if(!e)return;const st=ICH.admin?"schreiben":ICH.reiter[id];
  if(st=="lesen"){e.textContent="Nur lesen – in diesem Bereich lassen sich mit Ihrem Konto Daten ansehen, aber nichts ändern oder ans Gateway übertragen.";e.hidden=false}else e.hidden=true}
 (function(){const k=$("ich_k");if(k)k.textContent="👤 "+ICH.name+" · "+ICH.recht_text+(ICH.sparten&&ICH.sparten.length?" · "+ICH.sparten.join(", "):"");
@@ -1163,8 +1350,13 @@ async function bnEigenesPw(){await api("/api/benutzer-ich",{alt:$("bn_alt").valu
 async function bnLaden(){bnZeigen(await api("/api/benutzer",undefined,"log_bn"))}
 async function bnSpeichern(b,logid){bnZeigen(await api("/api/benutzer-speichern",b,logid||"log_bn"))}
 function siWahl(id,w){const e=$(id);if(![...e.options].some(o=>o.value==String(w))){const o=document.createElement("option");o.value=w;o.textContent=w+(id=="si_merk"?" Stunden":" Minuten");e.appendChild(o)}e.value=String(w)}
+function ztZeigen(d){const z=d.zugang;$("zt_st").textContent=z?"✔ Eingerichtet am "+z.erstellt+" von "+z.von+" (beginnt mit "+z.hinweis+")":"⚠ Kein Zugangstoken – die App kann sich nicht anmelden.";
+ if(d.token){$("zt_neu").hidden=false;$("zt_wert").value=d.token;$("zt_wert").select()}else{$("zt_neu").hidden=true;$("zt_wert").value=""}}
+async function ztLaden(){if(!ICH.admin)return;try{ztZeigen(await api("/api/app-zugangstoken"))}catch(e){}}
+async function ztNeu(){if(!confirm("Neuen App-Zugangstoken erzeugen? Der bisherige gilt dann nicht mehr – alle Apps müssen den neuen eingeben."))return;ztZeigen(await api("/api/app-zugangstoken",{neu:true},"log_zt"))}
+async function ztAus(){if(!confirm("App-Zugang sperren? Keine App kann sich dann anmelden oder Daten abrufen, bis ein neuer Token erzeugt ist."))return;ztZeigen(await api("/api/app-zugangstoken",{aus:true},"log_zt"))}
 async function siSpeichernAnmeldung(){const d=await api("/api/sicherheit-einstellungen",{abmelden_minuten:+$("si_ab").value,app_abmelden_minuten:+$("si_app").value,"2fa_merken_stunden":+$("si_merk").value},"log_sian");bnZeigen(d);$("log_sian").textContent="✔ Gespeichert. Die neue Abmelde-Zeit gilt nach dem nächsten Neuladen der Seite."}
-function bnZeigen(d){BN=d;const box=$("bn_tab"),y=box.scrollTop;$("bn_2fa_pflicht").checked=!!d.zwei_faktor_pflicht;if(d.sicherheit){siWahl("si_ab",d.sicherheit.abmelden_minuten);siWahl("si_app",d.sicherheit.app_abmelden_minuten);siWahl("si_merk",d.sicherheit["2fa_merken_stunden"])}
+function bnZeigen(d){BN=d;const box=$("bn_tab"),y=box.scrollTop;$("bn_2fa_pflicht").checked=!!d.zwei_faktor_pflicht;ztLaden();if(d.sicherheit){siWahl("si_ab",d.sicherheit.abmelden_minuten);siWahl("si_app",d.sicherheit.app_abmelden_minuten);siWahl("si_merk",d.sicherheit["2fa_merken_stunden"])}
  if(!$("bn_vorlage").options.length)$("bn_vorlage").innerHTML=Object.entries(d.vorlagen).map(([k,v])=>`<option value="${k}">${esc(v.text)}</option>`).join("")+'<option value="#admin">Administrator</option><option value="#gesperrt">Gesperrt (noch nicht freigeschaltet)</option>';
  let h="<table><tr><th>Benutzername</th><th>Name</th><th>Kontoart</th><th>Rechte</th><th>angelegt</th><th>zuletzt angemeldet</th><th>Sitzungen</th><th>2FA</th><th></th></tr>";
  for(const z of d.zeilen){const n=esc(z.name),offen=BNOFFEN.has(z.name);
@@ -1444,17 +1636,19 @@ const tkDarf=()=>ICH.admin||ICH.bereiche.tickets=="schreiben";
 async function tkLaden(){const p=new URLSearchParams({status:$("tk_fs").value||"offen",zustaendig:$("tk_fz").value,q:$("tk_such").value.trim()});const d=await api("/api/tickets?"+p.toString(),undefined,"log_tk");TK=d;
  document.querySelectorAll(".tk-schreib").forEach(e=>e.hidden=!tkDarf());$("tk_st").textContent=d.offen+" offen"+(d.meine?" · "+d.meine+" für Sie":"");
  const nb=$("n_tickets");if(nb)nb.textContent="Tickets"+(d.meine?" ("+d.meine+")":"");
- $("tk_tab").innerHTML=d.zeilen.length?"<table><tr><th>Nr.</th><th>Betreff</th><th>Kontakt</th><th>Sparte</th><th>Kategorie</th><th>Priorität</th><th>Status</th><th>Zuständig</th><th>eingegangen</th></tr>"+d.zeilen.map(z=>`<tr style="cursor:pointer${z.id==TKA?";outline:2px solid var(--green)":""}" data-id="${esc(z.id)}" onclick="tkOeffnen(this.dataset.id)"><td class="mono"><b>${esc(z.nr)}</b></td><td>${esc(z.betreff)}${z.antworten?` <small>(${z.antworten})</small>`:""}</td><td>${esc(z.kontakt.name||z.kontakt.email||"–")}</td><td>${esc(z.sparte||"")}${z.parzelle?" "+esc(z.parzelle):""}</td><td>${esc(z.kategorie)}</td><td class="tk-prio-${esc(z.prioritaet)}">${esc(d.prioritaeten[z.prioritaet]||z.prioritaet)}</td><td>${z.status=="neu"?'<span class="status">neu</span>':esc(d.status[z.status]||z.status)}</td><td>${esc(z.zustaendig||"–")}</td><td>${esc(z.erstellt)}</td></tr>`).join("")+"</table>":'<p class="hint" style="padding:10px">Keine Tickets für diesen Filter.</p>';
+ $("tk_tab").innerHTML=d.zeilen.length?"<table><tr><th>Nr.</th><th>Betreff</th><th>Kontakt</th><th>Sparte</th><th>Kategorie</th><th>Priorität</th><th>Status</th><th>Zuständig</th><th>eingegangen</th></tr>"+d.zeilen.map(z=>`<tr style="cursor:pointer${z.id==TKA?";outline:2px solid var(--green)":""}" data-id="${esc(z.id)}" onclick="tkOeffnen(this.dataset.id)"><td class="mono"><b>${esc(z.nr)}</b></td><td>${esc(z.betreff)}${z.antworten?` <small>(${z.antworten})</small>`:""}</td><td>${esc(z.kontakt.name||z.kontakt.email||"–")}${tkArt(z.kontakt)}</td><td>${esc(z.sparte||"")}${z.parzelle?" "+esc(z.parzelle):""}</td><td>${esc(z.kategorie)}</td><td class="tk-prio-${esc(z.prioritaet)}">${esc(d.prioritaeten[z.prioritaet]||z.prioritaet)}</td><td>${z.status=="neu"?'<span class="status">neu</span>':esc(d.status[z.status]||z.status)}</td><td>${esc(z.zustaendig||"–")}</td><td>${esc(z.erstellt)}</td></tr>`).join("")+"</table>":'<p class="hint" style="padding:10px">Keine Tickets für diesen Filter.</p>';
  const opt=(o,w)=>o.map(([k,t])=>`<option value="${esc(k)}"${k==w?" selected":""}>${esc(t)}</option>`).join("");
  $("tkn_kat").innerHTML=opt(d.kategorien.map(k=>[k,k]));$("tkn_zu").innerHTML='<option value="">niemand</option>'+opt(d.konten.map(k=>[k,k]));
  if(!$("tkn_sp").options.length){const sp=Object.keys((PLAN&&PLAN.sparten?Object.fromEntries(PLAN.sparten.map(s=>[s.kz,1])):{}));$("tkn_sp").innerHTML='<option value="">–</option>'+sp.map(k=>`<option>${esc(k)}</option>`).join("")}
  if(TKA&&d.zeilen.some(z=>z.id==TKA))tkOeffnen(TKA,true)}
+function tkArt(k){if(k.geprueft)return ' <small style="color:var(--green)" title="Vorname, Nachname, E-Mail, Sparte und Parzelle passen zu einem Mitglied">✔ Mitglied geprüft</small>';
+ if(k.art=="interessent")return ' <small class="status">Interessent</small>';if(k.art=="kein_mitglied")return ' <small class="status">kein Mitglied</small>';return""}
 async function tkOeffnen(id,still){TKA=id;const r=await api("/api/ticket?id="+encodeURIComponent(id),undefined,still?null:"log_tkd");const t=r.ticket,d=TK,w=tkDarf();const k=t.kontakt||{};
  const opt=(o,v)=>o.map(([a,b])=>`<option value="${esc(a)}"${a==v?" selected":""}>${esc(b)}</option>`).join("");
  $("tk_detail").hidden=false;$("tk_detail_t").textContent=t.nr+" · "+t.betreff;
  $("tk_felder").innerHTML=`<div class="reihe"><div><label>Status</label><select id="tkd_status"${w?"":" disabled"}>${opt(Object.entries(d.status),t.status)}</select></div><div><label>Zuständig</label><select id="tkd_zu"${w?"":" disabled"}><option value="">niemand</option>${opt(d.konten.map(x=>[x,x]),t.zustaendig)}</select></div>
   <div><label>Priorität</label><select id="tkd_prio"${w?"":" disabled"}>${opt(Object.entries(d.prioritaeten),t.prioritaet)}</select></div><div><label>Kategorie</label><select id="tkd_kat"${w?"":" disabled"}>${opt([...new Set(d.kategorien.concat([t.kategorie]))].map(x=>[x,x]),t.kategorie)}</select></div></div>
-  <p class="hint" style="margin-top:10px"><b>Kontakt:</b> ${esc(k.name||"–")}${k.email?` · <a href="mailto:${esc(k.email)}">${esc(k.email)}</a>`:""}${k.telefon?` · <a href="tel:${esc(k.telefon)}">${esc(k.telefon)}</a>`:""}${t.sparte?" · Sparte "+esc(t.sparte):""}${t.parzelle?" Parzelle "+esc(t.parzelle):""}${k.mitglied?" · Mitglied ✔":""} · eingegangen ${esc(t.erstellt)} (${esc(t.quelle)})</p>
+  <p class="hint" style="margin-top:10px"><b>Kontakt:</b> ${esc(k.name||"–")}${tkArt(k)}${k.email?` · <a href="mailto:${esc(k.email)}">${esc(k.email)}</a>`:""}${k.telefon?` · <a href="tel:${esc(k.telefon)}">${esc(k.telefon)}</a>`:""}${t.sparte?" · Sparte "+esc(t.sparte):""}${t.parzelle?" Parzelle "+esc(t.parzelle):""}${k.mitglied?" · Mitglied ✔":""} · eingegangen ${esc(t.erstellt)} (${esc(t.quelle)})</p>
   <div class="tk-verlauf" style="border-color:var(--navy)"><small>Anfrage</small><br>${esc(t.text||"(ohne Text)")}</div>`+t.verlauf.filter(v=>v.art!="angelegt").map(v=>`<div class="tk-verlauf ${esc(v.art)}"><small>${esc(v.zeit)} · ${esc(v.wer)} · ${{kommentar:"Notiz",antwort:"Antwort",aenderung:"Änderung"}[v.art]||esc(v.art)}</small><br>${esc(v.text)}</div>`).join("");
  ["tkd_status","tkd_zu","tkd_prio","tkd_kat"].forEach(i=>{const e=$(i);if(e)e.onchange=tkFelderSpeichern});
  $("tk_antwort").hidden=!w;$("tk_an_kontakt").disabled=!k.email;$("tk_an_kontakt_l").title=k.email?"":"keine E-Mail-Adresse beim Kontakt";

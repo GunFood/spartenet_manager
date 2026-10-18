@@ -1,6 +1,6 @@
 # SparteNet – Android-App (Handy und Tablet)
 
-Native App (Kotlin, Jetpack Compose, Material 3) für den **SparteNet Manager ab Version 5.1** (Grundfunktionen ab 5.0).
+Native App (Kotlin, Jetpack Compose, Material 3) für den **SparteNet Manager ab Version 5.3** (App-Zugangstoken).
 Sie nutzt ausschließlich die App-Schnittstelle des Managers (`/api/v1/app/…` und `/api/…` mit `Authorization: Bearer sna_…`)
 und hat genau die Rechte des Benutzerkontos, mit dem sie angemeldet wird.
 
@@ -24,6 +24,9 @@ Liste und Detail nebeneinander. Hoch- und Querformat werden unterstützt.
 
 ## Sicherheit
 
+* **App-Zugangstoken:** Beim Einrichten fragt die App nach dem Zugangstoken des Vereins (Manager → Benutzer → Anmeldung und
+  Sicherheit → App-Zugangstoken). Er wird verschlüsselt gespeichert und bei jeder Anfrage als `X-App-Token` mitgeschickt.
+  Erzeugt der Administrator einen neuen Token, fragt die App beim nächsten Anmelden danach.
 * Das Passwort wird **nicht** gespeichert. Nach der Anmeldung (mit Zwei-Faktor-Code, falls eingeschaltet) erhält die App einen
   eigenen Geräte-Schlüssel. Er liegt AES-GCM-verschlüsselt in den App-Einstellungen; der Schlüssel dazu steckt im
   **Android Keystore** und ist nicht exportierbar. Sicherung/Geräteübertragung ist für die App ausgeschaltet.
