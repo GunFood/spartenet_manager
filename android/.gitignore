@@ -1,0 +1,14 @@
+.gradle/
+build/
+/app/build/
+local.properties
+.idea/
+*.iml
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+# Signatur-Schlüssel nie ins Repo
+*.jks
+*.keystore
+keystore.properties

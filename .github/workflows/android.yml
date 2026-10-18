@@ -1,0 +1,61 @@
+name: Android-App
+
+on:
+  push:
+    paths:
+      - "android/**"
+      - ".github/workflows/android.yml"
+  pull_request:
+    paths:
+      - "android/**"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    name: APK bauen
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    env:
+      HAT_KEYSTORE: ${{ secrets.SPARTENET_KEYSTORE_B64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Debug-APK (Testversion)
+        run: ./gradlew --no-daemon assembleDebug lintDebug
+      # Optional: signierte Release-APK – nur wenn die Secrets im Repository hinterlegt sind
+      #   SPARTENET_KEYSTORE_B64 (keystore als Base64), SPARTENET_KEYSTORE_PASSWORT, SPARTENET_KEY_ALIAS, SPARTENET_KEY_PASSWORT
+      - name: Release-APK (signiert)
+        env:
+          KEYSTORE_B64: ${{ secrets.SPARTENET_KEYSTORE_B64 }}
+          SPARTENET_KEYSTORE_PASSWORT: ${{ secrets.SPARTENET_KEYSTORE_PASSWORT }}
+          SPARTENET_KEY_ALIAS: ${{ secrets.SPARTENET_KEY_ALIAS }}
+          SPARTENET_KEY_PASSWORT: ${{ secrets.SPARTENET_KEY_PASSWORT }}
+        if: env.HAT_KEYSTORE == 'true'
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/spartenet.jks"
+          SPARTENET_KEYSTORE="$RUNNER_TEMP/spartenet.jks" ./gradlew --no-daemon assembleRelease
+          rm -f "$RUNNER_TEMP/spartenet.jks"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SparteNet-App
+          path: |
+            android/app/build/outputs/apk/debug/*.apk
+            android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lint-bericht
+          path: android/app/build/reports/lint-results-debug.html
+          if-no-files-found: ignore

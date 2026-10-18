@@ -28,7 +28,7 @@ class Testserver:
             datenbank_leeren(db)
             env.update(db)
         env.update(SPARTENET_DATA_DIR=self.ordner, SPARTENET_PASSWORD_FILE=pwdatei, SPARTENET_PORT=str(self.port), SPARTENET_HOST="127.0.0.1",
-                   SPARTENET_KEIN_BROWSER="1", SPARTENET_UPDATE_PRUEFEN="0", SPARTENET_SICHERUNG="0", **umgebung)
+                   SPARTENET_KEIN_BROWSER="1", SPARTENET_UPDATE_PRUEFEN="0", SPARTENET_SICHERUNG="0", SPARTENET_ZEITPLAN="0", SPARTENET_RUNDSCHREIBEN_PAUSE="0", **umgebung)
         self.log = open(os.path.join(self.ordner, "server.log"), "w")
         self.proc = subprocess.Popen([sys.executable, os.path.join(CODE, "SparteNet_Manager.py")], cwd=self.ordner, env=env,
                                      stdout=self.log, stderr=subprocess.STDOUT)
@@ -121,7 +121,7 @@ class SmtpEmpfaenger:
     """minimaler SMTP-Server, der Nachrichten in einer Liste sammelt"""
 
     def __init__(self):
-        self.mails = []
+        self.mails, self.anmeldungen, self.passwort = [], [], "smtp-geheim"
         aussen = self
 
         class H(socketserver.StreamRequestHandler):
@@ -133,7 +133,15 @@ class SmtpEmpfaenger:
                     if not zeile:
                         return
                     c = zeile.decode().strip(); u = c.upper()
-                    if u.startswith("RCPT"):
+                    if u.startswith("EHLO"):
+                        self.wfile.write(b"250-test\r\n250 AUTH LOGIN PLAIN\r\n")
+                    elif u == "AUTH LOGIN":
+                        import base64 as b64
+                        w("334 VXNlcm5hbWU6"); nutzer = b64.b64decode(self.rfile.readline().strip()).decode()
+                        w("334 UGFzc3dvcmQ6"); pw = b64.b64decode(self.rfile.readline().strip()).decode()
+                        aussen.anmeldungen.append((nutzer, pw))
+                        w("235 ok" if pw == aussen.passwort else "535 falsch")
+                    elif u.startswith("RCPT"):
                         an.append(c[8:].strip("<>")); w("250 ok")
                     elif u == "DATA":
                         w("354 los"); teile = []

@@ -76,7 +76,7 @@ class AutomationenUndApi(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.a = admin()
-        code, x = cls.a.req("/api/smtp-speichern", {"host": "127.0.0.1", "port": SMTP.port, "sicherheit": "keine", "absender": "wlan@verein.example",
+        code, x = cls.a.req("/api/smtp-speichern", {"host": "127.0.0.1", "port": SMTP.port, "sicherheit": "keine", "anmeldung": "keine", "absender": "wlan@verein.example",
                                                     "passwort": "geheim-smtp-pw"})
         assert code == 200, x
         code, x = cls.a.req("/api/automation-speichern", {"regel": {"name": "Mail bei Buchung", "ausloeser": "buchung", "aktionen": [
@@ -91,6 +91,18 @@ class AutomationenUndApi(unittest.TestCase):
         cls.key = x["neu"]
         code, x = cls.a.req("/api/api-schluessel-neu", {"name": "Nur lesen", "rechte": ["lesen"]})
         cls.key_lesen = x["neu"]
+
+    def test_smtp_login(self):
+        a = admin()
+        a.req("/api/smtp-speichern", {"anmeldung": "login", "benutzer": "postfach@verein.example", "passwort": "falsch"})
+        code, x = a.req("/api/smtp-test", {"an": "test@example.org"})
+        self.assertEqual(code, 400)
+        self.assertIn("lehnt die Anmeldung ab", x["fehler"])
+        a.req("/api/smtp-speichern", {"passwort": SMTP.passwort})
+        code, x = a.req("/api/smtp-test", {"an": "test@example.org"})
+        self.assertEqual(code, 200, x)
+        self.assertEqual(SMTP.anmeldungen[-1], ("postfach@verein.example", SMTP.passwort))
+        a.req("/api/smtp-speichern", {"anmeldung": "keine"})
 
     def test_smtp_passwort_nie_sichtbar(self):
         _, x = self.a.req("/api/automation")
@@ -205,6 +217,277 @@ class UnterlagenOrdner(unittest.TestCase):
         code, x = a.req("/api/unterlage-ordner", {"loeschen": "Wartung"})
         self.assertEqual(code, 200, x)
         self.assertNotIn("Wartung", x["ordner"])
+
+
+class MitgliederTicketsEmail(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.a = admin()
+        cls.a.req("/api/smtp-speichern", {"host": "127.0.0.1", "port": SMTP.port, "sicherheit": "keine", "anmeldung": "keine", "absender": "wlan@verein.example"})
+        _, x = cls.a.req("/api/api-schluessel-neu", {"name": "Webseite", "rechte": ["mitglieder", "tickets"]})
+        cls.key = x["neu"]
+
+    def test_mitglied_von_hand_api_und_import(self):
+        a = self.a
+        code, x = a.req("/api/mitglied-speichern", {"mitglied": {"vorname": "Erika", "nachname": "Muster", "email": "Erika@Example.org", "telefon": "+49 3381 12345", "sparte": "BW", "parzelle": "5"}})
+        self.assertEqual(code, 200, x)
+        m = next(z for z in x["zeilen"] if z["nachname"] == "Muster")
+        self.assertEqual((m["email"], m["parzelle"]), ("erika@example.org", 5))
+        for falsch in ({"vorname": "", "nachname": ""}, {"nachname": "X", "email": "kaputt"}, {"nachname": "X", "sparte": "BW", "parzelle": "999"}, {"nachname": "X", "sparte": "XYZ"}, {"nachname": "X", "telefon": "abc"}):
+            self.assertEqual(a.req("/api/mitglied-speichern", {"mitglied": falsch})[0], 400, falsch)
+        code, x = api(SRV.basis, "POST", "/api/v1/mitglied", {"vorname": "Hans", "nachname": "Api", "email": "hans@example.org", "sparte": "BW", "parzelle": 6}, self.key)
+        self.assertEqual((code, x["neu"]), (200, True), x)
+        code, x = api(SRV.basis, "POST", "/api/v1/mitglied", {"email": "hans@example.org", "telefon": "0331 999"}, self.key)   # gleiche E-Mail → aktualisieren
+        self.assertEqual((x["neu"], x["mitglied"]["telefon"], x["mitglied"]["nachname"]), (False, "0331 999", "Api"))
+        csv_daten = "Vorname;Nachname;E-Mail;Telefon;Parzelle\nAnna;Import;anna@example.org;0331 1;7\nBodo;Fehler;kaputt;;8\nErika;Muster;erika@example.org;;5\n".encode("utf-8")
+        code, _, roh = a.roh("/api/mitglieder-import?" + urllib.parse.urlencode({"name": "liste.csv", "sparte": "BW"}), csv_daten)
+        x = json.loads(roh)
+        self.assertEqual((x["neu"], x["geaendert"], x["fehler"], x["uebernommen"]), (1, 1, 1, False), x)
+        code, _, roh = a.roh("/api/mitglieder-import?" + urllib.parse.urlencode({"name": "liste.csv", "sparte": "BW", "uebernehmen": "1"}), csv_daten)
+        _, x = a.req("/api/mitglieder")
+        self.assertEqual(sum(1 for z in x["zeilen"] if z["nachname"] == "Muster"), 1)                         # nicht doppelt
+        self.assertTrue(any(z["nachname"] == "Import" for z in x["zeilen"]))
+        code, kopf, roh = a.roh("/api/mitglieder-export")
+        self.assertIn(b"Erika;Muster", roh)
+        self.assertTrue(kopf["Content-Disposition"].startswith("attachment"))
+
+    def test_mail_mit_layout_vorlage_und_kunde_aus_mitglied(self):
+        a = self.a
+        a.req("/api/mitglied-speichern", {"mitglied": {"vorname": "Karla", "nachname": "Kunde", "email": "karla@example.org", "sparte": "BW", "parzelle": "33"}})
+        code, x = a.req("/api/email-vorlage-speichern", {"vorlage": {"name": "Willkommen", "betreff": "Willkommen {vorname}", "html": "<h2>Hallo {vorname}</h2><p>Tarif <b>{tarif}</b></p><script>alert(1)</script>"}})
+        self.assertEqual(code, 200, x)
+        vid = x["id"]
+        self.assertNotIn("script", json.dumps(x["vorlagen"]))
+        code, x = a.req("/api/automation-speichern", {"regel": {"name": "Willkommen", "ausloeser": "buchung", "bedingung": {"sparte": "BW", "tarif": "Max"},
+                                                                "aktionen": [{"typ": "email", "an": "", "an_kunde": True, "vorlage": vid}]}})
+        self.assertEqual(code, 200, x)
+        n = len(SMTP.mails)
+        a.req("/api/buchungen", {"sparte": "BW", "aenderungen": {"33": "Max"}})
+        m = SMTP.warten(n + 1)
+        neu = [x for x in m[n:] if "karla@example.org" in x["an"]]
+        self.assertTrue(neu, m[n:])
+        t = neu[0]["text"]
+        self.assertIn("Willkommen Karla", t)
+        self.assertIn("text/html", t)
+        self.assertIn("text/plain", t)
+        self.assertEqual(a.req("/api/email-vorlage-loeschen", {"id": vid})[0], 400)                           # noch in einer Regel benutzt
+        _, v = a.req("/api/email-vorschau", {"betreff": "x", "html": "<p>{vorname}</p>", "layout": {"kopf": "Mein Verein"}})
+        self.assertIn("Mein Verein", v["html"])
+
+    def test_ticket_api_zuweisung_antwort(self):
+        a = self.a
+        a.req("/api/benutzer-speichern", {"neu": True, "name": "technik", "passwort": "Technik-Passwort-1", "passwort2": "Technik-Passwort-1", "art": "bereiche",
+                                          "bereiche": {"tickets": "schreiben"}, "email": "technik@verein.example"})
+        a.req("/api/automation-speichern", {"regel": {"name": "Zuweisung", "ausloeser": "ticket_zugewiesen", "aktionen": [
+            {"typ": "email", "an": "{zustaendig_email}", "betreff": "Ticket {ticket}: {betreff}", "html": "<p>{nachricht}</p>"}]}})
+        code, x = api(SRV.basis, "POST", "/api/v1/ticket", {"betreff": "WLAN geht nicht", "text": "Seit gestern kein Netz", "email": "kunde2@example.org", "name": "K. Zwei",
+                                                            "sparte": "BW", "parzelle": 9, "prioritaet": "hoch"}, self.key)
+        self.assertEqual(code, 200, x)
+        nr = x["ticket"]
+        self.assertEqual(api(SRV.basis, "GET", "/api/v1/ticket?nr=" + nr, schluessel=self.key)[1]["status"], "neu")
+        _, liste = a.req("/api/tickets?status=offen")
+        tid = next(z["id"] for z in liste["zeilen"] if z["nr"] == nr)
+        n = len(SMTP.mails)
+        code, x = a.req("/api/ticket-speichern", {"ticket": {"id": tid, "zustaendig": "technik"}})
+        self.assertEqual(code, 200, x)
+        mails = SMTP.warten(n + 1)
+        self.assertTrue(any("technik@verein.example" in m["an"] and nr in m["text"] for m in mails[n:]), mails[n:])
+        t = Sitzung(SRV.basis)
+        self.assertEqual(t.anmelden("technik", "Technik-Passwort-1")[0], 200)
+        _, x = t.req("/api/tickets?zustaendig=ich")
+        self.assertEqual([z["nr"] for z in x["zeilen"]], [nr])
+        n = len(SMTP.mails)
+        code, x = t.req("/api/ticket-kommentar", {"id": tid, "html": "<p>Wir kümmern uns, {name}.</p>", "an_kontakt": True, "wartet": True})
+        self.assertEqual(code, 200, x)
+        mails = SMTP.warten(n + 1)
+        self.assertTrue(any("kunde2@example.org" in m["an"] and f"[{nr}]" in m["text"] for m in mails[n:]))
+        self.assertEqual(x["ticket"]["status"], "wartet")
+        self.assertEqual(t.req("/api/ticket-loeschen", {"id": tid})[0], 403)                                   # löschen nur Admin
+        code, x = t.req("/api/ticket-speichern", {"ticket": {"id": tid, "status": "erledigt"}})
+        self.assertIn("Status: wartet auf Rückmeldung → erledigt", json.dumps(x["ticket"]["verlauf"], ensure_ascii=False))
+        self.assertEqual(api(SRV.basis, "POST", "/api/v1/ticket", {"text": "ohne Betreff"}, self.key)[0], 400)
+
+
+class Version50(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.a = a = admin()
+        a.req("/api/smtp-speichern", {"host": "127.0.0.1", "port": SMTP.port, "sicherheit": "keine", "anmeldung": "keine", "absender": "wlan@verein.example"})
+        a.req("/api/rechnung-einstellungen", {"firma": "KGV Test e.V.", "adresse": "Weg 1\n14770 Brandenburg", "iban": "DE89 3704 0044 0532 0130 00", "bic": "COBADEFFXXX"})
+        a.req("/api/mitglied-speichern", {"mitglied": {"vorname": "Rita", "nachname": "Rechnung", "email": "rita@example.org", "sparte": "BW", "parzelle": "41"}})
+        a.req("/api/mitglied-speichern", {"mitglied": {"vorname": "Paul", "nachname": "Portal", "email": "paul@example.org", "sparte": "BW", "parzelle": "42"}})
+        a.req("/api/buchungen", {"sparte": "BW", "aenderungen": {"41": "Plus", "42": "Basic"}})
+
+    def _mails_seit(self, n, anzahl=1):
+        return SMTP.warten(n + anzahl)[n:]
+
+    def test_rechnungen_pdf_versand_und_zahlungsabgleich(self):
+        a = self.a
+        code, v = a.req("/api/rechnungslauf", {"jahr": 2031})
+        self.assertEqual(code, 200, v)
+        self.assertTrue(any(x["parzelle"] == 41 for x in v["vorschau"]))
+        code, x = a.req("/api/rechnungslauf", {"jahr": 2031, "ausfuehren": True})
+        self.assertEqual(code, 200, x)
+        r41 = next(z for z in x["zeilen"] if z["parzelle"] == 41)
+        r42 = next(z for z in x["zeilen"] if z["parzelle"] == 42)
+        self.assertEqual(a.req("/api/rechnungslauf", {"jahr": 2031, "ausfuehren": True})[0], 400)          # nicht doppelt
+        code, kopf, pdf = a.roh("/api/rechnung-pdf?id=" + r41["id"])
+        self.assertTrue(pdf.startswith(b"%PDF-1.4"))
+        n = len(SMTP.mails)
+        code, x = a.req("/api/rechnung-senden", {"ids": [r41["id"]]})
+        self.assertEqual(code, 200, x)
+        m = self._mails_seit(n)[0]
+        self.assertIn("rita@example.org", m["an"])
+        self.assertIn("application/pdf", m["text"])
+        csvd = f"Buchungstag;Verwendungszweck;Auftraggeber;Betrag\n17.10.2031;{r41['nr']} WLAN;Rita Rechnung;180,00\n18.10.2031;Spende;Jemand;5,00\n".encode()
+        code, _, roh = a.roh("/api/zahlungen-import", csvd)
+        x = json.loads(roh)
+        self.assertEqual(code, 200, x)
+        z = next(z for z in x["zeilen"] if z["betrag"] == 180.0)
+        self.assertEqual((z["rechnung"], z["grund"]), (r41["id"], "Rechnungsnummer"))
+        code, x = a.req("/api/zahlungen-uebernehmen", {"import": x["import"], "zuordnung": {z["hash"]: z["rechnung"]}})
+        self.assertEqual(next(y for y in x["zeilen"] if y["id"] == r41["id"])["status"], "bezahlt")
+        _, _, roh = a.roh("/api/zahlungen-import", csvd)
+        self.assertTrue(next(z for z in json.loads(roh)["zeilen"] if z["betrag"] == 180.0)["schon"])          # nicht doppelt buchen
+        _, k = a.req("/api/api-schluessel-neu", {"name": "Bank", "rechte": ["ereignis"]})
+        code, x = api(SRV.basis, "POST", "/api/v1/ereignis", {"ereignis": "zahlung", "betrag": "120", "referenz": r42["nr"]}, k["neu"])
+        self.assertEqual(x["aktionen"][0]["aktion"], "Zahlung gebucht", x)
+
+    def test_vertrag_und_rundschreiben(self):
+        a = self.a
+        _, v = a.req("/api/vertraege")
+        z = next(z for z in v["zeilen"] if z["id"] == "BW-41")
+        self.assertEqual((z["status"] in ("laufend", "Frist läuft ab"), z["laufzeit"]), (True, 12))
+        code, v = a.req("/api/vertrag-kuendigen", {"id": "BW-41"})
+        self.assertEqual(next(z for z in v["zeilen"] if z["id"] == "BW-41")["status"], "gekündigt")
+        a.req("/api/vertrag-kuendigen", {"id": "BW-41", "zuruecknehmen": True})
+        code, e = a.req("/api/rundschreiben-empfaenger", {"filter": {"sparten": ["BW"], "tarife": ["Plus"]}})
+        self.assertEqual(code, 200, e)
+        self.assertIn("rita@example.org", [x["email"] for x in e["beispiele"]])
+        self.assertNotIn("paul@example.org", [x["email"] for x in e["beispiele"]])
+        n = len(SMTP.mails)
+        code, x = a.req("/api/rundschreiben-senden", {"filter": {"sparten": ["BW"], "tarife": ["Plus"]}, "betreff": "Wartung {vorname}", "html": "<p>Hallo {vorname}</p>"})
+        self.assertEqual(code, 200, x)
+        ende = time.time() + 10
+        while time.time() < ende and not any("rita@example.org" in m["an"] and "Wartung Rita" in m["text"] for m in SMTP.mails[n:]):
+            time.sleep(0.2)
+        self.assertTrue(any("rita@example.org" in m["an"] and "Wartung Rita" in m["text"] for m in SMTP.mails[n:]), SMTP.mails[n:])
+
+    def test_paechter_seite(self):
+        a = self.a
+        s = Sitzung(SRV.basis)
+        self.assertEqual(s.roh("/portal")[0], 404)
+        a.req("/api/portal-einstellungen", {"aktiv": True})
+        code, _, html = s.roh("/portal")
+        self.assertEqual(code, 200)
+        self.assertIn(b"Zugangskarte", html)
+        a.req("/api/ppsk", {"sparte": "BW", "art": "fehlende"})
+        n = len(SMTP.mails)
+        code, x = s.req("/portal/ticket", {"betreff": "Frage", "text": "Hallo", "email": "paul@example.org", "sparte": "BW", "parzelle": "42"})
+        self.assertEqual(code, 200, x)
+        nr = x["ticket"]
+        self.assertEqual(s.req("/portal/status", {"nr": nr, "email": "falsch@example.org"})[0], 400)
+        code, x = s.req("/portal/status", {"nr": nr, "email": "paul@example.org"})
+        self.assertEqual((code, x["status"]), (200, "neu"))
+        code, x = s.req("/portal/zugang", {"sparte": "BW", "parzelle": "42", "email": "falsch@example.org"})
+        self.assertEqual(code, 200)
+        code, x = s.req("/portal/zugang", {"sparte": "BW", "parzelle": "42", "email": "paul@example.org"})
+        self.assertEqual(code, 200)
+        mails = self._mails_seit(n, 2)
+        karte = [m for m in mails if "Zugangskarte" in m["text"]]
+        self.assertEqual(len(karte), 1, mails)
+        self.assertIn("paul@example.org", karte[0]["an"])
+        self.assertIn("application/pdf", karte[0]["text"])
+        self.assertNotIn("SN", json.dumps(x))                       # kein Passwort in der Antwort
+        for _ in range(6):
+            code, x = s.req("/portal/zugang", {"sparte": "BW", "parzelle": "42", "email": "paul@example.org"})
+        self.assertEqual(code, 400)                                  # Grenze
+
+    def test_app_zugang(self):
+        a = self.a
+        a.req("/api/benutzer-speichern", {"neu": True, "name": "appnutzer", "passwort": "App-Passwort-123", "passwort2": "App-Passwort-123", "art": "bereiche",
+                                          "bereiche": {"tickets": "schreiben", "start": "lesen"}})
+        self.assertEqual(api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "appnutzer", "passwort": "falsch-falsch"})[0], 401)
+        code, x = api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "appnutzer", "passwort": "App-Passwort-123", "geraet": "Pixel 9"})
+        self.assertEqual(code, 200, x)
+        tok = x["token"]
+        self.assertTrue(tok.startswith("sna_"))
+        def mit_app(pfad, body=None):
+            r = urllib.request.Request(SRV.basis + pfad, data=json.dumps(body).encode() if body is not None else None, method="POST" if body is not None else "GET")
+            r.add_header("Authorization", "Bearer " + tok)
+            r.add_header("Content-Type", "application/json")
+            try:
+                with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(r) as o:
+                    return o.status, json.loads(o.read())
+            except urllib.error.HTTPError as e:
+                return e.code, json.loads(e.read())
+        code, x = mit_app("/api/app-uebersicht")
+        self.assertEqual(code, 200, x)
+        self.assertIn("tickets", x)
+        self.assertNotIn("rechnungen", x)                          # kein Recht
+        self.assertEqual(mit_app("/api/tickets")[0], 200)
+        self.assertEqual(mit_app("/api/benutzer")[0], 403)
+        self.assertEqual(mit_app("/api/ticket-speichern", {"ticket": {"betreff": "aus der App"}})[0], 200)
+        code, x = mit_app("/api/v1/app/funktionen")
+        self.assertTrue(any(f["pfad"] == "/api/tickets" for f in x["funktionen"]))
+        code, x = mit_app("/api/app-geraete")
+        gid = x["geraete"][0]["id"]
+        mit_app("/api/app-geraet-entfernen", {"id": gid})
+        self.assertEqual(mit_app("/api/app-uebersicht")[0], 401)
+
+    def test_android_app_ablauf(self):
+        """genau die Aufrufe, die die Android-App macht"""
+        code, x = api(SRV.basis, "POST", "/api/v1/app/anmelden", {"benutzer": "admin", "passwort": PASSWORT, "geraet": "Tablet Test"})
+        self.assertEqual(code, 200, x)
+        tok = x["token"]
+        g = lambda pfad: api(SRV.basis, "GET", pfad, None, tok)
+        p = lambda pfad, body: api(SRV.basis, "POST", pfad, body, tok)
+        code, info = g("/api/v1/app/info")
+        self.assertEqual((code, info["ich"]["admin"]), (200, True))
+        self.assertIn("bereiche", info["ich"])
+        code, sp = g("/api/buchungen")                                   # ohne Sparte: Liste für die Auswahl
+        self.assertEqual(code, 200, sp)
+        self.assertIn("BW", [x["kz"] for x in sp["sparten"]])
+        code, b = g("/api/buchungen?sparte=BW")
+        self.assertIn("Plus", b["tarife"])
+        code, m = g("/api/mitglieder")
+        self.assertIsInstance(m["sparten"], dict)
+        code, t = p("/api/ticket-speichern", {"ticket": {"betreff": "WLAN weg", "text": "seit gestern", "prioritaet": "hoch", "zustaendig": "admin",
+                                                         "sparte": "BW", "parzelle": "41", "name": "Rita R.", "email": "rita@example.org"}})
+        self.assertEqual(code, 200, t)
+        tid = t["ticket"]["id"]
+        self.assertEqual(t["ticket"]["kontakt"]["email"], "rita@example.org")
+        code, t = p("/api/ticket-speichern", {"ticket": {"id": tid, "status": "wartet"}})   # nur ein Feld ändern
+        self.assertEqual((code, t["ticket"]["status"], t["ticket"]["betreff"]), (200, "wartet", "WLAN weg"))
+        code, t = p("/api/ticket-kommentar", {"id": tid, "text": "Router neu gestartet", "an_kontakt": False})
+        self.assertEqual(t["ticket"]["verlauf"][-1]["art"], "kommentar")
+        code, lst = g("/api/tickets?status=offen&zustaendig=ich")
+        self.assertTrue(any(z["id"] == tid for z in lst["zeilen"]))
+        self.assertIn("admin", lst["konten"])
+        code, u = g("/api/app-uebersicht")
+        self.assertGreaterEqual(u["tickets"]["meine"], 1)
+        self.assertEqual(g("/api/ueberwachung")[0], 200)
+        self.assertEqual(g("/api/voucher-vorlagen")[0], 200)
+        self.assertEqual(g("/api/plan")[0], 200)
+
+    def test_datenschutz_und_wochenbericht(self):
+        a = self.a
+        _, m = a.req("/api/mitglied-speichern", {"mitglied": {"vorname": "Dora", "nachname": "Daten", "email": "dora@example.org", "sparte": "BW", "parzelle": "43"}})
+        mid = m["id"]
+        _, t = a.req("/api/ticket-speichern", {"ticket": {"betreff": "Geheim", "text": "meine Daten", "email": "dora@example.org"}})
+        code, kopf, roh = a.roh("/api/mitglied-auskunft?id=" + mid)
+        aus = json.loads(roh)
+        self.assertEqual(aus["mitglied"]["email"], "dora@example.org")
+        self.assertEqual(len(aus["tickets"]), 1)
+        code, x = a.req("/api/mitglied-dsgvo-loeschen", {"id": mid})
+        self.assertEqual(code, 200, x)
+        self.assertFalse(any(z["id"] == mid for z in x["zeilen"]))
+        _, t2 = a.req("/api/ticket?id=" + t["ticket"]["id"])
+        self.assertNotIn("dora", json.dumps(t2).lower())
+        n = len(SMTP.mails)
+        code, x = a.req("/api/wochenbericht", {"jetzt": True, "an_test": "chef@verein.example"})
+        self.assertEqual(code, 200, x)
+        self.assertIn("Wochenbericht", self._mails_seit(n)[0]["text"])
 
 
 class Datensicherung(unittest.TestCase):

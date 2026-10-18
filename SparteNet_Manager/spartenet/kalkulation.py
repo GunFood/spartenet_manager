@@ -189,13 +189,15 @@ def akt_kalk_sparte(d, b):
     return {"log": [f"✔ {kz} gespeichert."]}
 
 
-def akt_buchungen(d, kz):
+def akt_buchungen(d, kz, erlaubt=None):
+    if not kz:   # ohne Sparte: Liste der Sparten (z. B. für die App)
+        return {"sparten": [{"kz": k, "name": x["name"], "n": x["n"]} for k, x in sorted(kalk_sparten(d).items()) if erlaubt is None or k in erlaubt], "log": []}
     sp = kalk_sparten(d).get(kz)
     if not sp:
         raise Fehler("Sparte unbekannt.")
     b = (d.get("buchungen") or {}).get(kz) or {}
     namen = {t["name"] for t in tarife_pruefen(d["tarife"])}
-    return {"sparte": sp["name"], "kz": kz, "n": sp["n"],
+    return {"sparte": sp["name"], "kz": kz, "n": sp["n"], "tarife": sorted(namen),
             "zeilen": [{"p": p, "netz": NETZ_PARZELLE.format(kz=kz, p=p), "tarif": b.get(str(p), ""), "unbekannt": bool(b.get(str(p))) and b.get(str(p)) not in namen}
                        for p in range(1, sp["n"] + 1)], "log": []}
 

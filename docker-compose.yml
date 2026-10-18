@@ -27,6 +27,12 @@ services:
       # SPARTENET_SMTP_PASSWORD_FILE: /run/secrets/spartenet_smtp_password
       # API-Schnittstelle: Anfragen je Minute und Schlüssel
       SPARTENET_API_PRO_MINUTE: ${SPARTENET_API_PRO_MINUTE:-120}
+      # Zeitplan (Störungsüberwachung, Verträge, Wochenbericht) und Zeitzone für Ausdrucke/Berichte
+      SPARTENET_ZEITPLAN: ${SPARTENET_ZEITPLAN:-1}
+      SPARTENET_ZEITZONE: ${SPARTENET_ZEITZONE:-Europe/Berlin}
+      TZ: ${TZ:-Europe/Berlin}
+      # Gültigkeit der App-Schlüssel in Tagen
+      SPARTENET_APP_TAGE: ${SPARTENET_APP_TAGE:-365}
     # MariaDB direkt auf dem Docker-Host: SPARTENET_DB_HOST=host.docker.internal
     extra_hosts:
       - "host.docker.internal:host-gateway"

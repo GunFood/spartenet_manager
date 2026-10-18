@@ -156,6 +156,8 @@ def akt_parzelle(d, kz, p):
     ssid = wlan_ssid(d, kz)
     return {"parzelle": p, "sparte": sp["name"], "netz": zeile.get("Netz") or (netz or {}).get("name", ""), "vlan": zeile.get("VLAN") or (netz or {}).get("vlan", ""),
             "subnetz": (netz or {}).get("netz", ""), "wlan": ssid, "passwort": zeile["Passwort"],
-            "qr": qr_svg(wlan_qr_text(ssid, zeile["Passwort"]), rand=2), "log": []}
+            "qr": qr_svg(wlan_qr_text(ssid, zeile["Passwort"]), rand=2),
+            "qr_matrix": ["".join("1" if w else "0" for w in z) for z in qr_matrix(wlan_qr_text(ssid, zeile["Passwort"]))],   # für Apps (ohne SVG)
+            "log": []}
 
 __all__ = [_n for _n in dict(globals()) if not _n.startswith("__")]  # alle Namen an die folgenden Module weitergeben

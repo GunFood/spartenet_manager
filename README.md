@@ -1,4 +1,4 @@
-SparteNet Manager 4.8.4 (Cloud)
+SparteNet Manager 5.0 (Cloud)
 ===============================
 
 Funktioniert komplett über die UniFi-Cloud (api.ui.com). Kein lokaler Zugriff, kein VPN.
@@ -100,6 +100,63 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
     POST /api/v1/buchung   {"sparte":"BW","parzelle":12,"tarif":"Basic"}   ("" = Buchung entfernen)
   Höchstens 120 Anfragen je Minute und Schlüssel (SPARTENET_API_PRO_MINUTE). Zahlungsanbieter über n8n/Zapier/Make
   anbinden. Von außen nur über HTTPS (Reverse-Proxy, dann SPARTENET_PROXY=1).
+
+### RECHNUNGEN UND ZAHLUNGSABGLEICH (Reiter "Rechnungen") – neu in 5.0
+  Rechnungslauf je Jahr: für jede gebuchte Parzelle mit Mitglied eine Rechnung über den Jahrespreis des Tarifs.
+  PDF (ohne Zusatzpakete) mit GiroCode zum Scannen in der Banking-App, Versand per E-Mail mit PDF im Anhang.
+  Kleinunternehmer (§ 19 UStG) oder mit Umsatzsteuer; Rechnungen werden nie gelöscht, nur storniert.
+  Kontoauszug (CSV-Export der Bank) hochladen: Zuordnung über Rechnungsnummer, sonst Betrag + Name bzw. Parzelle;
+  prüfen, übernehmen – jede Zahlung löst "Zahlung eingegangen" aus. Schon übernommene Buchungen werden erkannt.
+  API: POST /api/v1/ereignis {"ereignis":"zahlung","referenz":"RE-2026-0001","betrag":"180"} bucht die Rechnung.
+
+### VERTRÄGE, RUNDSCHREIBEN, DATENSCHUTZ (Reiter "Mitglieder") – neu in 5.0
+  Verträge je Buchung (automatisch bei der Buchung): Beginn, Laufzeit, Verlängerung, Kündigungsfrist, Kündigung.
+  Automationen "Kündigungsfrist läuft bald ab", "Vertrag gekündigt", "Vertrag endet"; optional Buchung zum Ende entfernen.
+  Rundschreiben: E-Mail mit Layout an Mitglieder nach Sparte/Tarif, Test an sich selbst, Versand im Hintergrund.
+  Datenschutz: Auskunft je Mitglied als Datei, Löschung auf Knopfdruck (Tickets anonymisiert, Rechnungen gesperrt
+  aufbewahrt). E-Mail-Adressen im Automations-Verlauf nur für Konten mit Recht "Mitglieder".
+
+### PÄCHTER-SEITE, STÖRUNGEN, WOCHENBERICHT – neu in 5.0
+  /portal (anfangs aus, einschalten unter "Tickets"): Anfrage stellen, Stand abfragen, Zugangskarte neu anfordern –
+  die Karte (PDF mit QR-Code) geht nur an die hinterlegte E-Mail des Mitglieds; Grenzen gegen massenhafte Anfragen.
+  Störungsüberwachung ("Systeminfo"): Geräte der Konsole regelmäßig prüfen, bei Ausfall Ticket + Automation "Störung".
+  Wochenbericht ("Automationen"): Buchungen, Anfragen, Zahlungen, offene Rechnungen, Störungen, Verträge.
+  Zeitplan im Hintergrund jede Minute (SPARTENET_ZEITPLAN=0 schaltet ab), Zeitzone SPARTENET_ZEITZONE (Europe/Berlin).
+
+### E-MAIL: SMTP-LOGIN – neu in 5.0
+  "Anmeldung": SMTP-Login (AUTH LOGIN, Standard), AUTH PLAIN, automatisch oder keine. Benutzername leer = Absender.
+  Port 587 mit STARTTLS oder 465 mit SSL/TLS. Verständliche Meldungen bei abgelehnter Anmeldung oder falschem Port.
+
+### APP-SCHNITTSTELLE (z. B. eigene Android-App) – neu in 5.0
+  POST /api/v1/app/anmelden {"benutzer","passwort","code" (bei 2FA),"geraet"} → {"token": "sna_…"}.
+  Danach alle /api/…-Funktionen mit "Authorization: Bearer sna_…" – mit den Rechten des Kontos (kein X-Token nötig).
+  GET /api/app-uebersicht (Zahlen für den Startbildschirm), GET /api/v1/app/info, GET /api/v1/app/funktionen
+  (alle Funktionen mit nötigem Recht). Geräte unter "Benutzer → Mein Konto" entfernen; gültig 365 Tage (SPARTENET_APP_TAGE).
+
+### ANDROID-APP FÜR HANDY UND TABLET (Ordner android/)
+  Native App (Kotlin/Compose): Start-Übersicht, Anfragen bearbeiten und beantworten, Mitglieder, Buchungen, WLAN einer Parzelle
+  mit QR-Code, Gast-Voucher, Rechnungen als PDF, Störungen, Geräteverwaltung. Tablet mit Seitenleiste und Liste/Detail.
+  APK über GitHub Actions (Workflow "Android-App", Artefakt "SparteNet-App") oder Android Studio – Details in android/README.md.
+  GET /api/buchungen ohne "sparte" liefert die Sparten-Liste, /api/parzelle zusätzlich "qr_matrix" (für Apps).
+
+### E-MAIL MIT LAYOUT UND VORLAGEN (Reiter "Automationen") – neu in 4.9
+  Layout für alle E-Mails: Kopfzeile mit Logo (aus "Kartendesign"), Farben, Schrift, Breite, Fußzeile (Impressum).
+  Vorschau mit Beispieldaten, Test-E-Mail. Vorlagen mit Editor (fett, kursiv, Überschriften, Listen, Link, Platzhalter),
+  in Regeln und Ticket-Antworten auswählbar. Versand als HTML mit Text-Alternative; unsichere Inhalte werden entfernt.
+
+### MITGLIEDER (Reiter "Mitglieder") – neu in 4.9
+  Vorname, Nachname, E-Mail, Telefon, Sparte, Parzelle, Notiz – mit gebuchtem Tarif der Parzelle. Anlegen von Hand,
+  per Excel/CSV (Vorschau, dann Übernehmen; gleiche E-Mail bzw. Parzelle + Nachname wird aktualisiert) oder über die
+  API (POST /api/v1/mitglied, GET /api/v1/mitglieder – Recht "mitglieder"). Export als CSV. Hinweis auf gebuchte
+  Parzellen ohne Mitglied. In E-Mails: {vorname} {nachname} {telefon}; "an den Kunden" nutzt die E-Mail des Mitglieds.
+  Auslöser für Automationen: "Mitglied angelegt". Recht "Mitglieder" (kein/lesen/schreiben).
+
+### ANFRAGEN / TICKETS (Reiter "Tickets") – neu in 4.9
+  Tickets mit Nummer (T-0001), Kategorie, Priorität, Status (neu, in Bearbeitung, wartet, erledigt), zuständigem
+  Benutzer und Verlauf. Antwort per E-Mail an den Kontakt (mit Layout, optional Vorlage) oder interne Notiz.
+  Kontakt wird automatisch dem Mitglied zugeordnet (E-Mail oder Parzelle). Über die API: POST /api/v1/ticket,
+  GET /api/v1/ticket?nr= (Recht "tickets"). Automationen: "Neue Anfrage", "Ticket zugewiesen" (z. B. E-Mail an
+  {zustaendig_email} – E-Mail je Benutzerkonto unter "Benutzer"), "Ticket erledigt". Recht "Tickets".
 
 ### UNTERLAGEN: ORDNER WÄHLEN UND ANLEGEN – neu in 4.8.4
   Beim Hochladen "In Ordner hochladen" als Auswahl (mit Anzahl Dateien); "+ Neuer Ordner …" legt beim Hochladen
