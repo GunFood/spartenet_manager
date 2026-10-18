@@ -582,6 +582,15 @@ class Modulkette(unittest.TestCase):
                     gesehen.setdefault(x, m)
         self.assertEqual(doppelt, [])
 
+    def test_oberflaeche_keine_doppelten_namen(self):
+        """gleichnamige JS-Funktionen überschreiben sich still, doppelte IDs liefern das falsche Feld (z. B. App-Zugangstoken / Zuteilung)"""
+        import re as rx
+        from collections import Counter as C
+        f = C(rx.findall(r"(?<![\w.])function\s+([A-Za-z_$][\w$]*)\s*\(", S.HTML))
+        i = C(rx.findall(r'\sid="([^"$`{]+)"', S.HTML))
+        self.assertEqual({k: v for k, v in f.items() if v > 1}, {})
+        self.assertEqual({k: v for k, v in i.items() if v > 1}, {})
+
     def test_kartendesign_speichern(self):
         d = frisch()
         self.assertTrue(S.design_pruefen({**d["design"], "farbe_akzent": "#123456"})["farbe_akzent"] == "#123456")
