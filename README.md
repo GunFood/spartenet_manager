@@ -112,6 +112,23 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   Umstieg: Der bisherige gemeinsame Token aus 5.3/5.4 gilt weiter für alle Konten ("alle Konten (alt)" in der Liste),
   bis der Administrator ihn entfernt – am besten, sobald jeder seinen eigenen Token eingetragen hat.
 
+### MITGLIEDERBEREICH: ANPASSEN, TARIFE, ANTRÄGE – neu in 5.5
+  Reiter "Tickets" → Karte "Mitgliederbereich":
+  - Anpassen: Titel, Text auf der Anmeldeseite, Hinweis; sichtbare Bereiche (Geräte, Rechnungen, Anfragen, neue Anfrage,
+    Zugangskarte) einzeln ein-/ausschalten. Aussehen (Farben, Logo, Hintergrund, Schrift, Fußzeile) kommt von der Pächter-Seite
+    (☰ → System & Konto → Oberfläche gestalten → Pächter-Seite).
+  - Buchbare Tarife auswählen (keiner ausgewählt = alle).
+  - Upgrade (teurerer bzw. schnellerer Tarif) jederzeit: sofort gebucht – im Modus "Bezahldienst" nach der Bezahlung.
+  - Kleinerer Tarif (Downgrade) nur als Antrag: im Ticket erscheint "Tarif-Antrag" mit "Freigeben und buchen" oder "Ablehnen …"
+    (mit Grund). Freigeben bucht sofort, schließt das Ticket und informiert das Mitglied per E-Mail. Recht: Buchungen bearbeiten.
+    Ohne Bezahldienst laufen auch Neubuchung und Verlängerung über diese Freigabe.
+  - Mitglieder sehen nur ihre eigenen Anfragen: fest zugeordnet oder gleiche E-Mail UND gleiche Parzelle. Tickets werden beim
+    Anlegen nur noch dem Mitglied zugeordnet, dessen Parzelle passt (gleiche E-Mail mit anderer Parzelle reicht nicht mehr).
+
+### ENTER BESTÄTIGT EINGABEN – neu in 5.5
+  In der Oberfläche löst Enter in einem Eingabefeld den nächsten grünen Knopf im selben Block aus (z. B. Speichern, Anlegen).
+  Im Mitgliederbereich: E-Mail → Code senden, Code → Anmelden, Nachricht mit Strg+Enter senden. Pächter-Seite: Enter sendet das Formular.
+
 ### FEHLERBEHEBUNGEN – 5.5
   App-Zugangstoken wurde nach dem Erzeugen nicht angezeigt; CPU-/RAM-Balken unter System standen fast immer auf 100 %;
   "Unterschiede ermitteln" schrieb seine Kacheln auf die Startseite. Ein Test verhindert jetzt doppelte Namen in der Oberfläche.

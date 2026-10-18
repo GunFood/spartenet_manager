@@ -640,6 +640,7 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/ticket-kommentar": lambda: akt_ticket_kommentar(d, b or {}, ich, sp_erl),
                 "/api/ticket-loeschen": lambda: akt_ticket_loeschen(d, b or {}, ich),
                 "/api/ticket-schliessen": lambda: akt_ticket_schliessen(d, b or {}, ich, sp_erl),
+                "/api/tarif-antrag": lambda: akt_tarif_antrag(d, b or {}, ich, sp_erl),
                 "/api/ticket-zuordnen": lambda: akt_ticket_zuordnen(d, b or {}, ich, sp_erl),
                 "/api/ticket-mitglieder": lambda: akt_ticket_mitglieder(d, q, sp_erl),
                 "/api/mitglied-akte": lambda: akt_mitglied_akte(d, q, ich, rechte, sp_erl),

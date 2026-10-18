@@ -72,7 +72,7 @@ _LESEN = {
 _GET_LESEN_SONST_SCHREIBEN = {"/api/voucher-vorlagen": "voucher", "/api/tarife": "tarife", "/api/buchungen": "buchungen", "/api/design": "karten", "/api/fern": "verbindung"}
 _VORSCHAU = {"/api/zugang": "wlan_pw", "/api/netze": "netze", "/api/uebertragen": "wlan_pw", "/api/ppsk-hochladen": "wlan_pw", "/api/tarif-uebertragen": "tarife", "/api/voucher": "voucher", "/api/voucher-loeschen": "voucher", "/api/zuteilung-gateway": "netze", "/api/umzug": "netze"}
 _SCHREIBEN = {
-    "/api/laufzeit-verlaengern": "buchungen", "/api/laufzeit-starten": "buchungen", "/api/ticket-schliessen": "tickets", "/api/ticket-zuordnen": "tickets",
+    "/api/laufzeit-verlaengern": "buchungen", "/api/tarif-antrag": "buchungen", "/api/laufzeit-starten": "buchungen", "/api/ticket-schliessen": "tickets", "/api/ticket-zuordnen": "tickets",
     "/api/seiten-design": "gestaltung", "/api/seiten-vorschau": "gestaltung", "/api/ansicht-profile": "gestaltung",
     "/api/excel": "planung", "/api/schreibtest": "netze", "/api/umzug-rueckgaengig": "netze",
     "/api/ppsk-speichern": "wlan_pw", "/api/rueckgaengig": "wlan_pw", "/api/wlan-zuordnung": "wlan_pw", "/api/passwort": "wlan_pw",

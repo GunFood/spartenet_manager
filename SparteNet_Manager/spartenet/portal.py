@@ -336,7 +336,9 @@ body.mitbild footer{color:#eee}</style></head>
 <label for="z_email" class="pflicht">Ihre hinterlegte E-Mail-Adresse</label><input id="z_email" type="email" autocomplete="email">
 <button class="los" onclick="senden('zugang')">Zugangskarte senden</button><div class="msg" id="m_zugang"></div></section></main>
 <footer>__FUSS__</footer>
-<script>const $=i=>document.getElementById(i),esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));let INFO=null;
+<script>document.addEventListener("keydown",e=>{if(e.key!=="Enter"||e.isComposing)return;const el=e.target;if(!el||el.tagName!=="INPUT"||["checkbox","radio"].includes(el.type))return;
+ const sec=el.closest("section");const b=sec&&sec.querySelector("button.los");if(b&&!b.disabled){e.preventDefault();b.click()}});
+const $=i=>document.getElementById(i),esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));let INFO=null;
 function zeige(id){document.querySelectorAll("section").forEach(s=>s.classList.toggle("aktiv",s.id=="s_"+id));document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("aktiv",b.dataset.id==id))}
 function art(){const r=document.querySelector("input[name=t_art]:checked");return r?r.value:"mitglied"}
 function artGeaendert(){const m=art()=="mitglied";$("l_sparte").className=m?"pflicht":"";$("l_parzelle").className=m?"pflicht":"";

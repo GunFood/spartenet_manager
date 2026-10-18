@@ -614,11 +614,35 @@ class Version50(unittest.TestCase):
         rita = next((r for r in (rl.get("zeilen") or []) if r.get("parzelle") == 41), None)
         if rita:
             self.assertEqual(s.roh("/mein/rechnung?id=" + rita["id"])[0], 404)
+        # nur eigene Tickets: gleiche E-Mail, aber andere Parzelle → nicht sichtbar
+        a.req("/api/ticket-speichern", {"ticket": {"betreff": "Fremdes Ticket", "email": "paul@example.org", "sparte": "BW", "parzelle": "41"}})
+        self.assertNotIn("Fremdes Ticket", json.dumps(s.req("/mein/daten", {})[1]["parzellen"][0]["tickets"]))
+        # buchbare Tarife auswählen
+        self.assertEqual(a.req("/api/mitgliederbereich", {"tarife": ["Basic", "Max"], "titel": "Mein WLAN"})[0], 200)
+        self.assertIn(b"Mein WLAN", s.roh("/mein")[2])
+        self.assertEqual([t["name"] for t in s.req("/mein/daten", {})[1]["tarife"]], ["Basic", "Max"])
+        self.assertEqual(s.req("/mein/buchen", {"id": p["id"], "art": "wechsel", "tarif": "Plus"})[0], 400)
+        # Upgrade jederzeit: sofort gebucht
         code, x = s.req("/mein/buchen", {"id": p["id"], "art": "wechsel", "tarif": "Max"})
         self.assertEqual(code, 200, x)
-        self.assertIn("Anfrage", x["text"])
+        self.assertEqual(s.req("/mein/daten", {})[1]["parzellen"][0]["tarif"], "Max")
+        # Downgrade nur als Antrag mit Freigabe im Ticketsystem
+        code, x = s.req("/mein/buchen", {"id": p["id"], "art": "wechsel", "tarif": "Basic"})
+        self.assertEqual(code, 200, x)
+        self.assertIn("freigegeben", x["text"])
+        dd = s.req("/mein/daten", {})[1]["parzellen"][0]
+        self.assertEqual((dd["tarif"], dd["antraege"][0]["tarif"]), ("Max", "Basic"))
+        self.assertEqual(s.req("/mein/buchen", {"id": p["id"], "art": "wechsel", "tarif": "Basic"})[0], 400)     # nicht doppelt
         _, tl = a.req("/api/tickets?status=alle")
-        self.assertTrue(any("Tarifwechsel Basic → Max" in z["betreff"] for z in tl["zeilen"]))
+        tid = next(z["id"] for z in tl["zeilen"] if z["betreff"].startswith("Antrag: Downgrade Max → Basic"))
+        self.assertEqual(a.req("/api/tarif-antrag", {"id": tid, "freigeben": False})[0], 400)                # Ablehnen nur mit Grund
+        n = len(SMTP.mails)
+        code, x = a.req("/api/tarif-antrag", {"id": tid, "freigeben": True})
+        self.assertEqual(code, 200, x)
+        self.assertEqual((x["ticket"]["status"], x["ticket"]["antrag"]["status"]), ("geschlossen", "freigegeben"))
+        self.assertTrue(any("freigegeben" in m["text"] for m in self._mails_seit(n)))
+        self.assertEqual(s.req("/mein/daten", {})[1]["parzellen"][0]["tarif"], "Basic")
+        self.assertEqual(a.req("/api/tarif-antrag", {"id": tid, "freigeben": True})[0], 400)                  # nur einmal
         # Bezahldienst
         self.assertEqual(a.req("/api/mitgliederbereich", {"modus": "bezahldienst"})[0], 400)       # ohne Link/Schnittstelle
         code, x = a.req("/api/mitgliederbereich", {"modus": "bezahldienst", "checkout_vorlage": "https://bezahlen.example/pay?ref={referenz}&cent={betrag_cent}&zurueck={rueckkehr}", "geheim_neu": True})
@@ -641,9 +665,16 @@ class Version50(unittest.TestCase):
         self.assertIn(b"schon bezahlt", y)                                                          # nicht doppelt
         _, x = a.req("/api/mitgliederbereich")
         self.assertEqual(next(z for z in x["auftraege"] if z["referenz"] == ref)["status"], "bezahlt")
+        code, x = s.req("/mein/buchen", {"id": p["id"], "art": "wechsel", "tarif": "Basic"})          # Downgrade auch im Bezahlmodus nur als Antrag
+        self.assertEqual(code, 200, x)
+        _, tl = a.req("/api/tickets?status=offen")
+        tid = next(z["id"] for z in tl["zeilen"] if z["betreff"].startswith("Antrag: Downgrade"))
+        code, x = a.req("/api/tarif-antrag", {"id": tid, "freigeben": False, "grund": "Vertrag läuft noch"})
+        self.assertEqual((code, x["ticket"]["antrag"]["status"]), (200, "abgelehnt"), x)
+        self.assertEqual(s.req("/mein/daten", {})[1]["parzellen"][0]["tarif"], "Max")
         s.req("/mein/abmelden", {})
         self.assertEqual(s.req("/mein/daten", {})[0], 401)
-        a.req("/api/mitgliederbereich", {"aktiv": False, "modus": "anfrage"})
+        a.req("/api/mitgliederbereich", {"aktiv": False, "modus": "anfrage", "tarife": [], "titel": ""})
 
     def test_app_zugang(self):
         a = self.a
