@@ -140,6 +140,10 @@ class Handler(BaseHTTPRequestHandler):
         host = re.sub(r"[^A-Za-z0-9.:\[\]-]", "", self.headers.get("Host") or f"127.0.0.1:{PORT}")[:200]
         return f"{proto}://{host}"
 
+    def _mb_email(self, d):
+        """angemeldetes Mitglied: Cookie aus dem Browser oder Schlüssel der Mitglieder-App"""
+        return mb_sitzung(d, self._cookie("sn_mitglied")) or mb_app_pruefen(d, self.headers.get("Authorization"))
+
     def _mein(self, methode, u):
         """Mitgliederbereich – öffentlich erreichbar, eigene Anmeldung mit E-Mail-Code (Cookie sn_mitglied)"""
         d = self._lade()
@@ -153,7 +157,7 @@ class Handler(BaseHTTPRequestHandler):
             if pfad == "/mein":
                 return self._send(200, mein_seite(d).encode("utf-8"), "text/html")
             if pfad == "/mein/rechnung":
-                email = mb_sitzung(d, self._cookie("sn_mitglied"))
+                email = self._mb_email(d)
                 if not email:
                     return self._send(401, {"fehler": "Bitte anmelden."})
                 try:
@@ -192,15 +196,27 @@ class Handler(BaseHTTPRequestHandler):
             if pfad == "/mein/code":
                 with SCHREIB_SPERRE:
                     return self._send(200, mb_code_anfordern(lade(), b, self._quelle()))
+            if pfad == "/mein/info":                 # für die Mitglieder-App: ist der Bereich erreichbar?
+                e = mb_einstellungen(d)
+                return self._send(200, {"ok": True, "titel": e["titel"], "version": VERSION, "app_tage": MB_APP_TAGE})
             if pfad == "/mein/anmelden":
                 t = mb_anmelden(d, b, self._quelle())
+                if b.get("app"):                         # Mitglieder-App: dauerhafter Schlüssel statt Cookie
+                    mb_abmelden(t)
+                    with SCHREIB_SPERRE:
+                        tok = mb_app_anlegen(lade(), b.get("email"), b.get("geraet"))
+                    return self._send(200, {"ok": True, "token": tok, "gueltig_tage": MB_APP_TAGE,
+                                            "hinweis": "Bei jeder Anfrage: Authorization: Bearer <token>"})
                 return self._send(200, {"ok": True}, extra={"Set-Cookie": f"sn_mitglied={t}; Path=/mein; Max-Age=43200; HttpOnly; SameSite=Strict{sicher}"})
             if pfad == "/mein/abmelden":
+                if (self.headers.get("Authorization") or "").lower().startswith("bearer snm_"):
+                    with SCHREIB_SPERRE:
+                        mb_app_entfernen(lade(), self.headers.get("Authorization"))
                 mb_abmelden(self._cookie("sn_mitglied"))
                 return self._send(200, {"ok": True}, extra={"Set-Cookie": "sn_mitglied=; Path=/mein; Max-Age=0; HttpOnly; SameSite=Strict"})
         except Fehler as f:
             return self._send(400, {"fehler": str(f)})
-        code, antwort = mb_anfrage(pfad, b, mb_sitzung(d, self._cookie("sn_mitglied")), self._quelle(), self._basis(d))
+        code, antwort = mb_anfrage(pfad, b, self._mb_email(d), self._quelle(), self._basis(d))
         return self._send(code, antwort)
 
     def _erlaubt(self, d):

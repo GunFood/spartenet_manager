@@ -674,6 +674,22 @@ class Version50(unittest.TestCase):
         self.assertEqual(s.req("/mein/daten", {})[1]["parzellen"][0]["tarif"], "Max")
         s.req("/mein/abmelden", {})
         self.assertEqual(s.req("/mein/daten", {})[0], 401)
+        # Mitglieder-App: Anmeldung mit Code, dann dauerhafter Schlüssel im Kopf (kein Cookie)
+        self.assertEqual(api(SRV.basis, "POST", "/mein/info", {})[1]["titel"], "Mein WLAN")
+        n = len(SMTP.mails)
+        api(SRV.basis, "POST", "/mein/code", {"email": "paul@example.org"})
+        teile = [x.get_payload(decode=True).decode("utf-8", "replace") for x in em.message_from_string(self._mails_seit(n)[0]["text"]).walk() if not x.is_multipart()]
+        code, x = api(SRV.basis, "POST", "/mein/anmelden", {"email": "paul@example.org", "code": re.search(r">(\d{6})<", " ".join(teile)).group(1), "app": True, "geraet": "Pixel"})
+        self.assertEqual(code, 200, x)
+        snm = x["token"]
+        self.assertTrue(snm.startswith("snm_"))
+        code, x = api(SRV.basis, "POST", "/mein/daten", {}, snm)
+        self.assertEqual((code, x["parzellen"][0]["parzelle"]), (200, "42"), x)
+        self.assertEqual(api(SRV.basis, "POST", "/mein/daten", {}, snm[:-2] + "xx")[0], 401)
+        self.assertEqual(a.req("/api/mitgliederbereich")[1]["apps"], 1)
+        self.assertEqual(api(SRV.basis, "GET", "/api/tickets", None, snm)[0], 401)                  # kein Zugang zum Manager
+        api(SRV.basis, "POST", "/mein/abmelden", {}, snm)
+        self.assertEqual(api(SRV.basis, "POST", "/mein/daten", {}, snm)[0], 401)
         a.req("/api/mitgliederbereich", {"aktiv": False, "modus": "anfrage", "tarife": [], "titel": ""})
 
     def test_app_zugang(self):

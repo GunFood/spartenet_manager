@@ -112,6 +112,13 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   Umstieg: Der bisherige gemeinsame Token aus 5.3/5.4 gilt weiter für alle Konten ("alle Konten (alt)" in der Liste),
   bis der Administrator ihn entfernt – am besten, sobald jeder seinen eigenen Token eingetragen hat.
 
+### ZWEI ANDROID-APPS: MANAGER UND MITGLIED – neu in 5.5
+  Ordner android/: "SparteNet Manager" (grün, für Vorstand und Mitarbeiter, wie bisher) und neu "SparteNet Mitglied" (blau,
+  nur für Pächter). Die Mitglieder-App meldet sich mit Adresse des Vereins, E-Mail-Adresse und Code per E-Mail an und zeigt
+  den Mitgliederbereich: Tarif mit Laufzeit, Upgrade/kleinerer Tarif/Verlängern, Geräte im WLAN, Zugangskarte, Rechnungen (PDF),
+  Anfragen. Sie bekommt einen eigenen Schlüssel (snm_…, 180 Tage, nur als Prüfsumme gespeichert) und hat keinen Zugang zum
+  Manager. Anzahl angemeldeter Mitglieder-Apps und "Alle abmelden" in der Karte "Mitgliederbereich". Bauen: android/README.md.
+
 ### MITGLIEDERBEREICH: ANPASSEN, TARIFE, ANTRÄGE – neu in 5.5
   Reiter "Tickets" → Karte "Mitgliederbereich":
   - Anpassen: Titel, Text auf der Anmeldeseite, Hinweis; sichtbare Bereiche (Geräte, Rechnungen, Anfragen, neue Anfrage,

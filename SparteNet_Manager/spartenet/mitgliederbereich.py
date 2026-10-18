@@ -84,6 +84,9 @@ def akt_mitgliederbereich(d, b=None, ich=""):
                 roh[k] = v
             else:
                 roh[k] = text_einzeilig(v or "", 600)
+        if b.get("apps_abmelden"):
+            d["mitglied_apps"] = {}
+            journal(f"Alle Mitglieder-Apps abgemeldet durch {ich}")
         if b.get("geheim_neu"):
             roh["geheim"] = secrets.token_urlsafe(32)
             extra["geheim"] = roh["geheim"]
@@ -94,7 +97,7 @@ def akt_mitgliederbereich(d, b=None, ich=""):
         journal(f"Mitgliederbereich-Einstellungen gespeichert durch {ich}" + (" (Webhook-Geheimnis neu)" if extra else ""))
     auf = sorted(zahlungsauftraege(d).items(), key=lambda x: x[1].get("erstellt", ""), reverse=True)[:100]
     return {"einstellungen": mb_einstellungen(d), "alle_tarife": [{"name": t["name"], "preis": t.get("preis", 0)} for t in sorted(tarife_pruefen(d["tarife"]), key=tarif_rang)],
-            "antraege": len(tarif_antraege(d)), "auftraege": [{"referenz": r, **{k: a.get(k) for k in ("sparte", "parzelle", "tarif", "art", "betrag", "status", "erstellt", "bezahlt_am", "name")}}
+            "antraege": len(tarif_antraege(d)), "apps": len([x for x in mitglied_apps(d).values() if x.get("ablauf", 0) > time.time()]), "auftraege": [{"referenz": r, **{k: a.get(k) for k in ("sparte", "parzelle", "tarif", "art", "betrag", "status", "erstellt", "bezahlt_am", "name")}}
                                                                 for r, a in auf],
             **extra, "log": (["✔ Gespeichert."] + (["Neues Webhook-Geheimnis – jetzt kopieren, es wird nur einmal angezeigt."] if extra else [])) if b is not None else []}
 
@@ -169,6 +172,67 @@ def mb_sitzung(d, t):
 def mb_abmelden(t):
     with _MB_LOCK:
         _MB_SITZ.pop(_mb_hash(t or ""), None)
+
+
+# ---- Mitglieder-App: dauerhafter Schlüssel „snm_<id>_<geheim>“ (nur als Prüfsumme gespeichert) -----------------------
+MB_APP_TAGE = max(1, int(os.environ.get("SPARTENET_MITGLIED_APP_TAGE", "180") or 180))
+_MBA_RE = re.compile(r"^snm_([0-9a-f]{10})_([A-Za-z0-9_-]{30,80})$")
+
+
+def mitglied_apps(d):
+    a = d.get("mitglied_apps")
+    if not isinstance(a, dict):
+        a = {}
+        d["mitglied_apps"] = a
+    return a
+
+
+def mb_app_anlegen(d, email, geraet):
+    """nach erfolgreicher Code-Anmeldung: Schlüssel für die Mitglieder-App (höchstens 10 Geräte je E-Mail-Adresse)"""
+    e = name_norm(email)
+    a = mitglied_apps(d)
+    jetzt = time.time()
+    for k in [k for k, x in a.items() if x.get("ablauf", 0) < jetzt]:
+        del a[k]
+    eigene = sorted((k for k, x in a.items() if x.get("email") == e), key=lambda k: a[k].get("angelegt", ""))
+    for k in eigene[:-9]:
+        del a[k]                                     # ältestes Gerät fällt raus
+    i, geheim = secrets.token_hex(5), secrets.token_urlsafe(32)
+    a[i] = {"email": e, "hash": _mb_hash("app|" + geheim), "geraet": text_einzeilig(geraet or "App", 60) or "App",
+            "angelegt": time.strftime("%Y-%m-%d %H:%M"), "zuletzt": "", "ablauf": jetzt + MB_APP_TAGE * 86400}
+    speichere(d)
+    journal("Mitgliederbereich: Mitglieder-App angemeldet")
+    return f"snm_{i}_{geheim}"
+
+
+def mb_app_pruefen(d, kopf):
+    """E-Mail (normalisiert) für einen gültigen Mitglieder-App-Schlüssel, sonst None"""
+    roh = str(kopf or "")
+    if not roh.lower().startswith("bearer snm_"):
+        return None
+    m = _MBA_RE.match(roh[7:].strip())
+    if not m:
+        return None
+    x = mitglied_apps(d).get(m.group(1))
+    if not x or x.get("ablauf", 0) < time.time() or not hmac.compare_digest(x.get("hash", ""), _mb_hash("app|" + m.group(2))):
+        return None
+    if not mb_mitglieder_von(d, x["email"]):
+        return None                                  # Mitglied gelöscht oder E-Mail geändert
+    jetzt = time.strftime("%Y-%m-%d %H:%M")
+    if x.get("zuletzt", "")[:15] != jetzt[:15]:
+        with SCHREIB_SPERRE:
+            d2 = lade()
+            y = mitglied_apps(d2).get(m.group(1))
+            if y:
+                y["zuletzt"] = jetzt
+                speichere(d2)
+    return x["email"]
+
+
+def mb_app_entfernen(d, kopf):
+    m = _MBA_RE.match(str(kopf or "")[7:].strip())
+    if m and mitglied_apps(d).pop(m.group(1), None):
+        speichere(d)
 
 
 # ---- Daten für das Mitglied ------------------------------------------------------------------------------------------
