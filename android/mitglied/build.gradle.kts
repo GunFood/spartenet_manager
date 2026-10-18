@@ -22,7 +22,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 1
-        versionName = "1.0 (für Manager 5.5)"
+        versionName = "1.0 (für Manager 5.6)"
     }
 
     signingConfigs {

@@ -11,7 +11,7 @@ Die Mitglieder-App hat **keinen** Zugang zum Manager – nur zum Mitgliederberei
 
 ## SparteNet Mitglied (`mitglied/`)
 
-Nutzt den Mitgliederbereich des Managers (ab 5.5, muss im Manager eingeschaltet sein: Reiter „Tickets“ → „Mitgliederbereich“).
+Nutzt den Mitgliederbereich des Managers (ab 5.6, muss im Manager eingeschaltet sein: Reiter „Tickets“ → „Mitgliederbereich“).
 
 * **Anmelden:** Adresse des Vereins und E-Mail-Adresse eingeben → Code kommt per E-Mail → Code eingeben. Die App bekommt
   einen eigenen Schlüssel `snm_…` (180 Tage gültig, nur als Prüfsumme gespeichert, verschlüsselt im Android Keystore).

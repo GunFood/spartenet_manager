@@ -45,7 +45,7 @@ class Api(basis: String, @Volatile var token: String?) {
             if (text.isBlank()) JSONObject() else try {
                 JSONObject(text)
             } catch (e: Exception) {
-                throw ApiFehler(code, "Unerwartete Antwort – ist die Adresse richtig (SparteNet Manager ab 5.5)?")
+                throw ApiFehler(code, "Unerwartete Antwort – ist die Adresse richtig (SparteNet Manager ab 5.6)?")
             }
         } catch (e: ApiFehler) {
             throw e

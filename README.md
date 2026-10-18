@@ -1,4 +1,4 @@
-SparteNet Manager 5.5 (Cloud)
+SparteNet Manager 5.6 (Cloud)
 ===============================
 
 Funktioniert komplett über die UniFi-Cloud (api.ui.com). Kein lokaler Zugriff, kein VPN.
@@ -101,7 +101,7 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   Höchstens 120 Anfragen je Minute und Schlüssel (SPARTENET_API_PRO_MINUTE). Zahlungsanbieter über n8n/Zapier/Make
   anbinden. Von außen nur über HTTPS (Reverse-Proxy, dann SPARTENET_PROXY=1).
 
-### APP-ZUGANGSTOKENS JE BENUTZER – neu in 5.5 (seit 5.3 ein gemeinsamer Token)
+### APP-ZUGANGSTOKENS JE BENUTZER – neu in 5.6 (seit 5.3 ein gemeinsamer Token)
   Mein Konto → Apps und Geräte → App-Zugangstokens: jeder Benutzer erzeugt seine eigenen Tokens, beliebig viele
   (z. B. einen je Handy oder Tablet, mit Namen). Ein Token gilt nur für das eigene Konto, wird nur einmal angezeigt
   und nur als Prüfsumme gespeichert; die Liste zeigt "zuletzt benutzt". Einzelne Tokens lassen sich entfernen – Apps
@@ -112,7 +112,7 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   Umstieg: Der bisherige gemeinsame Token aus 5.3/5.4 gilt weiter für alle Konten ("alle Konten (alt)" in der Liste),
   bis der Administrator ihn entfernt – am besten, sobald jeder seinen eigenen Token eingetragen hat.
 
-### STÖRUNGEN IM MITGLIEDERBEREICH – neu in 5.5
+### STÖRUNGEN IM MITGLIEDERBEREICH – neu in 5.6
   Meldet die Störungsüberwachung einen Ausfall (Ticket erstellt), sehen Mitglieder eine hervorgehobene Meldung – im Mitgliederbereich
   oben auf der Hauptseite, schon auf seiner Anmeldeseite und in der Mitglieder-App, z. B. "Achtung: Access Point Festwiese ist aktuell
   ausgefallen (seit …). Ein Störungsticket T-0042 ist erstellt und an den Verein verschickt …". Nach "wieder online" verschwindet sie.
@@ -120,21 +120,21 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   - System → Störungsüberwachung: je Gerät "betrifft Sparte" (Standard: alle Sparten). Mitglieder sehen nur Ausfälle ihrer Sparte;
     die Anmeldeseite zeigt ohne E-Mail nur Ausfälle aller Sparten, nach Eingabe der E-Mail die passenden zur Sparte.
 
-### LOGOS: MANAGER-LOGO UND VEREINSLOGOS GETRENNT – neu in 5.5
+### LOGOS: MANAGER-LOGO UND VEREINSLOGOS GETRENNT – neu in 5.6
   ☰ → System & Konto → Oberfläche gestalten → Karte "Logos":
   - Manager-Logo: anzeigen und wählen (Bild aus den Unterlagen, SparteNet-Symbol oder keins). Erscheint in der Kopfzeile neben
     "SparteNet"; auf Anmelde-, Kontakt-Seite und im Mitgliederbereich beim Logo "Manager-Logo" wählen; in E-Mails und PDFs, wenn im
     E-Mail-Layout kein eigenes Logo gewählt ist. Öffentlich unter /managerlogo.
   - Vereinslogos der Sparten: getrennt davon je Sparte wählen, automatisch oder erzeugen (siehe "Spartenlogos").
 
-### MEHRERE PERSONEN JE PARZELLE – neu in 5.5
+### MEHRERE PERSONEN JE PARZELLE – neu in 5.6
   Mitglieder → Bearbeiten → "Weitere Personen dieser Parzelle" (bis 6: Mitpächter, Partner, Familie – Name, E-Mail, Telefon).
   Jede Person mit E-Mail-Adresse meldet sich selbst im Mitgliederbereich und in der Mitglieder-App an (Einmalcode an die eigene
   Adresse, Anrede mit eigenem Namen) und sieht dieselbe Parzelle: Tarif, Geräte, Rechnungen, Anfragen; Buchungen und Anfragen
   laufen auf die Parzelle. Auf der Kontakt-Seite werden weitere Personen genauso erkannt, das Vereinslogo zur E-Mail ebenso.
   Rechnungen, Verträge und Rundschreiben gehen weiter an das Mitglied selbst. Person entfernen = Zugang sofort weg.
 
-### KONTAKT-SEITE, MITGLIEDERBEREICH GESTALTEN, VEREINSLOGO – neu in 5.5
+### KONTAKT-SEITE, MITGLIEDERBEREICH GESTALTEN, VEREINSLOGO – neu in 5.6
   - Die bisherige "Pächter-Seite" heißt jetzt Kontakt-Seite (erreichbar unter /portal und /kontakt).
   - Oberfläche gestalten → "Mitgliederbereich gestalten": eigenes Aussehen für /mein (Farben, Schrift, Logo, Hintergrund, Titel,
     Text auf der Anmeldung, Hinweis, Kontakt, Impressum/Datenschutz) mit Vorschau (Anmeldung + Beispieldaten). Ohne eigene
@@ -146,7 +146,7 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
     Anmeldeseite ("Vereinslogos der Sparten neben dem Manager-Logo zeigen").
   - Android: Ordner android/manager (Manager-App, vorher android/app) und android/mitglied (Mitglieder-App).
 
-### SPARTENLOGOS UND VEREINSLOGOS – neu in 5.5
+### SPARTENLOGOS UND VEREINSLOGOS – neu in 5.6
   ☰ → System & Konto → Oberfläche gestalten → Karte "Logos" → Vereinslogos der Sparten: jede Sparte kann neben dem Vereinslogo ein eigenes Logo haben.
   - Wählen aus den Unterlagen – oder automatisch: ein Bild im Unterlagen-Ordner "Logos", das der Sparte zugeordnet ist.
   - "Erzeugen" / "Für alle Sparten ohne Logo erzeugen": der Manager zeichnet aus dem Spartennamen ein rundes Vereinsabzeichen
@@ -158,14 +158,14 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
     Leiste aller Sparten unten auf der Kontakt-Seite ("Logos aller Sparten unten zeigen").
   - Öffentlich abrufbar unter /spartenlogo/<Kürzel> (für Seiten und App).
 
-### ZWEI ANDROID-APPS: MANAGER UND MITGLIED – neu in 5.5
+### ZWEI ANDROID-APPS: MANAGER UND MITGLIED – neu in 5.6
   Ordner android/manager: "SparteNet Manager" (grün, für Vorstand und Mitarbeiter, wie bisher) und android/mitglied: neu "SparteNet Mitglied" (blau,
   nur für Pächter). Die Mitglieder-App meldet sich mit Adresse des Vereins, E-Mail-Adresse und Code per E-Mail an und zeigt
   den Mitgliederbereich: Tarif mit Laufzeit, Upgrade/kleinerer Tarif/Verlängern, Geräte im WLAN, Zugangskarte, Rechnungen (PDF),
   Anfragen. Sie bekommt einen eigenen Schlüssel (snm_…, 180 Tage, nur als Prüfsumme gespeichert) und hat keinen Zugang zum
   Manager. Anzahl angemeldeter Mitglieder-Apps und "Alle abmelden" in der Karte "Mitgliederbereich". Bauen: android/README.md.
 
-### MITGLIEDERBEREICH: ANPASSEN, TARIFE, ANTRÄGE – neu in 5.5
+### MITGLIEDERBEREICH: ANPASSEN, TARIFE, ANTRÄGE – neu in 5.6
   Reiter "Tickets" → Karte "Mitgliederbereich":
   - Anpassen: sichtbare Bereiche (Geräte, Rechnungen, Anfragen, neue Anfrage, Zugangskarte) einzeln ein-/ausschalten. Aussehen,
     Titel und Texte: ☰ → System & Konto → Oberfläche gestalten → Mitgliederbereich gestalten.
@@ -177,11 +177,11 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   - Mitglieder sehen nur ihre eigenen Anfragen: fest zugeordnet oder gleiche E-Mail UND gleiche Parzelle. Tickets werden beim
     Anlegen nur noch dem Mitglied zugeordnet, dessen Parzelle passt (gleiche E-Mail mit anderer Parzelle reicht nicht mehr).
 
-### ENTER BESTÄTIGT EINGABEN – neu in 5.5
+### ENTER BESTÄTIGT EINGABEN – neu in 5.6
   In der Oberfläche löst Enter in einem Eingabefeld den nächsten grünen Knopf im selben Block aus (z. B. Speichern, Anlegen).
   Im Mitgliederbereich: E-Mail → Code senden, Code → Anmelden, Nachricht mit Strg+Enter senden. Kontakt-Seite: Enter sendet das Formular.
 
-### FEHLERBEHEBUNGEN – 5.5
+### FEHLERBEHEBUNGEN – 5.6
   App-Zugangstoken wurde nach dem Erzeugen nicht angezeigt; CPU-/RAM-Balken unter System standen fast immer auf 100 %;
   "Unterschiede ermitteln" schrieb seine Kacheln auf die Startseite. Ein Test verhindert jetzt doppelte Namen in der Oberfläche.
 

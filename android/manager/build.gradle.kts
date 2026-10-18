@@ -21,8 +21,8 @@ android {
         applicationId = "de.spartenet.manager"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.3 (für Manager 5.5)"
+        versionCode = 5
+        versionName = "1.4 (für Manager 5.6)"
     }
 
     signingConfigs {
