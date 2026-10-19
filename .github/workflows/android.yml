@@ -32,8 +32,6 @@ jobs:
       - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
       - name: Debug-APKs (Testversion) – Manager-App und Mitglieder-App
-        env:
-          SPARTENET_SERVER: ${{ vars.SPARTENET_SERVER }}     # Adresse des Managers für die Mitglieder-App (Repository-Variable)
         run: ./gradlew --no-daemon :manager:assembleDebug :mitglied:assembleDebug :manager:lintDebug :mitglied:lintDebug
       # Optional: signierte Release-APK – nur wenn die Secrets im Repository hinterlegt sind
       #   SPARTENET_KEYSTORE_B64 (keystore als Base64), SPARTENET_KEYSTORE_PASSWORT, SPARTENET_KEY_ALIAS, SPARTENET_KEY_PASSWORT
@@ -43,7 +41,6 @@ jobs:
           SPARTENET_KEYSTORE_PASSWORT: ${{ secrets.SPARTENET_KEYSTORE_PASSWORT }}
           SPARTENET_KEY_ALIAS: ${{ secrets.SPARTENET_KEY_ALIAS }}
           SPARTENET_KEY_PASSWORT: ${{ secrets.SPARTENET_KEY_PASSWORT }}
-          SPARTENET_SERVER: ${{ vars.SPARTENET_SERVER }}
         if: env.HAT_KEYSTORE == 'true'
         run: |
           echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/spartenet.jks"

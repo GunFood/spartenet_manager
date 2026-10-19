@@ -52,15 +52,14 @@ import androidx.compose.runtime.LaunchedEffect
 import org.json.JSONObject
 
 /**
- * Anmeldung in zwei Schritten: Adresse + E-Mail → Code per E-Mail anfordern → Code eingeben.
+ * Anmeldung in zwei Schritten: E-Mail → Code per E-Mail anfordern → Code eingeben (Adresse des Managers fest in der App).
  * Kein Passwort. Enter (Tastatur „Weiter“/„Fertig“) löst jeweils den nächsten Schritt aus.
  */
 @Composable
 fun Anmeldung(speicher: Speicher, onAngemeldet: (String) -> Unit) {
     val scope = rememberCoroutineScope()
-    // Adresse fest in der App (beim Bauen hinterlegt) – dann kein Eingabefeld, nur E-Mail und Einmalcode
-    val festeAdresse = de.spartenet.mitglied.BuildConfig.SERVER.trim()
-    var server by remember { mutableStateOf(festeAdresse.ifEmpty { speicher.server }) }
+    // Adresse des Managers ist fest in der App (manager.wlan-im-garten.de) – nur E-Mail und Einmalcode
+    val server = speicher.server
     var email by remember { mutableStateOf(speicher.email) }
     var code by remember { mutableStateOf("") }
     var codeGesendet by remember { mutableStateOf(false) }
@@ -109,10 +108,6 @@ fun Anmeldung(speicher: Speicher, onAngemeldet: (String) -> Unit) {
 
     fun codeAnfordern() {
         if (laedt) return
-        if (server.isBlank()) {
-            fehler = "Bitte die Internetadresse des Vereins eintragen."
-            return
-        }
         if (!email.contains("@")) {
             fehler = "Bitte Ihre E-Mail-Adresse eintragen."
             return
@@ -122,7 +117,6 @@ fun Anmeldung(speicher: Speicher, onAngemeldet: (String) -> Unit) {
             try {
                 val api = Api(server, null)
                 val info = api.info()
-                speicher.server = api.basis
                 speicher.email = email.trim()
                 speicher.titel = info.s("titel")
                 hinweis = api.codeAnfordern(email)
@@ -187,17 +181,6 @@ fun Anmeldung(speicher: Speicher, onAngemeldet: (String) -> Unit) {
                         "Mit der E-Mail-Adresse, die beim Verein für Ihre Parzelle hinterlegt ist. Der Verein schickt Ihnen einen Einmalcode per E-Mail – ein Passwort ist nicht nötig.",
                         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    if (festeAdresse.isEmpty()) {             // nur wenn beim Bauen keine Adresse hinterlegt wurde
-                        OutlinedTextField(
-                            server, { server = it; codeGesendet = false }, Modifier.fillMaxWidth(), label = { Text("Internetadresse des Vereins") },
-                            placeholder = { Text("z. B. wlan.meine-sparte.de") }, singleLine = true, enabled = !laedt,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
-                            supportingText = { Text("Wie im Browser, ohne /mein – einmal eintragen, die App merkt sie sich.") },
-                        )
-                        if (server.trim().startsWith("http://")) {
-                            Text("⚠ Unverschlüsselte Verbindung – nur im eigenen Netz verwenden.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
                     OutlinedTextField(
                         email, { email = it; codeGesendet = false }, Modifier.fillMaxWidth(), label = { Text("E-Mail-Adresse") }, singleLine = true, enabled = !laedt,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Send),

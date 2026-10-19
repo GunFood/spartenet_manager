@@ -14,9 +14,8 @@ Die Mitglieder-App hat **keinen** Zugang zum Manager – nur zum Mitgliederberei
 Nutzt den Mitgliederbereich des Managers (ab 5.6, muss im Manager eingeschaltet sein: Reiter „Tickets“ → „Mitgliederbereich“).
 
 * **Anmelden:** nur E-Mail-Adresse → Einmalcode kommt per E-Mail → Code eingeben. Die Internetadresse des Managers ist fest
-  in der App: vor dem Bauen in `android/gradle.properties` `spartenetServer=https://wlan.meine-sparte.de` eintragen (oder
-  Umgebungsvariable `SPARTENET_SERVER`; bei GitHub Actions als Repository-Variable unter *Settings → Secrets and variables →
-  Actions → Variables* `SPARTENET_SERVER`). Ohne hinterlegte Adresse fragt die App einmal danach. Die App bekommt
+  in der App (`https://manager.wlan-im-garten.de`, Konstante `SERVER` in `mitglied/…/data/Speicher.kt`); Mitglieder geben
+  keine Adresse ein. Die App bekommt
   einen eigenen Schlüssel `snm_…` (180 Tage gültig, nur als Prüfsumme gespeichert, verschlüsselt im Android Keystore).
   „Abmelden“ entfernt den Schlüssel auch am Manager; der Administrator kann alle Mitglieder-Apps auf einmal abmelden.
 * **Mein Tarif:** Tarif, Laufzeit mit Resttagen, offener Betrag, Sperre; Upgrade jederzeit, kleinerer Tarif als Antrag
