@@ -13,7 +13,9 @@ Die Mitglieder-App hat **keinen** Zugang zum Manager – nur zum Mitgliederberei
 
 Nutzt den Mitgliederbereich des Managers (ab 5.6, muss im Manager eingeschaltet sein: Reiter „Tickets“ → „Mitgliederbereich“).
 
-* **Anmelden:** Adresse des Vereins und E-Mail-Adresse eingeben → Code kommt per E-Mail → Code eingeben. Die App bekommt
+* **Anmelden:** nur E-Mail-Adresse → Einmalcode kommt per E-Mail → Code eingeben. Die Internetadresse des Managers ist fest
+  in der App (`https://manager.wlan-im-garten.de`, Konstante `SERVER` in `mitglied/…/data/Speicher.kt`); Mitglieder geben
+  keine Adresse ein. Die App bekommt
   einen eigenen Schlüssel `snm_…` (180 Tage gültig, nur als Prüfsumme gespeichert, verschlüsselt im Android Keystore).
   „Abmelden“ entfernt den Schlüssel auch am Manager; der Administrator kann alle Mitglieder-Apps auf einmal abmelden.
 * **Mein Tarif:** Tarif, Laufzeit mit Resttagen, offener Betrag, Sperre; Upgrade jederzeit, kleinerer Tarif als Antrag
@@ -21,6 +23,9 @@ Nutzt den Mitgliederbereich des Managers (ab 5.6, muss im Manager eingeschaltet 
 * **Geräte im WLAN:** angemeldete Geräte im Netz der Parzelle (IP 10.<Sparte>.<Parzelle>.<Gerät>), Zugangskarte per E-Mail.
 * **Rechnungen** als PDF öffnen, **Anfragen** ansehen und neue stellen.
 * **Tablet:** ab 840 dp zwei Spalten. Mehrere Parzellen mit derselben E-Mail-Adresse: Auswahl oben.
+* **Firmenlogo:** im Anmeldebildschirm `mitglied/src/main/res/drawable/firmenlogo` – den Platzhalter `firmenlogo.xml` löschen und
+  das eigene Logo als `firmenlogo.png` dort ablegen (oder in Android Studio: Rechtsklick `res` → *New → Vector Asset* bzw. *Image Asset*,
+  Name `firmenlogo`). App-Symbol auf dem Handy: Rechtsklick `res` (Modul *mitglied*) → *New → Image Asset* → *Launcher Icons*, Name `ic_launcher`.
 * Schnittstelle: `POST /mein/info`, `/mein/code`, `/mein/anmelden` (`"app": true`), danach mit `Authorization: Bearer snm_…`:
   `/mein/daten`, `/mein/geraete`, `/mein/buchen`, `/mein/ticket`, `/mein/zugangskarte`, `/mein/abmelden`, `GET /mein/rechnung?id=`.
 

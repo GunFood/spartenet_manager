@@ -11,15 +11,14 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /**
- * Speichert Server-Adresse, E-Mail-Adresse und den Anmelde-Schlüssel der Mitglieder-App.
+ * Speichert E-Mail-Adresse und den Anmelde-Schlüssel der Mitglieder-App.
  * Der Schlüssel liegt nur verschlüsselt (AES-GCM, Schlüssel im Android Keystore, nicht exportierbar) auf dem Gerät.
  */
 class Speicher(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("spartenet_mitglied", Context.MODE_PRIVATE)
 
-    var server: String
-        get() = prefs.getString("server", "") ?: ""
-        set(v) = prefs.edit().putString("server", v).apply()
+    /** Adresse des Managers – fest in der App, Mitglieder geben nur E-Mail-Adresse und Einmalcode ein */
+    val server: String get() = SERVER
 
     var email: String
         get() = prefs.getString("email", "") ?: ""
@@ -67,6 +66,7 @@ class Speicher(context: Context) {
     }
 
     companion object {
+        const val SERVER = "https://manager.wlan-im-garten.de"
         private const val ALIAS = "spartenet_mitglied_schluessel"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
     }

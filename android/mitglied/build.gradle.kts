@@ -21,8 +21,9 @@ android {
         applicationId = "de.spartenet.mitglied"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0 (für Manager 5.6)"
+        versionCode = 2
+        versionName = "1.1 (für Manager 5.6)"
+        // Adresse des Managers steht fest in data/Speicher.kt (SERVER = https://manager.wlan-im-garten.de)
     }
 
     signingConfigs {

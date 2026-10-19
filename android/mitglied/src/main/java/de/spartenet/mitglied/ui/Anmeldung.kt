@@ -39,6 +39,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
 import de.spartenet.mitglied.data.Api
 import de.spartenet.mitglied.data.Speicher
 import de.spartenet.mitglied.data.s
@@ -52,13 +54,14 @@ import androidx.compose.runtime.LaunchedEffect
 import org.json.JSONObject
 
 /**
- * Anmeldung in zwei Schritten: Adresse + E-Mail → Code per E-Mail anfordern → Code eingeben.
+ * Anmeldung in zwei Schritten: E-Mail → Code per E-Mail anfordern → Code eingeben (Adresse des Managers fest in der App).
  * Kein Passwort. Enter (Tastatur „Weiter“/„Fertig“) löst jeweils den nächsten Schritt aus.
  */
 @Composable
 fun Anmeldung(speicher: Speicher, onAngemeldet: (String) -> Unit) {
     val scope = rememberCoroutineScope()
-    var server by remember { mutableStateOf(speicher.server) }
+    // Adresse des Managers ist fest in der App (manager.wlan-im-garten.de) – nur E-Mail und Einmalcode
+    val server = speicher.server
     var email by remember { mutableStateOf(speicher.email) }
     var code by remember { mutableStateOf("") }
     var codeGesendet by remember { mutableStateOf(false) }
@@ -107,8 +110,8 @@ fun Anmeldung(speicher: Speicher, onAngemeldet: (String) -> Unit) {
 
     fun codeAnfordern() {
         if (laedt) return
-        if (server.isBlank() || !email.contains("@")) {
-            fehler = "Bitte die Adresse des Vereins und Ihre E-Mail-Adresse eintragen."
+        if (!email.contains("@")) {
+            fehler = "Bitte Ihre E-Mail-Adresse eintragen."
             return
         }
         scope.launch {
@@ -116,7 +119,6 @@ fun Anmeldung(speicher: Speicher, onAngemeldet: (String) -> Unit) {
             try {
                 val api = Api(server, null)
                 val info = api.info()
-                speicher.server = api.basis
                 speicher.email = email.trim()
                 speicher.titel = info.s("titel")
                 hinweis = api.codeAnfordern(email)
@@ -164,7 +166,8 @@ fun Anmeldung(speicher: Speicher, onAngemeldet: (String) -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(Modifier.padding(top = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Wifi, null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(56.dp))
+                // Firmenlogo: res/drawable/firmenlogo (Platzhalter firmenlogo.xml durch eigenes firmenlogo.png ersetzen)
+                Image(painterResource(de.spartenet.mitglied.R.drawable.firmenlogo), "SparteNet", Modifier.size(72.dp))
                 if (vereinslogo.isNotEmpty()) {
                     Spacer(Modifier.size(12.dp))
                     NetzBild(Api(server, null), vereinslogo, vereinsname.ifEmpty { "Vereinslogo" }, 64.dp)
@@ -181,15 +184,6 @@ fun Anmeldung(speicher: Speicher, onAngemeldet: (String) -> Unit) {
                         "Mit der E-Mail-Adresse, die beim Verein für Ihre Parzelle hinterlegt ist. Der Verein schickt Ihnen einen Einmalcode per E-Mail – ein Passwort ist nicht nötig.",
                         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    OutlinedTextField(
-                        server, { server = it; codeGesendet = false }, Modifier.fillMaxWidth(), label = { Text("Adresse des Vereins") },
-                        placeholder = { Text("z. B. wlan.meine-sparte.de") }, singleLine = true, enabled = !laedt,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
-                        supportingText = { Text("Steht auf der Zugangskarte oder bekommen Sie vom Vorstand.") },
-                    )
-                    if (server.trim().startsWith("http://")) {
-                        Text("⚠ Unverschlüsselte Verbindung – nur im eigenen Netz verwenden.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                    }
                     OutlinedTextField(
                         email, { email = it; codeGesendet = false }, Modifier.fillMaxWidth(), label = { Text("E-Mail-Adresse") }, singleLine = true, enabled = !laedt,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Send),
@@ -213,7 +207,7 @@ fun Anmeldung(speicher: Speicher, onAngemeldet: (String) -> Unit) {
                 }
             }
             Text(
-                "Diese App ist für Mitglieder. Für Vorstand und Mitarbeiter gibt es die App „SparteNet Manager“.",
+                "Diese App ist für Mitglieder.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
