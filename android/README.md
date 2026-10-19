@@ -23,6 +23,9 @@ Nutzt den Mitgliederbereich des Managers (ab 5.6, muss im Manager eingeschaltet 
 * **Geräte im WLAN:** angemeldete Geräte im Netz der Parzelle (IP 10.<Sparte>.<Parzelle>.<Gerät>), Zugangskarte per E-Mail.
 * **Rechnungen** als PDF öffnen, **Anfragen** ansehen und neue stellen.
 * **Tablet:** ab 840 dp zwei Spalten. Mehrere Parzellen mit derselben E-Mail-Adresse: Auswahl oben.
+* **Firmenlogo:** im Anmeldebildschirm `mitglied/src/main/res/drawable/firmenlogo` – den Platzhalter `firmenlogo.xml` löschen und
+  das eigene Logo als `firmenlogo.png` dort ablegen (oder in Android Studio: Rechtsklick `res` → *New → Vector Asset* bzw. *Image Asset*,
+  Name `firmenlogo`). App-Symbol auf dem Handy: Rechtsklick `res` (Modul *mitglied*) → *New → Image Asset* → *Launcher Icons*, Name `ic_launcher`.
 * Schnittstelle: `POST /mein/info`, `/mein/code`, `/mein/anmelden` (`"app": true`), danach mit `Authorization: Bearer snm_…`:
   `/mein/daten`, `/mein/geraete`, `/mein/buchen`, `/mein/ticket`, `/mein/zugangskarte`, `/mein/abmelden`, `GET /mein/rechnung?id=`.
 

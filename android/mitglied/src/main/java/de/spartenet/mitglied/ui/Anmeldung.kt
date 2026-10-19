@@ -39,6 +39,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
 import de.spartenet.mitglied.data.Api
 import de.spartenet.mitglied.data.Speicher
 import de.spartenet.mitglied.data.s
@@ -164,7 +166,8 @@ fun Anmeldung(speicher: Speicher, onAngemeldet: (String) -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(Modifier.padding(top = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Wifi, null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(56.dp))
+                // Firmenlogo: res/drawable/firmenlogo (Platzhalter firmenlogo.xml durch eigenes firmenlogo.png ersetzen)
+                Image(painterResource(de.spartenet.mitglied.R.drawable.firmenlogo), "SparteNet", Modifier.size(72.dp))
                 if (vereinslogo.isNotEmpty()) {
                     Spacer(Modifier.size(12.dp))
                     NetzBild(Api(server, null), vereinslogo, vereinsname.ifEmpty { "Vereinslogo" }, 64.dp)
@@ -204,7 +207,7 @@ fun Anmeldung(speicher: Speicher, onAngemeldet: (String) -> Unit) {
                 }
             }
             Text(
-                "Diese App ist für Mitglieder. Für Vorstand und Mitarbeiter gibt es die App „SparteNet Manager“.",
+                "Diese App ist für Mitglieder.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
