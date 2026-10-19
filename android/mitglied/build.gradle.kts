@@ -21,8 +21,13 @@ android {
         applicationId = "de.spartenet.mitglied"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0 (für Manager 5.6)"
+        versionCode = 2
+        versionName = "1.1 (für Manager 5.6)"
+        // Adresse des Managers fest in der App – Mitglieder melden sich dann nur mit E-Mail und Einmalcode an.
+        // Setzen: android/gradle.properties „spartenetServer=https://wlan.meine-sparte.de“ oder Umgebungsvariable SPARTENET_SERVER
+        // (GitHub: Repository-Variable SPARTENET_SERVER). Leer = die App fragt einmal nach der Adresse.
+        val server = (project.findProperty("spartenetServer") as String?) ?: System.getenv("SPARTENET_SERVER") ?: ""
+        buildConfigField("String", "SERVER", "\"" + server.trim().replace("\"", "") + "\"")
     }
 
     signingConfigs {
@@ -64,6 +69,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     lint {
         abortOnError = false   // Bericht als Artefakt, bricht den Bau aber nicht ab

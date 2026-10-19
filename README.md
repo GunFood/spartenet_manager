@@ -117,7 +117,8 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
 
 ### NEU IN 5.6
   Mitgliederbereich (/mein) und Mitglieder-App
-  - Eigene Mitglieder-App "SparteNet Mitglied" (android/mitglied): Adresse des Vereins, E-Mail, Einmalcode – danach Tarif mit
+  - Eigene Mitglieder-App "SparteNet Mitglied" (android/mitglied): Anmeldung nur mit E-Mail und Einmalcode (Adresse des Managers
+    wird beim Bauen fest eingetragen: spartenetServer in android/gradle.properties bzw. GitHub-Variable SPARTENET_SERVER) – danach Tarif mit
     Laufzeit, Upgrade/kleinerer Tarif/Verlängern, Geräte im WLAN, Zugangskarte, Rechnungen (PDF), Anfragen, Störungen. Eigener
     Schlüssel snm_… (180 Tage, nur als Prüfsumme gespeichert), kein Zugang zum Manager; Anzahl und "Alle abmelden" in der Karte
     "Mitgliederbereich". Die bisherige App heißt "SparteNet Manager" und liegt jetzt in android/manager.
