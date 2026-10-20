@@ -1,10 +1,10 @@
-SparteNet Manager 5.7 (Cloud)
+SparteNet Manager 5.7.1 (Cloud)
 ===============================
 
 Funktioniert komplett über die UniFi-Cloud (api.ui.com). Kein lokaler Zugriff, kein VPN.
 Benötigt nur Python 3 – keine Zusatzpakete (nur für MariaDB/MySQL: PyMySQL, im Docker-Image enthalten).
 
-### ÜBERSICHT (Stand 5.7)
+### ÜBERSICHT (Stand 5.7.1)
   Verwaltet das WLAN einer oder mehrerer Kleingarten-Sparten an UniFi-Gateways: Netze und WLAN-Passwörter je Parzelle,
   Tarife mit Laufzeit, Buchungen, Mitglieder, Anfragen (Tickets), Rechnungen, Verträge, Automationen und Störungsüberwachung.
 
@@ -115,6 +115,14 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   Höchstens 120 Anfragen je Minute und Schlüssel (SPARTENET_API_PRO_MINUTE). Zahlungsanbieter über n8n/Zapier/Make
   anbinden. Von außen nur über HTTPS (Reverse-Proxy, dann SPARTENET_PROXY=1).
 
+### NEU IN 5.7.1
+  - Update über GitHub: auch eine Korrektur mit gleicher Versionsnummer wird als Update angeboten (anderer Stand auf GitHub) und
+    nach dem Update auch gestartet.
+  - App-Updates: Versionsnummer automatisch beim Bauen, der Manager liest sie aus der APK; falsche App wird abgelehnt.
+  - Gerät trennen ohne Sperre (kick-sta, eigener Schalter) und wieder "Gerät sperren" (block-sta, eigener Schalter "Mitglieder dürfen
+    eigene Geräte sperren und wieder zulassen") mit Liste "Gesperrte Geräte" und "Wieder zulassen" – auf /mein und in der App.
+  - Prüfung im Manager, ob das Gateway Trennen/Sperren zulässt; Tablet-Layout für /mein und die Mitglieder-App.
+
 ### NEU IN 5.7 – MITGLIEDERBEREICH WIE DIE APP, MITGLIEDER-APP 1.2 UND APP-UPDATES
   - Mitgliederbereich (/mein) und Mitglieder-App sehen gleich aus und können dasselbe. Kopf mit Spartenlogo, Firmenlogo und "Hallo Vorname Nachname"; Bereiche Übersicht, Rechnungen, Support, Profil;
     Ansicht ◐ System / ☀ Hell / ☾ Dunkel. Geräte ohne IP- und MAC-Adressen, fortlaufend nummeriert, mit "Basic: 3 von 5 Geräten".
@@ -128,7 +136,7 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
     Anträge, volle Geräteplätze; die App sieht alle 15–60 Minuten selbst nach, ohne Firebase).
   - Adresse des Managers verschleiert in der App, nur HTTPS.
   - App-Updates für Mitglieder-App und Manager-App: unter "Mitgliederbereich → App-Updates" die signierte Release-APK hochladen
-    (versionCode, Versionsname, Hinweis); die Apps melden das Update, laden es, prüfen die SHA-256-Prüfsumme und starten die
+    (Versionsnummer und -name liest der Manager aus der APK; jede neu gebaute APK hat automatisch eine höhere Nummer); die Apps melden das Update, laden es, prüfen die SHA-256-Prüfsumme und starten die
     Installation (Details in android/README.md).
 
 ### NEU IN 5.6

@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Receipt
@@ -476,6 +477,7 @@ private fun GeraeteKarte(api: Api, p: JSONObject, erlaubt: JSONObject, aktion: (
     var laedt by remember(p.s("id")) { mutableStateOf(false) }
     var fehler by remember(p.s("id")) { mutableStateOf<String?>(null) }
     var trennen by remember { mutableStateOf(false) }
+    var sperren by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     fun laden() {
         if (!erlaubt.b("geraete")) return
@@ -531,6 +533,27 @@ private fun GeraeteKarte(api: Api, p: JSONObject, erlaubt: JSONObject, aktion: (
                     }
                 }
             }
+            // vom Mitglied gesperrte Geräte – „Wieder zulassen“ hebt die Sperre am Gateway auf
+            val gesperrt = a?.liste("gesperrt") ?: emptyList()
+            if (gesperrt.isNotEmpty()) {
+                HorizontalDivider()
+                Text("Gesperrte Geräte", style = MaterialTheme.typography.labelLarge)
+                gesperrt.forEach { g ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Block, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+                        Column(Modifier.weight(1f).padding(start = 8.dp)) {
+                            Text(g.s("name"))
+                            Text("gesperrt seit ${g.s("zeit")}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        TextButton(onClick = {
+                            aktion {
+                                melden(api.post("/mein/geraet_zulassen", JSONObject().put("id", p.s("id")).put("ref", g.s("ref"))).s("text"))
+                                laden()
+                            }
+                        }) { Text("Wieder zulassen") }
+                    }
+                }
+            }
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (erlaubt.b("geraete")) OutlinedButton(onClick = { laden() }) { Text("Aktualisieren") }
@@ -540,14 +563,21 @@ private fun GeraeteKarte(api: Api, p: JSONObject, erlaubt: JSONObject, aktion: (
                     Text("Gerät trennen", Modifier.padding(start = 6.dp))
                 }
             }
+            if (erlaubt.b("geraete") && erlaubt.b("geraete_sperren") && (a?.liste("geraete")?.isNotEmpty() == true)) {
+                OutlinedButton(onClick = { sperren = true }) {
+                    Icon(Icons.Filled.Block, null, Modifier.size(18.dp))
+                    Text("Gerät sperren", Modifier.padding(start = 6.dp))
+                }
+            }
             if (erlaubt.b("zugangskarte")) OutlinedButton(onClick = {
                 aktion { melden(api.post("/mein/zugangskarte", JSONObject().put("id", p.s("id"))).s("text")) }
             }) { Text("Zugangskarte per E-Mail") }
         }
     }
-    val liste = antwort?.liste("geraete")?.filter { it.s("art") != "Kabel" } ?: emptyList()       // nur WLAN-Geräte lassen sich trennen
+    val alle = antwort?.liste("geraete") ?: emptyList()
+    val liste = alle.filter { it.s("art") != "Kabel" }       // nur WLAN-Geräte lassen sich trennen
     if (trennen && liste.isNotEmpty()) {
-        TrennenDialog(liste, onAbbrechen = { trennen = false }) { ref ->
+        TrennenDialog(liste, sperren = false, onAbbrechen = { trennen = false }) { ref ->
             trennen = false
             aktion {
                 melden(api.post("/mein/geraet_trennen", JSONObject().put("id", p.s("id")).put("ref", ref).put("bestaetigt", true)).s("text"))
@@ -555,20 +585,30 @@ private fun GeraeteKarte(api: Api, p: JSONObject, erlaubt: JSONObject, aktion: (
             }
         }
     }
+    if (sperren && alle.isNotEmpty()) {
+        TrennenDialog(alle, sperren = true, onAbbrechen = { sperren = false }) { ref ->
+            sperren = false
+            aktion {
+                melden(api.post("/mein/geraet_trennen", JSONObject().put("id", p.s("id")).put("ref", ref).put("bestaetigt", true).put("sperren", true)).s("text"))
+                laden()
+            }
+        }
+    }
 }
 
-/** Auswahl, welches Gerät getrennt wird – mit ausdrücklicher Bestätigung */
+/** Auswahl, welches Gerät getrennt bzw. gesperrt wird – mit ausdrücklicher Bestätigung */
 @Composable
-private fun TrennenDialog(geraete: List<JSONObject>, onAbbrechen: () -> Unit, onTrennen: (String) -> Unit) {
+private fun TrennenDialog(geraete: List<JSONObject>, sperren: Boolean, onAbbrechen: () -> Unit, onTrennen: (String) -> Unit) {
     var gewaehlt by remember { mutableStateOf<String?>(null) }
     AlertDialog(
         onDismissRequest = onAbbrechen,
-        icon = { Icon(Icons.Filled.LinkOff, null) },
-        title = { Text("Welches Gerät trennen?") },
+        icon = { Icon(if (sperren) Icons.Filled.Block else Icons.Filled.LinkOff, null) },
+        title = { Text(if (sperren) "Welches Gerät sperren?" else "Welches Gerät trennen?") },
         text = {
             Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
                 Text(
-                    "Das Gerät wird vom WLAN getrennt. Es wird nicht gesperrt und kann sich bei Bedarf jederzeit wieder verbinden.",
+                    if (sperren) "Das Gerät wird gesperrt und kommt nicht mehr ins Netz, bis Sie es unter „Gesperrte Geräte“ wieder zulassen."
+                    else "Das Gerät wird vom WLAN getrennt. Es wird nicht gesperrt und kann sich bei Bedarf jederzeit wieder verbinden.",
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 geraete.forEach { g ->
@@ -582,7 +622,7 @@ private fun TrennenDialog(geraete: List<JSONObject>, onAbbrechen: () -> Unit, on
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { gewaehlt?.let(onTrennen) }, enabled = gewaehlt != null) { Text("Trennen") } },
+        confirmButton = { TextButton(onClick = { gewaehlt?.let(onTrennen) }, enabled = gewaehlt != null) { Text(if (sperren) "Sperren" else "Trennen") } },
         dismissButton = { TextButton(onClick = onAbbrechen) { Text("Abbrechen") } },
     )
 }

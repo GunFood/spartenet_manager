@@ -24,7 +24,9 @@ Nutzt den Mitgliederbereich des Managers (ab 5.7, muss im Manager eingeschaltet 
   (Freigabe im Ticket), Neu buchen, Verlängern – je nach Einstellung im Manager; mit Bezahldienst öffnet sich die Bezahlseite.
 * **Geräte im WLAN:** Verbrauch nach Tarif („Basic: 3 von 5 Geräten“), die Geräte fortlaufend nummeriert (Gerät 1, 2, 3) –
   **ohne IP- und MAC-Adressen**. „Gerät trennen“ (Auswahl, welches; mit Bestätigung) trennt ein WLAN-Gerät vom
-  WLAN – ohne Sperre, es kann sich bei Bedarf sofort wieder verbinden; nur wenn der Administrator das unter „Mitgliederbereich“ einschaltet. Zugangskarte per E-Mail.
+  WLAN – ohne Sperre, es kann sich bei Bedarf sofort wieder verbinden. „Gerät sperren“ sperrt ein Gerät am Gateway; unter
+  „Gesperrte Geräte“ hebt „Wieder zulassen“ die Sperre auf. Beides nur, wenn der Administrator es unter „Mitgliederbereich“
+  einschaltet (je ein eigener Schalter). Zugangskarte per E-Mail.
 * **Rechnungen** als PDF öffnen. **Support:** Tickets ansehen und „Ticket anlegen“.
 * **Profil:** Vorname, Nachname und Parzelle gesperrt (ändert nur der Verein); Rufnummer (Mobil), Telefon und E-Mail änderbar –
   eine neue E-Mail-Adresse gilt erst nach dem Code, der an sie geht (die alte Adresse bekommt eine Info).
@@ -48,8 +50,9 @@ Nutzt den Mitgliederbereich des Managers (ab 5.7, muss im Manager eingeschaltet 
 
 ## App-Updates (beide Apps)
 
-Im Manager unter **Mitgliederbereich → App-Updates** (nur Administratoren) die neue APK hochladen: App wählen (Mitglieder-App oder
-Manager-App), `versionCode` (aus `build.gradle.kts`, muss größer sein als vorher) und Versionsname eintragen, optional einen Hinweis.
+Im Manager unter **Mitgliederbereich → App-Updates** (nur Administratoren) die neue APK hochladen und die App wählen (Mitglieder-App
+oder Manager-App), optional einen Hinweis. **Versionsnummer und Versionsname liest der Manager aus der APK**; jede neu gebaute APK hat
+automatisch eine höhere Nummer (`versionCode` = Minuten seit 1.1.2024, Versionsname mit Baudatum, z. B. „1.3 (20.10.2026 19:40)“).
 Beim Öffnen meldet die App „Neue App-Version … verfügbar“ → **Aktualisieren**: Download, Prüfung der SHA-256-Prüfsumme, dann der
 Android-Installer. Beim ersten Mal fragt Android nach „Apps aus dieser Quelle zulassen“.
 

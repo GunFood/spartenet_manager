@@ -21,8 +21,10 @@ android {
         applicationId = "de.spartenet.manager"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "1.5"
+        // Versionsnummer automatisch: Minuten seit 1.1.2024 – jede neu gebaute APK hat eine höhere Nummer, damit das
+        // App-Update im Manager sie als neuer erkennt. Der Versionsname zeigt zusätzlich das Baudatum.
+        versionCode = ((System.currentTimeMillis() / 1000 - 1_704_067_200L) / 60).toInt()
+        versionName = "1.6 (" + java.text.SimpleDateFormat("dd.MM.yyyy HH:mm").format(java.util.Date()) + ")"
     }
 
     signingConfigs {
