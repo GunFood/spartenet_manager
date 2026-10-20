@@ -118,8 +118,9 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
 ### NEU IN 5.7 – MITGLIEDERBEREICH WIE DIE APP, MITGLIEDER-APP 1.2 UND APP-UPDATES
   - Mitgliederbereich (/mein) und Mitglieder-App sehen gleich aus und können dasselbe. Kopf mit Spartenlogo, Firmenlogo und "Hallo Vorname Nachname"; Bereiche Übersicht, Rechnungen, Support, Profil;
     Ansicht ◐ System / ☀ Hell / ☾ Dunkel. Geräte ohne IP- und MAC-Adressen, fortlaufend nummeriert, mit "Basic: 3 von 5 Geräten".
-  - "Gerät trennen" (Auswahl und Bestätigung) sperrt das Gerät am Gateway, "Wieder zulassen" hebt die Sperre auf – nur wenn der
-    Administrator unter "Mitgliederbereich" "Mitglieder dürfen eigene Geräte trennen" einschaltet (Standard: aus).
+  - "Gerät trennen" (Auswahl und Bestätigung) trennt ein WLAN-Gerät vom WLAN (kick-sta) – ohne Sperre, es kann sich bei Bedarf
+    sofort wieder verbinden; nur wenn der Administrator unter "Mitgliederbereich" "Mitglieder dürfen eigene WLAN-Geräte trennen"
+    einschaltet (Standard: aus). "Prüfen, ob das Gateway Geräte trennen zulässt" testet das harmlos (trennt nichts).
   - Profil: Vorname, Nachname, Parzelle gesperrt; Rufnummer (Mobil), Telefon und E-Mail änderbar (neue E-Mail mit Code bestätigt,
     die alte Adresse bekommt eine Info). Mitglieder haben dafür das neue Feld "Mobil". Der Pächter legt weitere Personen der
     Parzelle an und entfernt sie (Schalter "Pächter dürfen weitere Personen anlegen").

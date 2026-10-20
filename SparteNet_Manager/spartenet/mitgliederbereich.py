@@ -347,30 +347,21 @@ def _geraete_roh(d, kz, p):
     return aus, _GERAETE_CACHE["fehler"]
 
 
-def gesperrte_geraete(d):
-    g = d.get("mb_gesperrte_geraete")
-    if not isinstance(g, dict):
-        g = {}
-        d["mb_gesperrte_geraete"] = g
-    return g
-
-
 def mb_geraete(d, kz, p):
     """Geräte im Netz der Parzelle – fortlaufend nummeriert, ohne IP- und MAC-Adresse; dazu „x von y“ nach dem Tarif
-    und die vom Mitglied getrennten (gesperrten) Geräte"""
+    (WLAN-Geräte kann das Mitglied trennen, wenn eingeschaltet)"""
     roh, fehler = _geraete_roh(d, kz, p)
     aus = [{"nr": i + 1, "name": c.get("name") or c.get("hostname") or "Gerät", "ref": _geraet_ref(kz, p, c.get("macAddress") or ""),
             "art": {"WIRELESS": "WLAN", "WIRED": "Kabel"}.get(str(c.get("type") or "").upper(), c.get("type") or ""), "seit": c.get("connectedAt") or ""}
            for i, c in enumerate(roh)]
     tarif = ((d.get("buchungen") or {}).get(kz) or {}).get(str(p), "")
     t = next((x for x in tarife_pruefen(d["tarife"]) if x["name"] == tarif), None)
-    gesp = [{"ref": x["ref"], "name": x.get("name", "Gerät"), "zeit": x.get("zeit", "")} for x in gesperrte_geraete(d).get(f"{kz}-{p}", [])]
-    return {"geraete": aus, "anzahl": len(aus), "max": int(t.get("geraete") or 0) if t else 0, "tarif": tarif, "gesperrt": gesp, "fehler": fehler}
+    return {"geraete": aus, "anzahl": len(aus), "max": int(t.get("geraete") or 0) if t else 0, "tarif": tarif, "fehler": fehler}
 
 
 def mb_geraet_trennen(d, kz, p, b):
-    """Gerät der Parzelle vom WLAN trennen und sperren (bis das Mitglied es wieder zulässt) – nur mit Bestätigung und nur,
-    wenn der Administrator es unter „Mitgliederbereich“ ausdrücklich eingeschaltet hat (Änderung am Gateway)"""
+    """WLAN-Gerät der Parzelle trennen (kick-sta): die Verbindung wird beendet, das Gerät wird NICHT gesperrt und darf sich
+    bei Bedarf sofort wieder verbinden. Nur mit Bestätigung und nur, wenn der Administrator es unter „Mitgliederbereich“ einschaltet."""
     if not mb_einstellungen(d)["geraete_trennen"]:
         raise Fehler("Geräte trennen ist hier nicht eingeschaltet – bitte beim Verein melden.")
     if not b.get("bestaetigt"):
@@ -381,30 +372,36 @@ def mb_geraet_trennen(d, kz, p, b):
     c = next((c for c in roh if c.get("macAddress") and hmac.compare_digest(_geraet_ref(kz, p, c["macAddress"]), ref)), None)
     if not c:
         raise Fehler("Dieses Gerät ist gerade nicht im Netz Ihrer Parzelle.")
-    mac = str(c["macAddress"]).lower()
-    Gateway(d).legacy_cmd("cmd/stamgr", {"cmd": "block-sta", "mac": mac})
-    liste = gesperrte_geraete(d).setdefault(f"{kz}-{p}", [])
-    if not any(x.get("mac") == mac for x in liste):
-        liste.append({"ref": ref, "mac": mac, "name": text_einzeilig(c.get("name") or c.get("hostname") or "Gerät", 60), "zeit": time.strftime("%d.%m.%Y %H:%M")})
-    del liste[:-20]
+    if str(c.get("type") or "").upper() == "WIRED":
+        raise Fehler("Geräte am Kabel können nicht getrennt werden – nur WLAN-Geräte.")
+    Gateway(d).legacy_cmd("cmd/stamgr", {"cmd": "kick-sta", "mac": str(c["macAddress"]).lower()})
     _GERAETE_CACHE["zeit"] = 0
-    speichere(d)
-    journal(f"Mitgliederbereich: Gerät in {kz} Parzelle {p} vom Mitglied getrennt (gesperrt)")
-    return {"ok": True, "text": "Das Gerät ist getrennt und gesperrt. Unter „Getrennte Geräte“ können Sie es wieder zulassen."}
+    journal(f"Mitgliederbereich: WLAN-Gerät in {kz} Parzelle {p} vom Mitglied getrennt")
+    return {"ok": True, "text": "Das Gerät ist vom WLAN getrennt. Es kann sich bei Bedarf jederzeit wieder verbinden."}
 
 
-def mb_geraet_zulassen(d, kz, p, b):
-    if not mb_einstellungen(d)["geraete_trennen"]:
-        raise Fehler("Geräte trennen ist hier nicht eingeschaltet – bitte beim Verein melden.")
-    liste = gesperrte_geraete(d).get(f"{kz}-{p}", [])
-    x = next((x for x in liste if hmac.compare_digest(x.get("ref", ""), str(b.get("ref") or ""))), None)
-    if not x:
-        raise Fehler("Dieses Gerät ist für Ihre Parzelle nicht gesperrt.")
-    Gateway(d).legacy_cmd("cmd/stamgr", {"cmd": "unblock-sta", "mac": x["mac"]})
-    liste.remove(x)
-    speichere(d)
-    journal(f"Mitgliederbereich: Gerät in {kz} Parzelle {p} vom Mitglied wieder zugelassen")
-    return {"ok": True, "text": "Das Gerät ist wieder zugelassen und kann sich neu verbinden."}
+def akt_mitglied_trennen_pruefen(d):
+    """Administrator: lässt das Gateway über die UniFi-Cloud das Trennen/Sperren von Geräten zu?
+    Harmloser Test: „kick-sta“ an eine MAC-Adresse, die es nicht gibt (00:00:00:00:00:00) – trennt nichts, sperrt nichts.
+    Die offizielle Network-Schnittstelle (Integration API) kennt für Geräte nur Gastzugang erlauben/entziehen, deshalb nutzt
+    das Trennen die klassische Schnittstelle cmd/stamgr (kick-sta) über den Cloud-Connector."""
+    g = Gateway(d)
+    code, a = http("POST", f"{g.leg_base}/cmd/stamgr", g.key, {"cmd": "kick-sta", "mac": "00:00:00:00:00:00"})
+    text = a if isinstance(a, str) else json.dumps(a)
+    if code < 300 or (code == 400 and "api.err" in text):
+        ok, meldung = True, ("✔ Das Gateway nimmt Befehle zum Trennen an (klassische Schnittstelle über die Cloud erreichbar). "
+                             "Mitglieder können Geräte trennen, sobald der Schalter eingeschaltet ist.")
+    elif code in (401, 403):
+        ok, meldung = False, (f"✖ Abgelehnt ({code}): Der API-Schlüssel darf keine Befehle an Geräte senden. "
+                              "Bitte einen Schlüssel eines Kontos mit Administratorrechten (Site Manager → API) verwenden.")
+    elif code == 405:
+        ok, meldung = False, "✖ Die UniFi-Cloud lässt diesen Befehl nicht durch (405) – Geräte trennen ist über die Cloud nicht möglich."
+    elif code == 404:
+        ok, meldung = False, "✖ Die klassische Schnittstelle ist über die Cloud nicht erreichbar (404) – Firmware/Network-Version prüfen."
+    else:
+        ok, meldung = False, f"✖ Unerwartete Antwort vom Gateway ({code}): {text[:200]}"
+    journal(f"Geräte-trennen-Prüfung: {'möglich' if ok else 'nicht möglich'} ({code})")
+    return {"ok": ok, "code": code, "log": [meldung]}
 
 
 def _tarif_info(t):
@@ -960,13 +957,13 @@ def mb_anfrage(pfad, b, email, quelle, basis):
                 raise Fehler("Die Geräteanzeige ist ausgeschaltet.")
             return 200, mb_geraete(d, kz, p)
         _grenze("mb_aktion", email)
-        if pfad in ("/mein/geraet_trennen", "/mein/geraet_zulassen"):
+        if pfad == "/mein/geraet_trennen":
             if not mb_einstellungen(d)["geraete"]:
                 raise Fehler("Die Geräteanzeige ist ausgeschaltet.")
             with SCHREIB_SPERRE:
                 d = lade()
                 _mid, _m, kz, p = _mb_parzelle(d, email, (b or {}).get("id"))
-                return 200, (mb_geraet_trennen if pfad.endswith("trennen") else mb_geraet_zulassen)(d, kz, p, b or {})
+                return 200, mb_geraet_trennen(d, kz, p, b or {})
         aktionen = {"/mein/profil": mb_profil_speichern, "/mein/profil_bestaetigen": mb_profil_bestaetigen,
                     "/mein/person_neu": mb_person_neu, "/mein/person_entfernen": mb_person_entfernen}
         if pfad in aktionen:
@@ -1075,7 +1072,9 @@ MEIN_HTML = r"""__KOPF__<main>
 .balken{height:8px;border-radius:4px;background:var(--l);overflow:hidden;margin:6px 0}.balken i{display:block;height:100%;background:var(--a)}.balken.voll i{background:#b42318}
 .nr{display:inline-block;background:var(--a);color:#fff;border-radius:6px;padding:2px 8px;font-size:13px;white-space:nowrap}.geraet{display:flex;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid var(--l)}
 .fest{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--l);padding:8px 0}.fest span{color:var(--m);font-size:13px}.fest b{font-weight:500}
-.reiter{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}.reiter button{flex:1;min-width:70px;padding:10px 4px;font-size:14px}.tab[hidden]{display:none}.wahl label{display:flex;gap:8px;align-items:center;color:var(--t);font-size:15px;margin:6px 0}.wahl input{width:auto}</style>
+.reiter{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}.reiter button{flex:1;min-width:70px;padding:10px 4px;font-size:14px}.tab[hidden]{display:none}.wahl label{display:flex;gap:8px;align-items:center;color:var(--t);font-size:15px;margin:6px 0}.wahl input{width:auto}
+.zwei>*{min-width:0}#v_login{max-width:640px;margin-left:auto;margin-right:auto}
+@media(min-width:900px){main{max-width:min(1160px,94vw)!important}.zwei{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}#v_daten .reiter{max-width:720px}}</style>
 <div id="l_stoerung"></div><div id="v_login" class="karte" style="display:none"><h2 style="margin-top:0">Anmelden</h2><p class="hint">__ANMELDETEXT__</p>
 <label for="l_email">E-Mail-Adresse</label><input id="l_email" type="email" autocomplete="email" oninput="logoNachEmail()" onchange="logoNachEmail()" onkeydown="if(event.key=='Enter')codeAnfordern()"><button class="los" id="l_b1" onclick="codeAnfordern()">Code per E-Mail senden</button>
 <div id="l_code_box" style="display:none"><label for="l_code">Einmalcode aus der E-Mail</label><input id="l_code" onkeydown="if(event.key=='Enter')anmelden()" inputmode="numeric" autocomplete="one-time-code" maxlength="6" style="font-size:22px;letter-spacing:6px;text-align:center"><button class="los" onclick="anmelden()">Anmelden</button></div>
@@ -1083,22 +1082,22 @@ MEIN_HTML = r"""__KOPF__<main>
 <div id="v_daten" style="display:none"><div class="reiter" id="reiter"><button class="k2 akt" data-r="start" onclick="reiter('start')">Übersicht</button><button class="k2" data-r="rechnungen" onclick="reiter('rechnungen')">Rechnungen</button><button class="k2" data-r="support" onclick="reiter('support')">Support</button><button class="k2" data-r="profil" onclick="reiter('profil')">Profil</button></div>
 <div style="margin-bottom:10px"><select id="d_parz" onchange="zeigen()" style="max-width:340px"></select></div>
 <div id="d_stoerung"></div><div class="msg" id="m_daten"></div>
-<div class="tab" id="t_start"><p class="hint" id="d_hinweis"></p><div class="karte"><h2 style="margin-top:0">Mein Tarif</h2><div id="d_tarif"></div><div id="d_wechsel"></div></div>
-<div class="karte" id="s_geraete"><h2 style="margin-top:0">Meine Geräte im WLAN</h2><div id="d_verbrauch"></div><div id="d_geraete">…</div><div id="d_getrennt"></div><div id="d_trennen"></div>
-<div class="knoepfe"><button class="k2" onclick="geraete()">Aktualisieren</button><button class="k2" id="b_trennen" onclick="trennenZeigen()">⛓ Gerät trennen</button><button class="k2" id="b_karte" onclick="karte()">Zugangskarte per E-Mail</button></div></div></div>
+<div class="tab" id="t_start"><p class="hint" id="d_hinweis"></p><div class="zwei"><div class="karte"><h2 style="margin-top:0">Mein Tarif</h2><div id="d_tarif"></div><div id="d_wechsel"></div></div>
+<div class="karte" id="s_geraete"><h2 style="margin-top:0">Meine Geräte im WLAN</h2><div id="d_verbrauch"></div><div id="d_geraete">…</div><div id="d_trennen"></div>
+<div class="knoepfe"><button class="k2" onclick="geraete()">Aktualisieren</button><button class="k2" id="b_trennen" onclick="trennenZeigen()">⛓ Gerät trennen</button><button class="k2" id="b_karte" onclick="karte()">Zugangskarte per E-Mail</button></div></div></div></div>
 <div class="tab" id="t_rechnungen" hidden><div class="karte" id="s_rechnungen"><h2 style="margin-top:0">Meine Rechnungen</h2><div id="d_rechnungen"></div></div></div>
 <div class="tab" id="t_support" hidden><div class="karte" id="s_anfragen"><h2 style="margin-top:0">Support</h2><p class="hint">Fragen, Störungen oder Wünsche? Legen Sie ein Ticket an – Sie bekommen die Antwort per E-Mail.</p>
 <details style="margin-top:10px" id="s_neu"><summary style="cursor:pointer;font-weight:600">Ticket anlegen</summary><label for="t_kat">Worum geht es?</label><select id="t_kat"></select><label for="t_betreff">Betreff</label><input id="t_betreff" maxlength="160" onkeydown="if(event.key=='Enter'){event.preventDefault();$('t_text').focus()}"><label for="t_text">Nachricht</label><textarea id="t_text" maxlength="5000" onkeydown="if(event.key=='Enter'&&(event.ctrlKey||event.metaKey))ticket()" placeholder="Strg+Enter sendet"></textarea><button class="los" onclick="ticket()">Ticket senden</button></details><div class="msg" id="m_ticket"></div>
 <h3 id="h_tickets">Meine Tickets</h3><div id="d_tickets"></div></div></div>
-<div class="tab" id="t_profil" hidden><div class="karte"><h2 style="margin-top:0">Mein Profil</h2><div id="p_fest"></div>
+<div class="tab" id="t_profil" hidden><div class="zwei"><div><div class="karte"><h2 style="margin-top:0">Mein Profil</h2><div id="p_fest"></div>
 <label for="p_mobil">Rufnummer (Mobil)</label><input id="p_mobil" type="tel" maxlength="30" autocomplete="tel"><label for="p_telefon">Telefon</label><input id="p_telefon" type="tel" maxlength="30"><label for="p_email">E-Mail-Adresse</label><input id="p_email" type="email" maxlength="200" autocomplete="email">
 <p class="hint" style="margin:6px 0 0">Eine neue Adresse bestätigen Sie mit einem Code, der an sie geschickt wird.</p><button class="los" id="p_los" onclick="profilSpeichern()">Speichern</button>
 <div id="p_code_box" style="display:none"><label for="p_code">Code aus der E-Mail an die neue Adresse</label><input id="p_code" inputmode="numeric" maxlength="6" style="font-size:22px;letter-spacing:6px;text-align:center" onkeydown="if(event.key=='Enter')codeBestaetigen()"><button class="los" onclick="codeBestaetigen()">Bestätigen</button></div><div class="msg" id="m_profil"></div></div>
 <div class="karte" id="s_personen"><h2 style="margin-top:0" id="h_personen">Personen der Parzelle</h2><div id="d_personen"></div>
 <details id="s_person_neu" style="margin-top:10px"><summary style="cursor:pointer;font-weight:600">👤 Neues Mitglied in der Parzelle anlegen</summary><p class="hint">Die Person meldet sich mit ihrer E-Mail-Adresse und einem Einmalcode an und bekommt eine Info per E-Mail.</p>
 <div class="zeile"><div><label for="n_vorname">Vorname</label><input id="n_vorname" maxlength="120"></div><div><label for="n_nachname">Nachname</label><input id="n_nachname" maxlength="120"></div></div><label for="n_email">E-Mail-Adresse</label><input id="n_email" type="email" maxlength="200">
-<div class="zeile"><div><label for="n_mobil">Rufnummer (Mobil, optional)</label><input id="n_mobil" type="tel" maxlength="30"></div><div><label for="n_telefon">Telefon (optional)</label><input id="n_telefon" type="tel" maxlength="30"></div></div><button class="los" onclick="personNeu()">Anlegen</button></details><div class="msg" id="m_personen"></div></div>
-<div class="karte"><h2 style="margin-top:0">Ansicht</h2><div class="knoepfe" id="d_ansicht"></div><p class="hint" id="p_app" style="margin-top:12px"></p></div></div></div>
+<div class="zeile"><div><label for="n_mobil">Rufnummer (Mobil, optional)</label><input id="n_mobil" type="tel" maxlength="30"></div><div><label for="n_telefon">Telefon (optional)</label><input id="n_telefon" type="tel" maxlength="30"></div></div><button class="los" onclick="personNeu()">Anlegen</button></details><div class="msg" id="m_personen"></div></div></div><div>
+<div class="karte"><h2 style="margin-top:0">Ansicht</h2><div class="knoepfe" id="d_ansicht"></div><p class="hint" id="p_app" style="margin-top:12px"></p></div></div></div></div></div>
 </main>__FUSS__<script>const $=i=>document.getElementById(i),esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));let D=null,WAHL=null,VORSCHAU=false,GER=null;
 const eur=x=>Number(x||0).toLocaleString("de-DE",{style:"currency",currency:"EUR"});
 const FARBEN=[["system","◐","System"],["hell","☀","Hell"],["dunkel","☾","Dunkel"]];
@@ -1155,14 +1154,12 @@ function waehlen(wie){const p=P();const hoeher=(t)=>p.rang&&(t.rang[0]>p.rang[0]
  <button class="los" id="d_los" disabled>${esc(knopf)}</button>`;
  let wahl=wie=="verlaengern"?p.tarif:null;document.querySelectorAll(".tarif").forEach(x=>{if(x.dataset.t==wahl)x.classList.add("akt");x.onclick=()=>{wahl=x.dataset.t;document.querySelectorAll(".tarif").forEach(y=>y.classList.toggle("akt",y===x));$("d_los").disabled=false}});
  $("d_los").disabled=!wahl;$("d_los").onclick=async()=>{try{$("d_los").disabled=true;const d=await post("/mein/buchen",{id:p.id,art,tarif:wahl});if(d.url){location.href=d.url;return}msg("m_daten",d.text,true);laden()}catch(e){msg("m_daten",e.message);$("d_los").disabled=false}}}
-async function geraete(){const p=P();$("d_geraete").textContent="…";try{GER=await post("/mein/geraete",{id:p.id})}catch(e){if(VORSCHAU)GER={tarif:p.tarif,anzahl:2,max:5,geraete:[{nr:1,name:"Handy",art:"WLAN",ref:"a"},{nr:2,name:"Laptop",art:"WLAN",ref:"b"}],gesperrt:[]};else{$("d_geraete").textContent=e.message;return}}
+async function geraete(){const p=P();$("d_geraete").textContent="…";try{GER=await post("/mein/geraete",{id:p.id})}catch(e){if(VORSCHAU)GER={tarif:p.tarif,anzahl:2,max:5,geraete:[{nr:1,name:"Handy",art:"WLAN",ref:"a"},{nr:2,name:"Laptop",art:"WLAN",ref:"b"}]};else{$("d_geraete").textContent=e.message;return}}
  const d=GER,voll=d.max&&d.anzahl>=d.max;$("d_verbrauch").innerHTML=`<div class="wert" style="font-size:18px">${d.tarif?esc(d.tarif)+": ":""}${d.max?d.anzahl+" von "+d.max+" Geräten":d.anzahl+" Geräte (unbegrenzt)"}</div>`+(d.max?`<div class="balken${voll?" voll":""}"><i style="width:${Math.min(100,Math.round(d.anzahl/d.max*100))}%"></i></div>`:"")+(voll?'<p class="hint" style="color:#b42318">Alle Plätze belegt – trennen Sie ein Gerät oder wechseln Sie in einen größeren Tarif.</p>':"");
  $("d_geraete").innerHTML=d.geraete.length?d.geraete.map(g=>`<div class="geraet"><span class="nr">Gerät ${esc(g.nr)}</span><div style="flex:1"><b>${esc(g.name)}</b>${g.art?`<br><span class="klein">${esc(g.art)}</span>`:""}</div></div>`).join(""):`<p class="hint">${esc(d.fehler||"Gerade ist kein Gerät angemeldet.")}</p>`;
- $("d_getrennt").innerHTML=(d.gesperrt||[]).length?'<h3 style="margin:14px 0 4px">Getrennte Geräte</h3>'+d.gesperrt.map(g=>`<div class="geraet"><div style="flex:1">${esc(g.name)}<br><span class="klein">getrennt am ${esc(g.zeit)}</span></div><button class="k2" onclick="zulassen('${esc(g.ref)}')">Wieder zulassen</button></div>`).join(""):"";
- $("b_trennen").style.display=D.erlaubt.geraete_trennen&&d.geraete.length?"":"none"}
-function trennenZeigen(){if(!GER)return;$("d_trennen").innerHTML=`<div class="karte" style="margin:12px 0 0"><b>Welches Gerät trennen?</b><p class="hint">Das Gerät wird vom WLAN getrennt und gesperrt, bis Sie es unter „Getrennte Geräte“ wieder zulassen.</p><div class="wahl">${GER.geraete.map(g=>`<label><input type="radio" name="tr" value="${esc(g.ref)}"> Gerät ${esc(g.nr)} · ${esc(g.name)}</label>`).join("")}</div><div class="knoepfe"><button class="k2" onclick="trennen()">Trennen</button><button class="k2" onclick="$('d_trennen').innerHTML=''">Abbrechen</button></div></div>`}
+ $("b_trennen").style.display=D.erlaubt.geraete_trennen&&d.geraete.some(g=>g.art!="Kabel")?"":"none"}
+function trennenZeigen(){if(!GER)return;$("d_trennen").innerHTML=`<div class="karte" style="margin:12px 0 0"><b>Welches Gerät trennen?</b><p class="hint">Das Gerät wird vom WLAN getrennt. Es wird nicht gesperrt und kann sich bei Bedarf jederzeit wieder verbinden.</p><div class="wahl">${GER.geraete.filter(g=>g.art!="Kabel").map(g=>`<label><input type="radio" name="tr" value="${esc(g.ref)}"> Gerät ${esc(g.nr)} · ${esc(g.name)}</label>`).join("")}</div><div class="knoepfe"><button class="k2" onclick="trennen()">Trennen</button><button class="k2" onclick="$('d_trennen').innerHTML=''">Abbrechen</button></div></div>`}
 async function trennen(){const w=document.querySelector("input[name=tr]:checked");if(!w){msg("m_daten","Bitte ein Gerät auswählen.");return}try{const d=await post("/mein/geraet_trennen",{id:P().id,ref:w.value,bestaetigt:true});msg("m_daten",d.text,true);$("d_trennen").innerHTML="";geraete()}catch(e){msg("m_daten",e.message)}}
-async function zulassen(ref){try{const d=await post("/mein/geraet_zulassen",{id:P().id,ref});msg("m_daten",d.text,true);geraete()}catch(e){msg("m_daten",e.message)}}
 async function karte(){try{const d=await post("/mein/zugangskarte",{id:P().id});msg("m_daten",d.text,true)}catch(e){msg("m_daten",e.message)}}
 async function ticket(){try{const d=await post("/mein/ticket",{id:P().id,kategorie:$("t_kat").value,betreff:$("t_betreff").value,text:$("t_text").value});msg("m_ticket",d.text,true);$("t_betreff").value="";$("t_text").value="";laden()}catch(e){msg("m_ticket",e.message)}}
 function profilZeigen(){const pr=D.profil||{},darf=D.erlaubt.profil;$("p_fest").innerHTML=[["Vorname",pr.vorname],["Nachname",pr.nachname],["Parzelle",(pr.parzellen||[]).join(", ")]].map(([l,w])=>`<div class="fest"><div><span>${l}</span><br><b>${esc(w||"–")}</b></div><span title="nur vom Verein änderbar">🔒</span></div>`).join("");

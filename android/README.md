@@ -23,8 +23,8 @@ Nutzt den Mitgliederbereich des Managers (ab 5.7, muss im Manager eingeschaltet 
 * **Mein Tarif:** Tarif, Laufzeit mit Resttagen, offener Betrag, Sperre; Upgrade jederzeit, kleinerer Tarif als Antrag
   (Freigabe im Ticket), Neu buchen, Verlängern – je nach Einstellung im Manager; mit Bezahldienst öffnet sich die Bezahlseite.
 * **Geräte im WLAN:** Verbrauch nach Tarif („Basic: 3 von 5 Geräten“), die Geräte fortlaufend nummeriert (Gerät 1, 2, 3) –
-  **ohne IP- und MAC-Adressen**. „Gerät trennen“ (Auswahl, welches; mit Bestätigung) trennt und sperrt das Gerät am Gateway,
-  „Wieder zulassen“ hebt die Sperre auf – nur wenn der Administrator das unter „Mitgliederbereich“ einschaltet. Zugangskarte per E-Mail.
+  **ohne IP- und MAC-Adressen**. „Gerät trennen“ (Auswahl, welches; mit Bestätigung) trennt ein WLAN-Gerät vom
+  WLAN – ohne Sperre, es kann sich bei Bedarf sofort wieder verbinden; nur wenn der Administrator das unter „Mitgliederbereich“ einschaltet. Zugangskarte per E-Mail.
 * **Rechnungen** als PDF öffnen. **Support:** Tickets ansehen und „Ticket anlegen“.
 * **Profil:** Vorname, Nachname und Parzelle gesperrt (ändert nur der Verein); Rufnummer (Mobil), Telefon und E-Mail änderbar –
   eine neue E-Mail-Adresse gilt erst nach dem Code, der an sie geht (die alte Adresse bekommt eine Info).

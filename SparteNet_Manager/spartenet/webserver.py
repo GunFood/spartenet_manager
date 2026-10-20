@@ -678,6 +678,7 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/wochenbericht": lambda: akt_wochenbericht(d, b, ich),
                 "/api/portal-einstellungen": lambda: akt_portal_einstellungen(d, b, ich),
                 "/api/mitgliederbereich": lambda: akt_mitgliederbereich(d, b if isinstance(b, dict) and b else None, ich),
+                "/api/mitglied-trennen-pruefen": lambda: akt_mitglied_trennen_pruefen(d),
                 "/api/app-update": lambda: akt_app_update(d, b if isinstance(b, dict) and b else None, ich),
                 "/api/app-update-hochladen": lambda: akt_app_update_hochladen(d, q, roh, ich),
                 "/api/app-uebersicht": lambda: akt_app_uebersicht(d, ich, rechte),
