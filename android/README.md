@@ -30,6 +30,12 @@ Nutzt den Mitgliederbereich des Managers (ab 5.7, muss im Manager eingeschaltet 
   eine neue E-Mail-Adresse gilt erst nach dem Code, der an sie geht (die alte Adresse bekommt eine Info).
   **Personen der Parzelle:** der Pächter legt weitere Personen an (Mitpächter, Partner …) und entfernt sie; die Person bekommt eine
   Info-E-Mail und meldet sich mit eigener E-Mail-Adresse an. **Ansicht:** ◐ System, ☀ Hell, ☾ Dunkel (wie im Manager).
+* **Widget „Meine Geräte“:** auf dem Startbildschirm Tarif mit „x von y Geräten“, Balken und die Geräte (Gerät 1, 2, …) der zuletzt
+  gewählten Parzelle; Tippen öffnet die App. Anlegen im Profil („Widget hinzufügen“) oder lange auf den Startbildschirm tippen → Widgets.
+* **Benachrichtigungen** (Profil → Benachrichtigungen): Störungen, Antworten/Status der Tickets, Laufzeit endet in ≤ 3 Tagen, neue
+  Rechnungen, entschiedene Anträge, alle Geräteplätze belegt – einzeln wählbar, Nachsehen alle 15/30/60 Minuten, Test-Benachrichtigung.
+  Die App fragt dafür im Hintergrund selbst beim Manager nach (WorkManager, ohne Firebase/Google-Konto); es wird nur Neues gemeldet.
+  Echte Sofort-Push-Nachrichten bräuchten Firebase Cloud Messaging (eigenes Firebase-Projekt, google-services.json, Server-Schlüssel).
 * **App-Update:** siehe unten.
 * Mehrere Parzellen mit derselben E-Mail-Adresse: Auswahl oben.
 * **Firmenlogo:** im Anmeldebildschirm `mitglied/src/main/res/drawable/firmenlogo` – den Platzhalter `firmenlogo.xml` löschen und

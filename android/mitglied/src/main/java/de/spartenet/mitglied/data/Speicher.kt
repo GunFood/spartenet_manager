@@ -25,6 +25,37 @@ class Speicher(context: Context) {
         get() = prefs.getString("ansicht", "system") ?: "system"
         set(v) = prefs.edit().putString("ansicht", v).apply()
 
+    // ---- Benachrichtigungen und Widget ----
+    /** Benachrichtigungen eingeschaltet */
+    var meldungenAn: Boolean
+        get() = prefs.getBoolean("meldungen_an", false)
+        set(v) = prefs.edit().putBoolean("meldungen_an", v).apply()
+
+    /** gewünschte Arten: stoerung, ticket, laufzeit, rechnung, antrag, geraete */
+    var meldungArten: Set<String>
+        get() = prefs.getStringSet("meldung_arten", null)?.toSet() ?: MELDUNG_ARTEN.map { it.first }.toSet()
+        set(v) = prefs.edit().putStringSet("meldung_arten", v).apply()
+
+    /** wie oft im Hintergrund nachgesehen wird (Minuten, mindestens 15 – Vorgabe von Android) */
+    var intervall: Int
+        get() = prefs.getInt("intervall", 30)
+        set(v) = prefs.edit().putInt("intervall", v.coerceIn(15, 240)).apply()
+
+    /** letzter bekannter Stand (zum Vergleichen – nur was für Benachrichtigungen nötig ist) */
+    var zustand: String
+        get() = prefs.getString("zustand", "") ?: ""
+        set(v) = prefs.edit().putString("zustand", v).apply()
+
+    /** zuletzt angezeigter Inhalt des Widgets */
+    var widget: String
+        get() = prefs.getString("widget", "") ?: ""
+        set(v) = prefs.edit().putString("widget", v).apply()
+
+    /** Parzelle, die das Widget zeigt (die zuletzt in der App gewählte) */
+    var widgetParzelle: String
+        get() = prefs.getString("widget_parzelle", "") ?: ""
+        set(v) = prefs.edit().putString("widget_parzelle", v).apply()
+
     var email: String
         get() = prefs.getString("email", "") ?: ""
         set(v) = prefs.edit().putString("email", v).apply()
@@ -71,6 +102,16 @@ class Speicher(context: Context) {
     }
 
     companion object {
+        /** Arten der Benachrichtigungen (Schlüssel, Text in den Einstellungen) */
+        val MELDUNG_ARTEN = listOf(
+            "stoerung" to "Störungen im WLAN",
+            "ticket" to "Antworten und Status meiner Tickets",
+            "laufzeit" to "Laufzeit endet bald",
+            "rechnung" to "Neue Rechnungen",
+            "antrag" to "Entscheidung über meine Anträge",
+            "geraete" to "Alle Geräteplätze belegt",
+        )
+
         /**
          * Adresse des Managers – nicht als lesbarer Text in der APK, sondern verschleiert (XOR) und erst zur Laufzeit
          * zusammengesetzt. Das erschwert nur das einfache Auslesen; geschützt wird die Verbindung durch HTTPS (nur HTTPS erlaubt).

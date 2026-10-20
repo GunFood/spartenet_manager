@@ -83,6 +83,7 @@ import androidx.core.content.FileProvider
 import de.spartenet.mitglied.data.Api
 import de.spartenet.mitglied.data.ApiFehler
 import de.spartenet.mitglied.data.AppUpdate
+import de.spartenet.mitglied.hintergrund.Hintergrund
 import de.spartenet.mitglied.data.Datei
 import de.spartenet.mitglied.data.Speicher
 import de.spartenet.mitglied.data.b
@@ -181,6 +182,13 @@ fun Uebersicht(speicher: Speicher, token: String, ansicht: String, onAnsicht: (S
     val d = daten
     val parzellen = d?.liste("parzellen") ?: emptyList()
     val p = parzellen.firstOrNull { it.s("id") == wahl } ?: parzellen.firstOrNull()
+    LaunchedEffect(p?.s("id")) {                       // das Widget zeigt die zuletzt gewählte Parzelle
+        val id = p?.s("id") ?: return@LaunchedEffect
+        if (speicher.widgetParzelle != id) {
+            speicher.widgetParzelle = id
+            Hintergrund.jetzt(ctx)
+        }
+    }
     Scaffold(
         topBar = {
             Kopf(
@@ -255,6 +263,8 @@ fun Uebersicht(speicher: Speicher, token: String, ansicht: String, onAnsicht: (S
                             Bereich.PROFIL -> {
                                 ProfilKarte(api, d.o("profil") ?: JSONObject(), erlaubt, ::aktion, ::melden, onEmail = { speicher.email = it; laden() }) { laden() }
                                 if (p != null) PersonenKarte(api, p, erlaubt, ::aktion, ::melden) { laden() }
+                                BenachrichtigungKarte(speicher, ::melden)
+                                WidgetKarte()
                                 AnsichtKarte(ansicht, onAnsicht)
                             }
                         }

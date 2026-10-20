@@ -4,6 +4,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- App-Update: neue Version aus dem Manager installieren (fragt einmal nach der Erlaubnis) -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Benachrichtigungen (Android 13+ fragt einmal nach) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:allowBackup="false"
@@ -25,6 +27,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Widget „Meine Geräte“ für den Startbildschirm -->
+        <receiver
+            android:name=".hintergrund.GeraeteWidget"
+            android:exported="false"
+            android:label="Meine Geräte">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/geraete_widget_info" />
+        </receiver>
 
         <provider
             android:name="androidx.core.content.FileProvider"

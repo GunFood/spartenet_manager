@@ -123,6 +123,8 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   - Profil: Vorname, Nachname, Parzelle gesperrt; Rufnummer (Mobil), Telefon und E-Mail änderbar (neue E-Mail mit Code bestätigt,
     die alte Adresse bekommt eine Info). Mitglieder haben dafür das neue Feld "Mobil". Der Pächter legt weitere Personen der
     Parzelle an und entfernt sie (Schalter "Pächter dürfen weitere Personen anlegen").
+  - Mitglieder-App: Widget „Meine Geräte“ für den Startbildschirm und Benachrichtigungen (Störungen, Tickets, Laufzeit, Rechnungen,
+    Anträge, volle Geräteplätze; die App sieht alle 15–60 Minuten selbst nach, ohne Firebase).
   - Adresse des Managers verschleiert in der App, nur HTTPS.
   - App-Updates für Mitglieder-App und Manager-App: unter "Mitgliederbereich → App-Updates" die signierte Release-APK hochladen
     (versionCode, Versionsname, Hinweis); die Apps melden das Update, laden es, prüfen die SHA-256-Prüfsumme und starten die

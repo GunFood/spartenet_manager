@@ -1,5 +1,19 @@
 package de.spartenet.mitglied.ui
 
+import android.Manifest
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Switch
+import androidx.compose.ui.platform.LocalContext
+import de.spartenet.mitglied.data.Speicher
+import de.spartenet.mitglied.hintergrund.GeraeteWidget
+import de.spartenet.mitglied.hintergrund.Hintergrund
+import de.spartenet.mitglied.hintergrund.Meldungen
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -235,6 +249,91 @@ fun AnsichtKarte(ansicht: String, onAnsicht: (String) -> Unit) {
                     Text("$symbol $text")
                 }
             }
+        }
+    }
+}
+
+/**
+ * Benachrichtigungen auf dem Handy: ein/aus, welche Arten, wie oft nachgesehen wird; Android 13+ fragt einmal nach der Erlaubnis.
+ * Die App sieht selbst beim Manager nach (kein Firebase) – Meldungen kommen daher mit bis zu der eingestellten Verzögerung.
+ */
+@Composable
+fun BenachrichtigungKarte(speicher: Speicher, melden: (String) -> Unit) {
+    val ctx = LocalContext.current
+    var an by remember { mutableStateOf(speicher.meldungenAn && Meldungen.erlaubt(ctx)) }
+    var arten by remember { mutableStateOf(speicher.meldungArten) }
+    var intervall by remember { mutableStateOf(speicher.intervall) }
+    fun einschalten(wert: Boolean) {
+        an = wert
+        speicher.meldungenAn = wert
+        Hintergrund.planen(ctx)
+        if (wert) {
+            Meldungen.kanalAnlegen(ctx)
+            Hintergrund.jetzt(ctx)
+        }
+    }
+    val erlaubnis = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok) einschalten(true) else melden("Ohne Erlaubnis kann die App keine Benachrichtigungen zeigen (Android-Einstellungen → Apps → SparteNet Mitglied).")
+    }
+    Karte("Benachrichtigungen") {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Benachrichtigungen auf diesem Handy", Modifier.weight(1f))
+            Switch(checked = an, onCheckedChange = { neu ->
+                if (neu && Build.VERSION.SDK_INT >= 33 && !Meldungen.erlaubt(ctx)) erlaubnis.launch(Manifest.permission.POST_NOTIFICATIONS) else einschalten(neu)
+            })
+        }
+        if (an) {
+            Speicher.MELDUNG_ARTEN.forEach { (k, text) ->
+                Row(Modifier.fillMaxWidth().clickable {
+                    arten = if (k in arten) arten - k else arten + k
+                    speicher.meldungArten = arten
+                }, verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = k in arten, onCheckedChange = { c ->
+                        arten = if (c) arten + k else arten - k
+                        speicher.meldungArten = arten
+                    })
+                    Text(text)
+                }
+            }
+            Text("Nachsehen alle", style = MaterialTheme.typography.labelLarge)
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                val wahl = listOf(15, 30, 60)
+                wahl.forEachIndexed { i, m ->
+                    SegmentedButton(selected = intervall == m, onClick = {
+                        intervall = m
+                        speicher.intervall = m
+                        Hintergrund.planen(ctx)
+                    }, shape = SegmentedButtonDefaults.itemShape(i, wahl.size)) { Text("$m Min.") }
+                }
+            }
+            Text(
+                "Die App sieht in diesem Abstand beim Verein nach und meldet nur Neues. Android kann das bei Energiesparen etwas verzögern.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedButton(onClick = {
+                Meldungen.senden(ctx, "test", "SparteNet Mitglied", "So sehen Benachrichtigungen aus. ✔")
+            }) { Text("Test-Benachrichtigung") }
+        }
+    }
+}
+
+/** Widget „Meine Geräte“ auf den Startbildschirm legen */
+@Composable
+fun WidgetKarte() {
+    val ctx = LocalContext.current
+    Karte("Widget „Meine Geräte“") {
+        Text(
+            "Zeigt auf dem Startbildschirm Ihren Tarif mit „x von y Geräten“ und die Geräte im WLAN der Parzelle – aktualisiert sich von selbst.",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        val am = AppWidgetManager.getInstance(ctx)
+        if (am.isRequestPinAppWidgetSupported) {
+            Button(onClick = { am.requestPinAppWidget(ComponentName(ctx, GeraeteWidget::class.java), null, null) }) { Text("Widget hinzufügen") }
+        } else {
+            Text(
+                "Lange auf eine freie Stelle des Startbildschirms tippen → „Widgets“ → „SparteNet Mitglied“ → „Meine Geräte“.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
