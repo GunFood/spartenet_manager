@@ -11,7 +11,7 @@ Die Mitglieder-App hat **keinen** Zugang zum Manager – nur zum Mitgliederberei
 
 ## SparteNet Mitglied (`mitglied/`)
 
-Nutzt den Mitgliederbereich des Managers (ab 5.6, muss im Manager eingeschaltet sein: Reiter „Tickets“ → „Mitgliederbereich“).
+Nutzt den Mitgliederbereich des Managers (ab 5.7, muss im Manager eingeschaltet sein: Reiter „Tickets“ → „Mitgliederbereich“).
 
 * **Anmelden:** nur E-Mail-Adresse → Einmalcode kommt per E-Mail → Code eingeben. Die Adresse des Managers
   (`https://manager.wlan-im-garten.de`) steht **verschleiert** in `mitglied/…/data/Speicher.kt` (kein Klartext in der APK;

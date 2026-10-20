@@ -272,7 +272,8 @@ def portal_seite(d, design=None, inline=False, art="portal"):
     g = design or seiten_design(d, art)
     vars_ = (f"--a:{g['farbe_knopf']};--k:{g['farbe_kopf']};--kt:{g['farbe_kopf_text']};--bg:{g['farbe_grund']};--c:{g['farbe_karte']};--t:{g['farbe_text']};"
              f"--ecken:{int(g['ecken'])}px;--breite:{int(g['breite'])}px;--schrift:{SEITEN_SCHRIFTEN[g['schrift']][1]};--abdunkeln:{int(g['abdunkeln']) / 100:.2f}")
-    dunkel = ("@media (prefers-color-scheme:dark){:root{--bg:#0f161c;--c:#18222a;--t:#e2e8ec;--m:#9aa9b3;--l:#2e3c46}}" if g["dunkel"] else "")
+    dv = "--bg:#0f161c;--c:#18222a;--t:#e2e8ec;--m:#9aa9b3;--l:#2e3c46"       # dunkel: nach System oder fest gewählt (data-farbe, z. B. /mein ◐ ☀ ☾)
+    dunkel = (f"@media (prefers-color-scheme:dark){{:root:not([data-farbe=hell]){{{dv}}}}}:root[data-farbe=dunkel]{{{dv}}}" if g["dunkel"] else "")
     hg = _bild_src(d, art, "hintergrund", g["hintergrund"], inline)
     logo = _bild_src(d, art, "logo", g["logo"], inline)
     fuss = []

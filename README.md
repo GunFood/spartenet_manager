@@ -1,10 +1,10 @@
-SparteNet Manager 5.6 (Cloud)
+SparteNet Manager 5.7 (Cloud)
 ===============================
 
 Funktioniert komplett über die UniFi-Cloud (api.ui.com). Kein lokaler Zugriff, kein VPN.
 Benötigt nur Python 3 – keine Zusatzpakete (nur für MariaDB/MySQL: PyMySQL, im Docker-Image enthalten).
 
-### ÜBERSICHT (Stand 5.6)
+### ÜBERSICHT (Stand 5.7)
   Verwaltet das WLAN einer oder mehrerer Kleingarten-Sparten an UniFi-Gateways: Netze und WLAN-Passwörter je Parzelle,
   Tarife mit Laufzeit, Buchungen, Mitglieder, Anfragen (Tickets), Rechnungen, Verträge, Automationen und Störungsüberwachung.
 
@@ -115,8 +115,8 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   Höchstens 120 Anfragen je Minute und Schlüssel (SPARTENET_API_PRO_MINUTE). Zahlungsanbieter über n8n/Zapier/Make
   anbinden. Von außen nur über HTTPS (Reverse-Proxy, dann SPARTENET_PROXY=1).
 
-### MITGLIEDER-APP 1.2 UND APP-UPDATES
-  - Mitglieder-App: Kopf mit Spartenlogo, Firmenlogo und "Hallo Vorname Nachname"; Bereiche Übersicht, Rechnungen, Support, Profil;
+### NEU IN 5.7 – MITGLIEDERBEREICH WIE DIE APP, MITGLIEDER-APP 1.2 UND APP-UPDATES
+  - Mitgliederbereich (/mein) und Mitglieder-App sehen gleich aus und können dasselbe. Kopf mit Spartenlogo, Firmenlogo und "Hallo Vorname Nachname"; Bereiche Übersicht, Rechnungen, Support, Profil;
     Ansicht ◐ System / ☀ Hell / ☾ Dunkel. Geräte ohne IP- und MAC-Adressen, fortlaufend nummeriert, mit "Basic: 3 von 5 Geräten".
   - "Gerät trennen" (Auswahl und Bestätigung) sperrt das Gerät am Gateway, "Wieder zulassen" hebt die Sperre auf – nur wenn der
     Administrator unter "Mitgliederbereich" "Mitglieder dürfen eigene Geräte trennen" einschaltet (Standard: aus).

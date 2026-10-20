@@ -1029,7 +1029,10 @@ def mein_seite(d, design=None, inline=False, vorschau=False):
     kopf, rest = seite.split("<body", 1)
     kopf = re.sub(r"<title>.*?</title>", f"<title>{titel}</title>", kopf, flags=re.S)
     body_tag, rest = rest.split(">", 1)
-    header = rest[:rest.index("</header>")].replace('<div id="titel"></div>', f'<div id="titel">{titel}</div>') + "</header>"
+    knoepfe = ('<div id="kopf_knoepfe"><button id="b_farbe" onclick="farbeWeiter()" title="Ansicht">◐</button>'
+               '<button id="b_ab" onclick="abmelden()" hidden>Abmelden</button></div>')
+    header = rest[:rest.index("</header>")].replace("<header>", "<header>" + knoepfe, 1).replace(
+        '<div id="titel"></div>', f'<div id="titel">{titel}</div><div id="kopf_logos"></div><div id="kopf_hallo"></div>') + "</header>"
     fuss = re.search(r"<footer>.*?</footer>", seite, re.S)
     text = html_mod.escape(g["text_anmeldung"]).replace("\n", "<br>") if g.get("text_anmeldung") else (
         "Mit der E-Mail-Adresse, die beim Verein für Ihre Parzelle hinterlegt ist. Der Verein schickt Ihnen einen Einmalcode per E-Mail – ein Passwort ist nicht nötig.")
@@ -1045,76 +1048,105 @@ def _mb_beispiel(d, g):
     sl = sparten_logo_uri(d, sp[0]) if g.get("vereinslogo", True) else ""
     t = [{**_tarif_info(x), "rang": list(tarif_rang(x))} for x in tarife_pruefen(d["tarife"])][:3]
     return {"mitglied": "Erika Muster", "hinweis": g.get("hinweis", ""), "titel": g.get("titel", ""), "modus": "anfrage", "kategorien": ["Sonstiges"],
-            "erlaubt": {"tarifwechsel": True, "downgrade": True, "neubuchung": True, "verlaengern": True, "geraete": False, "zeige_rechnungen": True,
-                        "zeige_anfragen": True, "neue_anfrage": True, "zugangskarte": True},
+            "erlaubt": {"tarifwechsel": True, "downgrade": True, "neubuchung": True, "verlaengern": True, "geraete": True, "zeige_rechnungen": True,
+                        "zeige_anfragen": True, "neue_anfrage": True, "zugangskarte": True, "profil": True, "personen": True, "geraete_trennen": True},
+            "profil": {"vorname": "Erika", "nachname": "Muster", "email": "erika@example.org", "telefon": "", "mobil": "0170 1234567", "haupt": True,
+                       "parzellen": [f"{sp[1].get('name', sp[0])} · Parzelle 12"]},
             "tarife": t, "parzellen": [{"id": "x", "sparte": sp[0], "sparte_name": sp[1].get("name", sp[0]), "parzelle": "12", "sparte_logo": sl,
                                         "tarif": t[0]["name"] if t else "", "rang": t[0]["rang"] if t else None, "tarif_laufzeit": "unbegrenzt",
                                         "laufzeit": None, "gesperrt": False, "offen": 0, "rechnungen": [{"id": "r", "nr": "RE-2026-0001", "datum": "2026-03-01", "brutto": 120, "status": "bezahlt"}],
                                         "tickets": [{"nr": "T-0001", "betreff": "WLAN langsam", "status": "geschlossen", "erstellt": "2026-05-02 18:10", "loesung": "Access Point neu gestartet"}],
-                                        "auftrag": None, "antraege": [],
+                                        "auftrag": None, "antraege": [], "haupt": True,
+                                        "personen": [{"vorname": "Erika", "nachname": "Muster", "email": "erika@example.org", "haupt": True},
+                                                     {"vorname": "Max", "nachname": "Muster", "email": "max@example.org", "haupt": False}],
                                         "stoerungen": [{"geraet": "Access Point Festwiese", "text": MB_STANDARD["stoerung_meldung"].replace("{geraet}", "Access Point Festwiese").replace("{seit}", "18.10.2026 19:40").replace("{ticket}", "T-0042").replace("{modell}", "")}]}],
             "stoerung_text": mb_einstellungen(d)["stoerung_text"], "stoerung_farbe": mb_einstellungen(d)["stoerung_farbe"]}
 
 
 MEIN_HTML = r"""__KOPF__<main>
-<style>.zeile{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.zeile>*{flex:1}.klein{font-size:13px;color:var(--m)}.tabelle{width:100%;border-collapse:collapse;font-size:14px}
+<style>header{position:relative}#kopf_knoepfe{position:absolute;top:10px;right:10px;display:flex;gap:6px}#kopf_knoepfe button{background:none;border:1px solid currentColor;color:var(--kt);border-radius:8px;padding:5px 9px;font:inherit;font-size:15px;cursor:pointer;opacity:.9}
+@media(max-width:560px){#kopf_knoepfe{position:static;justify-content:flex-end;margin:-8px -8px 6px}}
+#kopf_logos{display:flex;gap:10px;justify-content:center;align-items:center;margin-top:8px}#kopf_logos img{height:44px;width:auto;max-width:120px;object-fit:contain;background:#fff;border-radius:10px;padding:3px}#kopf_logos:empty{display:none}#kopf_hallo{margin-top:6px;font-weight:600}#kopf_hallo:empty{display:none}
+.zeile{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.zeile>*{flex:1}.klein{font-size:13px;color:var(--m)}.tabelle{width:100%;border-collapse:collapse;font-size:14px}
 .tabelle td,.tabelle th{padding:7px 6px;border-bottom:1px solid var(--l);text-align:left}.wert{font-size:22px;font-weight:700}.knoepfe{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-.k2{border:1px solid var(--l);background:var(--c);color:var(--t);border-radius:calc(var(--ecken) * .7);padding:10px 14px;cursor:pointer;font:inherit}.k2:hover{border-color:var(--a)}
+.k2{border:1px solid var(--l);background:var(--c);color:var(--t);border-radius:calc(var(--ecken) * .7);padding:10px 14px;cursor:pointer;font:inherit}.k2:hover{border-color:var(--a)}.k2.akt{border-color:var(--a);box-shadow:inset 0 -3px 0 var(--a);font-weight:600}
 .tarife{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-top:10px}.tarif{border:1.5px solid var(--l);border-radius:var(--ecken);padding:12px;cursor:pointer;background:var(--c)}
-.tarif.akt{border-color:var(--a);box-shadow:0 0 0 2px var(--a) inset}.tarif b{font-size:17px}.gesperrt{background:#fde8e6;color:#b42318;border-radius:8px;padding:8px 10px;margin-top:8px}</style>
-<div id="l_stoerung"></div><section id="v_login" class="karte" style="display:none"><h2 style="margin-top:0">Anmelden</h2><p class="hint">__ANMELDETEXT__</p>
+.tarif.akt{border-color:var(--a);box-shadow:0 0 0 2px var(--a) inset}.tarif b{font-size:17px}.gesperrt{background:#fde8e6;color:#b42318;border-radius:8px;padding:8px 10px;margin-top:8px}
+.balken{height:8px;border-radius:4px;background:var(--l);overflow:hidden;margin:6px 0}.balken i{display:block;height:100%;background:var(--a)}.balken.voll i{background:#b42318}
+.nr{display:inline-block;background:var(--a);color:#fff;border-radius:6px;padding:2px 8px;font-size:13px;white-space:nowrap}.geraet{display:flex;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid var(--l)}
+.fest{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--l);padding:8px 0}.fest span{color:var(--m);font-size:13px}.fest b{font-weight:500}
+.reiter{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}.reiter button{flex:1;min-width:70px;padding:10px 4px;font-size:14px}.tab[hidden]{display:none}.wahl label{display:flex;gap:8px;align-items:center;color:var(--t);font-size:15px;margin:6px 0}.wahl input{width:auto}</style>
+<div id="l_stoerung"></div><div id="v_login" class="karte" style="display:none"><h2 style="margin-top:0">Anmelden</h2><p class="hint">__ANMELDETEXT__</p>
 <label for="l_email">E-Mail-Adresse</label><input id="l_email" type="email" autocomplete="email" oninput="logoNachEmail()" onchange="logoNachEmail()" onkeydown="if(event.key=='Enter')codeAnfordern()"><button class="los" id="l_b1" onclick="codeAnfordern()">Code per E-Mail senden</button>
 <div id="l_code_box" style="display:none"><label for="l_code">Einmalcode aus der E-Mail</label><input id="l_code" onkeydown="if(event.key=='Enter')anmelden()" inputmode="numeric" autocomplete="one-time-code" maxlength="6" style="font-size:22px;letter-spacing:6px;text-align:center"><button class="los" onclick="anmelden()">Anmelden</button></div>
-<div class="msg" id="m_login"></div></section>
-<div id="v_daten" style="display:none"><div class="zeile" style="margin-bottom:10px"><p class="hint" id="d_hallo" style="margin:0"></p><div style="flex:none"><select id="d_parz" onchange="zeigen()" style="min-width:200px"></select></div><button class="k2" style="flex:none" onclick="abmelden()">Abmelden</button></div>
-<div id="d_stoerung"></div><p class="hint" id="d_hinweis"></p><div class="msg" id="m_daten"></div>
-<section class="karte" style="display:block"><h2 style="margin-top:0">Mein Tarif</h2><div id="d_tarif"></div><div id="d_wechsel"></div></section>
-<section class="karte" style="display:block" id="s_geraete"><h2 style="margin-top:0">Meine Geräte im WLAN</h2><p class="hint">Geräte, die gerade im WLAN Ihrer Parzelle angemeldet sind. <b id="d_netz"></b></p><div id="d_geraete">…</div><div class="knoepfe"><button class="k2" onclick="geraete()">Aktualisieren</button><button class="k2" id="b_karte" onclick="karte()">Zugangskarte per E-Mail</button></div></section>
-<section class="karte" style="display:block" id="s_rechnungen"><h2 style="margin-top:0">Meine Rechnungen</h2><div id="d_rechnungen"></div></section>
-<section class="karte" style="display:block" id="s_anfragen"><h2 style="margin-top:0">Support</h2><div id="d_tickets"></div>
-<details style="margin-top:10px" id="s_neu"><summary style="cursor:pointer;font-weight:600">Ticket anlegen</summary><label for="t_kat">Worum geht es?</label><select id="t_kat"></select><label for="t_betreff">Betreff</label><input id="t_betreff" maxlength="160" onkeydown="if(event.key=='Enter'){event.preventDefault();$('t_text').focus()}"><label for="t_text">Nachricht</label><textarea id="t_text" maxlength="5000" onkeydown="if(event.key=='Enter'&&(event.ctrlKey||event.metaKey))ticket()" placeholder="Strg+Enter sendet"></textarea><button class="los" onclick="ticket()">Ticket senden</button></details><div class="msg" id="m_ticket"></div></section></div>
-</main>__FUSS__<script>const $=i=>document.getElementById(i),esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));let D=null,WAHL=null;
+<div class="msg" id="m_login"></div><p class="hint" id="l_app"></p></div>
+<div id="v_daten" style="display:none"><div class="reiter" id="reiter"><button class="k2 akt" data-r="start" onclick="reiter('start')">Übersicht</button><button class="k2" data-r="rechnungen" onclick="reiter('rechnungen')">Rechnungen</button><button class="k2" data-r="support" onclick="reiter('support')">Support</button><button class="k2" data-r="profil" onclick="reiter('profil')">Profil</button></div>
+<div style="margin-bottom:10px"><select id="d_parz" onchange="zeigen()" style="max-width:340px"></select></div>
+<div id="d_stoerung"></div><div class="msg" id="m_daten"></div>
+<div class="tab" id="t_start"><p class="hint" id="d_hinweis"></p><div class="karte"><h2 style="margin-top:0">Mein Tarif</h2><div id="d_tarif"></div><div id="d_wechsel"></div></div>
+<div class="karte" id="s_geraete"><h2 style="margin-top:0">Meine Geräte im WLAN</h2><div id="d_verbrauch"></div><div id="d_geraete">…</div><div id="d_getrennt"></div><div id="d_trennen"></div>
+<div class="knoepfe"><button class="k2" onclick="geraete()">Aktualisieren</button><button class="k2" id="b_trennen" onclick="trennenZeigen()">⛓ Gerät trennen</button><button class="k2" id="b_karte" onclick="karte()">Zugangskarte per E-Mail</button></div></div></div>
+<div class="tab" id="t_rechnungen" hidden><div class="karte" id="s_rechnungen"><h2 style="margin-top:0">Meine Rechnungen</h2><div id="d_rechnungen"></div></div></div>
+<div class="tab" id="t_support" hidden><div class="karte" id="s_anfragen"><h2 style="margin-top:0">Support</h2><p class="hint">Fragen, Störungen oder Wünsche? Legen Sie ein Ticket an – Sie bekommen die Antwort per E-Mail.</p>
+<details style="margin-top:10px" id="s_neu"><summary style="cursor:pointer;font-weight:600">Ticket anlegen</summary><label for="t_kat">Worum geht es?</label><select id="t_kat"></select><label for="t_betreff">Betreff</label><input id="t_betreff" maxlength="160" onkeydown="if(event.key=='Enter'){event.preventDefault();$('t_text').focus()}"><label for="t_text">Nachricht</label><textarea id="t_text" maxlength="5000" onkeydown="if(event.key=='Enter'&&(event.ctrlKey||event.metaKey))ticket()" placeholder="Strg+Enter sendet"></textarea><button class="los" onclick="ticket()">Ticket senden</button></details><div class="msg" id="m_ticket"></div>
+<h3 id="h_tickets">Meine Tickets</h3><div id="d_tickets"></div></div></div>
+<div class="tab" id="t_profil" hidden><div class="karte"><h2 style="margin-top:0">Mein Profil</h2><div id="p_fest"></div>
+<label for="p_mobil">Rufnummer (Mobil)</label><input id="p_mobil" type="tel" maxlength="30" autocomplete="tel"><label for="p_telefon">Telefon</label><input id="p_telefon" type="tel" maxlength="30"><label for="p_email">E-Mail-Adresse</label><input id="p_email" type="email" maxlength="200" autocomplete="email">
+<p class="hint" style="margin:6px 0 0">Eine neue Adresse bestätigen Sie mit einem Code, der an sie geschickt wird.</p><button class="los" id="p_los" onclick="profilSpeichern()">Speichern</button>
+<div id="p_code_box" style="display:none"><label for="p_code">Code aus der E-Mail an die neue Adresse</label><input id="p_code" inputmode="numeric" maxlength="6" style="font-size:22px;letter-spacing:6px;text-align:center" onkeydown="if(event.key=='Enter')codeBestaetigen()"><button class="los" onclick="codeBestaetigen()">Bestätigen</button></div><div class="msg" id="m_profil"></div></div>
+<div class="karte" id="s_personen"><h2 style="margin-top:0" id="h_personen">Personen der Parzelle</h2><div id="d_personen"></div>
+<details id="s_person_neu" style="margin-top:10px"><summary style="cursor:pointer;font-weight:600">👤 Neues Mitglied in der Parzelle anlegen</summary><p class="hint">Die Person meldet sich mit ihrer E-Mail-Adresse und einem Einmalcode an und bekommt eine Info per E-Mail.</p>
+<div class="zeile"><div><label for="n_vorname">Vorname</label><input id="n_vorname" maxlength="120"></div><div><label for="n_nachname">Nachname</label><input id="n_nachname" maxlength="120"></div></div><label for="n_email">E-Mail-Adresse</label><input id="n_email" type="email" maxlength="200">
+<div class="zeile"><div><label for="n_mobil">Rufnummer (Mobil, optional)</label><input id="n_mobil" type="tel" maxlength="30"></div><div><label for="n_telefon">Telefon (optional)</label><input id="n_telefon" type="tel" maxlength="30"></div></div><button class="los" onclick="personNeu()">Anlegen</button></details><div class="msg" id="m_personen"></div></div>
+<div class="karte"><h2 style="margin-top:0">Ansicht</h2><div class="knoepfe" id="d_ansicht"></div><p class="hint" id="p_app" style="margin-top:12px"></p></div></div></div>
+</main>__FUSS__<script>const $=i=>document.getElementById(i),esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));let D=null,WAHL=null,VORSCHAU=false,GER=null;
 const eur=x=>Number(x||0).toLocaleString("de-DE",{style:"currency",currency:"EUR"});
+const FARBEN=[["system","◐","System"],["hell","☀","Hell"],["dunkel","☾","Dunkel"]];
+function farbe(){try{return localStorage.getItem("sn_mein_farbe")||"system"}catch(e){return "system"}}
+function farbeSetzen(f){try{localStorage.setItem("sn_mein_farbe",f)}catch(e){}if(f=="system")delete document.documentElement.dataset.farbe;else document.documentElement.dataset.farbe=f;const x=FARBEN.find(z=>z[0]==f)||FARBEN[0];$("b_farbe").textContent=x[1];$("b_farbe").title="Ansicht: "+x[2]+" (klicken zum Wechseln)";
+ $("d_ansicht").innerHTML=FARBEN.map(([k,s,t])=>`<button class="k2${k==f?" akt":""}" onclick="farbeSetzen('${k}')">${s} ${t}</button>`).join("")}
+function farbeWeiter(){const i=FARBEN.findIndex(z=>z[0]==farbe());farbeSetzen(FARBEN[(i+1)%3][0])}
 function msg(id,t,ok){const m=$(id);m.className="msg "+(t?(ok?"ok":"f"):"");m.textContent=t||""}
-async function post(p,b){const r=await fetch(p,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})});const d=await r.json().catch(()=>({}));if(r.status==401&&d.anmelden){ansicht(false);throw new Error("Bitte erneut anmelden.")}if(!r.ok)throw new Error(d.fehler||r.status);return d}
-function ansicht(an){$("v_login").style.display=an?"none":"block";$("v_daten").style.display=an?"block":"none";$("l_stoerung").style.display=an?"none":"";if(!an&&!$("l_stoerung").innerHTML)stoerungAllgemein()}
+async function post(p,b){if(VORSCHAU)throw new Error("Vorschau");const r=await fetch(p,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})});const d=await r.json().catch(()=>({}));if(r.status==401&&d.anmelden){ansicht(false);throw new Error("Bitte erneut anmelden.")}if(!r.ok)throw new Error(d.fehler||r.status);return d}
+function ansicht(an){$("v_login").style.display=an?"none":"block";$("v_daten").style.display=an?"block":"none";$("l_stoerung").style.display=an?"none":"";$("b_ab").hidden=!an;if(!an){$("kopf_hallo").textContent="";if(!$("l_stoerung").innerHTML)stoerungAllgemein()}}
 async function codeAnfordern(){try{const d=await post("/mein/code",{email:$("l_email").value.trim()});msg("m_login",d.text,true);$("l_code_box").style.display="block";$("l_code").focus()}catch(e){msg("m_login",e.message)}}
 async function anmelden(){try{await post("/mein/anmelden",{email:$("l_email").value.trim(),code:$("l_code").value});msg("m_login","");laden()}catch(e){msg("m_login",e.message)}}
 async function abmelden(){await post("/mein/abmelden").catch(()=>{});location.replace("/mein")}
 async function laden(){try{D=await post("/mein/daten");ansicht(true)}catch(e){ansicht(false);return}
  datenZeigen()}
-function vorschau(x){D=x;ansicht(true);$("v_login").style.display="block";datenZeigen();$("l_stoerung").style.display="";stoerungZeigen("l_stoerung",(x.parzellen[0]||{}).stoerungen,x.stoerung_text,x.stoerung_farbe);document.querySelectorAll("button").forEach(b=>b.onclick=null)}
+async function appLink(){try{const a=(await post("/mein/app",{})).app||{};const t=a.version_name?`📱 <a href="/mein/app.apk">App „SparteNet Mitglied“ ${esc(a.version_name)} für Android herunterladen</a>`:"";$("l_app").innerHTML=t;$("p_app").innerHTML=t}catch(e){}}
+function vorschau(x){VORSCHAU=true;D=x;ansicht(true);$("v_login").style.display="block";datenZeigen();$("l_stoerung").style.display="";stoerungZeigen("l_stoerung",(x.parzellen[0]||{}).stoerungen,x.stoerung_text,x.stoerung_farbe);document.querySelectorAll("button:not(.k2)").forEach(b=>b.onclick=null)}
 const VL="__VEREINSLOGO__";
-function kopfLogo(src,titel){const mk=document.querySelector("header .mk");let sl=document.getElementById("sp_logo");
- if(VL&&src&&mk){if(!sl){sl=document.createElement("img");sl.id="sp_logo";sl.alt="";sl.style.cssText="height:42px;width:auto;margin:0 8px";mk.insertBefore(sl,mk.querySelector("b"))}sl.src=src;sl.title=titel||""}else if(sl)sl.remove()}
+function kopf(spSrc,spName){const fl=document.querySelector("header .mk img");let h="";if(VL&&spSrc)h+=`<img src="${esc(spSrc)}" alt="${esc(spName||"Spartenlogo")}" title="${esc(spName||"")}">`;if(fl)h+=`<img src="${esc(fl.getAttribute("src"))}" alt="Firmenlogo">`;$("kopf_logos").innerHTML=h;if(fl)fl.style.display="none"}
 function stoerungZeigen(id,liste,text,farbe){const sf=farbe||"#b42318";$(id).innerHTML=(liste||[]).length?`<div role="alert" style="border:2px solid ${sf};background:${sf}1a;color:${sf};border-radius:var(--ecken);padding:14px 16px;margin:0 0 12px;font-weight:600">`
   +liste.map(s=>`<div style="display:flex;gap:10px;align-items:flex-start;margin:4px 0"><span style="font-size:22px;line-height:1">⚠</span><span>${esc(s.text)}</span></div>`).join("")
   +(text?`<div style="font-weight:400;margin-top:8px;color:var(--t);white-space:pre-wrap">${esc(text)}</div>`:"")+"</div>":""}
 async function stoerungAllgemein(){try{const d=await post("/mein/stoerung",{});stoerungZeigen("l_stoerung",d.stoerungen,d.stoerung_text,d.stoerung_farbe)}catch(x){}}
-let LT=null;function logoNachEmail(){clearTimeout(LT);const e=$("l_email").value.trim();if(!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(e)){kopfLogo("");return}
- LT=setTimeout(async()=>{try{const d=await post("/mein/logo",{email:e});if(VL)kopfLogo(d.logo,d.name);stoerungZeigen("l_stoerung",d.stoerungen,d.stoerung_text,d.stoerung_farbe)}catch(x){}},500)}
+let LT=null;function logoNachEmail(){clearTimeout(LT);const e=$("l_email").value.trim();if(!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(e)){kopf("");return}
+ LT=setTimeout(async()=>{try{const d=await post("/mein/logo",{email:e});kopf(d.logo,d.name);stoerungZeigen("l_stoerung",d.stoerungen,d.stoerung_text,d.stoerung_farbe)}catch(x){}},500)}
+function reiter(r){document.querySelectorAll("#reiter button").forEach(b=>b.classList.toggle("akt",b.dataset.r==r));["start","rechnungen","support","profil"].forEach(t=>$("t_"+t).hidden=t!=r);try{sessionStorage.setItem("sn_mein_reiter",r)}catch(e){}}
 function datenZeigen(){
- $("d_hallo").textContent="Hallo "+D.mitglied;$("d_hinweis").textContent=D.hinweis||"";$("d_parz").innerHTML=D.parzellen.map(p=>`<option value="${esc(p.id)}">${esc(p.sparte_name)} · Parzelle ${esc(p.parzelle)}</option>`).join("");
+ $("kopf_hallo").textContent=D.mitglied?"Hallo "+D.mitglied:"";$("d_hinweis").textContent=D.hinweis||"";$("d_parz").innerHTML=D.parzellen.map(p=>`<option value="${esc(p.id)}">${esc(p.sparte_name)} · Parzelle ${esc(p.parzelle)}</option>`).join("");
  $("d_parz").style.display=D.parzellen.length>1?"":"none";if(WAHL&&D.parzellen.some(p=>p.id==WAHL))$("d_parz").value=WAHL;$("t_kat").innerHTML=D.kategorien.map(k=>`<option>${esc(k)}</option>`).join("");
  const q=new URLSearchParams(location.search);if(q.get("zahlung")=="abbruch")msg("m_daten","Die Zahlung wurde abgebrochen – es wurde nichts gebucht.");else if(q.get("zahlung"))msg("m_daten","Danke! Sobald der Bezahldienst die Zahlung bestätigt, ist die Buchung erledigt (Referenz "+q.get("zahlung")+").",true);
- if(q.has("zahlung"))history.replaceState(null,"","/mein");zeigen()}
+ if(q.has("zahlung"))history.replaceState(null,"","/mein");let r="start";try{r=sessionStorage.getItem("sn_mein_reiter")||"start"}catch(e){}reiter(r);profilZeigen();zeigen()}
 function P(){return D.parzellen.find(p=>p.id==$("d_parz").value)||D.parzellen[0]}
-function zeigen(){const p=P();if(!p)return;WAHL=p.id;const lz=p.laufzeit;
- kopfLogo(p.sparte_logo,p.sparte_name);
+function zeigen(){const p=P();if(!p){kopf("");return}WAHL=p.id;const lz=p.laufzeit;
+ kopf(p.sparte_logo,p.sparte_name);
  stoerungZeigen("d_stoerung",p.stoerungen,D.stoerung_text,D.stoerung_farbe);
  $("d_tarif").innerHTML=p.tarif?`<div class="zeile"><div><div class="klein">Tarif</div><div class="wert">${esc(p.tarif)}</div></div>${lz?`<div><div class="klein">Laufzeit</div><div><b>${lz.aktiv?"bis "+esc(lz.ende):"abgelaufen am "+esc(lz.ende)}</b>${lz.aktiv?`<br><span class="klein">noch ${lz.rest_tage} Tag(e)</span>`:""}</div></div>`:`<div><div class="klein">Laufzeit</div><div><b>unbegrenzt</b></div></div>`}<div><div class="klein">Offen</div><div class="wert" style="font-size:18px">${eur(p.offen)}</div></div></div>${p.gesperrt?'<div class="gesperrt">Der WLAN-Zugang ist gerade gesperrt (Laufzeit abgelaufen) – mit einer Verlängerung wird er wieder freigegeben.</div>':""}`:'<p class="hint">Für diese Parzelle ist noch kein Tarif gebucht.</p>';
- const e=D.erlaubt,R=t=>t.rang.join(","),hoeher=(t)=>p.rang&&(t.rang[0]>p.rang[0]||t.rang[0]==p.rang[0]&&(t.rang[1]>p.rang[1]||t.rang[1]==p.rang[1]&&t.rang[2]>p.rang[2]));
+ const e=D.erlaubt,hoeher=(t)=>p.rang&&(t.rang[0]>p.rang[0]||t.rang[0]==p.rang[0]&&(t.rang[1]>p.rang[1]||t.rang[1]==p.rang[1]&&t.rang[2]>p.rang[2]));
  const ups=D.tarife.filter(t=>t.name!=p.tarif&&hoeher(t)),downs=D.tarife.filter(t=>t.name!=p.tarif&&!hoeher(t));let akt=[];
  if(!p.tarif&&e.neubuchung&&D.tarife.length)akt.push(["neu","Tarif buchen"]);if(p.tarif&&e.tarifwechsel&&ups.length)akt.push(["upgrade","⬆ Upgrade"]);if(p.tarif&&e.downgrade&&downs.length&&!p.antraege.length)akt.push(["downgrade","⬇ Kleinerer Tarif"]);
  if(p.tarif&&e.verlaengern&&p.tarif_laufzeit&&p.tarif_laufzeit!="unbegrenzt"&&!p.antraege.length)akt.push(["verlaengern","Laufzeit verlängern ("+p.tarif_laufzeit+")"]);
  $("d_wechsel").innerHTML=(p.auftrag?`<p class="hint">Offener Zahlungsauftrag ${esc(p.auftrag.referenz)} (${esc(p.auftrag.tarif)}, ${eur(p.auftrag.betrag)}) – wird gebucht, sobald die Zahlung bestätigt ist.</p>`:"")
   +p.antraege.map(a=>`<p class="hint">⏳ Antrag ${esc(a.nr)} vom ${esc(a.erstellt.slice(0,10))}: ${{wechsel:"Wechsel zu",neu:"Buchung",verlaengern:"Verlängerung"}[a.art]||""} ${esc(a.tarif)} – wartet auf Freigabe durch den Verein.</p>`).join("")
   +(akt.length?`<div class="knoepfe">${akt.map(([a,t])=>`<button class="k2" onclick="waehlen('${a}')">${esc(t)}</button>`).join("")}</div><div id="d_auswahl"></div>`:"");
- $("s_rechnungen").style.display=e.zeige_rechnungen?"block":"none";$("s_anfragen").style.display=e.zeige_anfragen||e.neue_anfrage?"block":"none";$("d_tickets").style.display=e.zeige_anfragen?"":"none";$("s_neu").style.display=e.neue_anfrage?"":"none";$("b_karte").style.display=e.zugangskarte?"":"none";
- $("d_rechnungen").innerHTML=p.rechnungen.length?'<table class="tabelle"><tr><th>Nr.</th><th>Datum</th><th>Betrag</th><th>Status</th><th></th></tr>'+p.rechnungen.map(r=>`<tr><td>${esc(r.nr)}</td><td>${esc(r.datum)}</td><td>${eur(r.brutto)}</td><td>${esc(r.status)}</td><td><a href="/mein/rechnung?id=${encodeURIComponent(r.id)}" target="_blank" rel="noopener">PDF</a></td></tr>`).join("")+"</table>":'<p class="hint">Noch keine Rechnungen.</p>';
- $("d_tickets").innerHTML=p.tickets.length?p.tickets.map(t=>`<div class="antwort"><b>${esc(t.nr)}</b> · ${esc(t.status)} · ${esc(t.erstellt)}<br>${esc(t.betreff)}${t.loesung?"<br><small>Lösung: "+esc(t.loesung)+"</small>":""}</div>`).join(""):'<p class="hint">Keine Anfragen.</p>';
- $("s_geraete").style.display=e.geraete?"block":"none";if(e.geraete)geraete()}
-function waehlen(wie){const p=P();const e=D.erlaubt,hoeher=(t)=>p.rang&&(t.rang[0]>p.rang[0]||t.rang[0]==p.rang[0]&&(t.rang[1]>p.rang[1]||t.rang[1]==p.rang[1]&&t.rang[2]>p.rang[2]));
+ $("s_rechnungen").style.display=e.zeige_rechnungen?"block":"none";$("d_tickets").style.display=$("h_tickets").style.display=e.zeige_anfragen?"":"none";$("s_neu").style.display=e.neue_anfrage?"":"none";$("b_karte").style.display=e.zugangskarte?"":"none";
+ $("d_rechnungen").innerHTML=!e.zeige_rechnungen?"":p.rechnungen.length?'<table class="tabelle"><tr><th>Nr.</th><th>Datum</th><th>Betrag</th><th>Status</th><th></th></tr>'+p.rechnungen.map(r=>`<tr><td>${esc(r.nr)}</td><td>${esc(r.datum)}</td><td>${eur(r.brutto)}</td><td>${esc(r.status)}</td><td><a href="/mein/rechnung?id=${encodeURIComponent(r.id)}" target="_blank" rel="noopener">PDF</a></td></tr>`).join("")+"</table>":'<p class="hint">Noch keine Rechnungen.</p>';
+ $("d_tickets").innerHTML=p.tickets.length?p.tickets.map(t=>`<div class="antwort"><b>${esc(t.nr)}</b> · ${esc(t.status)} · ${esc(t.erstellt)}<br>${esc(t.betreff)}${t.loesung?"<br><small>Lösung: "+esc(t.loesung)+"</small>":""}</div>`).join(""):'<p class="hint">Noch keine Tickets.</p>';
+ personenZeigen(p);$("s_geraete").style.display=e.geraete||e.zugangskarte?"block":"none";$("d_trennen").innerHTML="";if(e.geraete)geraete();else{$("d_geraete").innerHTML="";$("b_trennen").style.display="none"}}
+function waehlen(wie){const p=P();const hoeher=(t)=>p.rang&&(t.rang[0]>p.rang[0]||t.rang[0]==p.rang[0]&&(t.rang[1]>p.rang[1]||t.rang[1]==p.rang[1]&&t.rang[2]>p.rang[2]));
  const art=wie=="upgrade"||wie=="downgrade"?"wechsel":wie;
  const liste=wie=="verlaengern"?[{name:p.tarif,laufzeit:p.tarif_laufzeit,preis:p.tarif_preis,down:p.tarif_down,up:p.tarif_up,geraete:p.tarif_geraete}]:wie=="upgrade"?D.tarife.filter(t=>t.name!=p.tarif&&hoeher(t)):wie=="downgrade"?D.tarife.filter(t=>t.name!=p.tarif&&!hoeher(t)):D.tarife;
  const knopf=wie=="downgrade"?"Antrag stellen (Freigabe durch den Verein)":D.modus=="bezahldienst"?"Weiter zur Bezahlung":wie=="upgrade"?"Jetzt wechseln":"Antrag an den Verein senden";
@@ -1123,10 +1155,27 @@ function waehlen(wie){const p=P();const e=D.erlaubt,hoeher=(t)=>p.rang&&(t.rang[
  <button class="los" id="d_los" disabled>${esc(knopf)}</button>`;
  let wahl=wie=="verlaengern"?p.tarif:null;document.querySelectorAll(".tarif").forEach(x=>{if(x.dataset.t==wahl)x.classList.add("akt");x.onclick=()=>{wahl=x.dataset.t;document.querySelectorAll(".tarif").forEach(y=>y.classList.toggle("akt",y===x));$("d_los").disabled=false}});
  $("d_los").disabled=!wahl;$("d_los").onclick=async()=>{try{$("d_los").disabled=true;const d=await post("/mein/buchen",{id:p.id,art,tarif:wahl});if(d.url){location.href=d.url;return}msg("m_daten",d.text,true);laden()}catch(e){msg("m_daten",e.message);$("d_los").disabled=false}}}
-async function geraete(){const p=P();$("d_geraete").textContent="…";try{const d=await post("/mein/geraete",{id:p.id});$("d_netz").textContent=d.tarif?(d.tarif+": "+d.anzahl+(d.max?" von "+d.max:"")+" Geräte"+(d.max?"":" (unbegrenzt)")):"";
- $("d_geraete").innerHTML=d.geraete.length?'<table class="tabelle"><tr><th>Nr.</th><th>Gerät</th><th>Verbindung</th></tr>'+d.geraete.map(g=>`<tr><td>Gerät ${esc(g.nr)}</td><td>${esc(g.name)}</td><td>${esc(g.art)}</td></tr>`).join("")+"</table>":`<p class="hint">${esc(d.fehler||"Gerade ist kein Gerät angemeldet.")}</p>`}catch(e){$("d_geraete").textContent=e.message}}
+async function geraete(){const p=P();$("d_geraete").textContent="…";try{GER=await post("/mein/geraete",{id:p.id})}catch(e){if(VORSCHAU)GER={tarif:p.tarif,anzahl:2,max:5,geraete:[{nr:1,name:"Handy",art:"WLAN",ref:"a"},{nr:2,name:"Laptop",art:"WLAN",ref:"b"}],gesperrt:[]};else{$("d_geraete").textContent=e.message;return}}
+ const d=GER,voll=d.max&&d.anzahl>=d.max;$("d_verbrauch").innerHTML=`<div class="wert" style="font-size:18px">${d.tarif?esc(d.tarif)+": ":""}${d.max?d.anzahl+" von "+d.max+" Geräten":d.anzahl+" Geräte (unbegrenzt)"}</div>`+(d.max?`<div class="balken${voll?" voll":""}"><i style="width:${Math.min(100,Math.round(d.anzahl/d.max*100))}%"></i></div>`:"")+(voll?'<p class="hint" style="color:#b42318">Alle Plätze belegt – trennen Sie ein Gerät oder wechseln Sie in einen größeren Tarif.</p>':"");
+ $("d_geraete").innerHTML=d.geraete.length?d.geraete.map(g=>`<div class="geraet"><span class="nr">Gerät ${esc(g.nr)}</span><div style="flex:1"><b>${esc(g.name)}</b>${g.art?`<br><span class="klein">${esc(g.art)}</span>`:""}</div></div>`).join(""):`<p class="hint">${esc(d.fehler||"Gerade ist kein Gerät angemeldet.")}</p>`;
+ $("d_getrennt").innerHTML=(d.gesperrt||[]).length?'<h3 style="margin:14px 0 4px">Getrennte Geräte</h3>'+d.gesperrt.map(g=>`<div class="geraet"><div style="flex:1">${esc(g.name)}<br><span class="klein">getrennt am ${esc(g.zeit)}</span></div><button class="k2" onclick="zulassen('${esc(g.ref)}')">Wieder zulassen</button></div>`).join(""):"";
+ $("b_trennen").style.display=D.erlaubt.geraete_trennen&&d.geraete.length?"":"none"}
+function trennenZeigen(){if(!GER)return;$("d_trennen").innerHTML=`<div class="karte" style="margin:12px 0 0"><b>Welches Gerät trennen?</b><p class="hint">Das Gerät wird vom WLAN getrennt und gesperrt, bis Sie es unter „Getrennte Geräte“ wieder zulassen.</p><div class="wahl">${GER.geraete.map(g=>`<label><input type="radio" name="tr" value="${esc(g.ref)}"> Gerät ${esc(g.nr)} · ${esc(g.name)}</label>`).join("")}</div><div class="knoepfe"><button class="k2" onclick="trennen()">Trennen</button><button class="k2" onclick="$('d_trennen').innerHTML=''">Abbrechen</button></div></div>`}
+async function trennen(){const w=document.querySelector("input[name=tr]:checked");if(!w){msg("m_daten","Bitte ein Gerät auswählen.");return}try{const d=await post("/mein/geraet_trennen",{id:P().id,ref:w.value,bestaetigt:true});msg("m_daten",d.text,true);$("d_trennen").innerHTML="";geraete()}catch(e){msg("m_daten",e.message)}}
+async function zulassen(ref){try{const d=await post("/mein/geraet_zulassen",{id:P().id,ref});msg("m_daten",d.text,true);geraete()}catch(e){msg("m_daten",e.message)}}
 async function karte(){try{const d=await post("/mein/zugangskarte",{id:P().id});msg("m_daten",d.text,true)}catch(e){msg("m_daten",e.message)}}
 async function ticket(){try{const d=await post("/mein/ticket",{id:P().id,kategorie:$("t_kat").value,betreff:$("t_betreff").value,text:$("t_text").value});msg("m_ticket",d.text,true);$("t_betreff").value="";$("t_text").value="";laden()}catch(e){msg("m_ticket",e.message)}}
+function profilZeigen(){const pr=D.profil||{},darf=D.erlaubt.profil;$("p_fest").innerHTML=[["Vorname",pr.vorname],["Nachname",pr.nachname],["Parzelle",(pr.parzellen||[]).join(", ")]].map(([l,w])=>`<div class="fest"><div><span>${l}</span><br><b>${esc(w||"–")}</b></div><span title="nur vom Verein änderbar">🔒</span></div>`).join("");
+ $("p_mobil").value=pr.mobil||"";$("p_telefon").value=pr.telefon||"";$("p_email").value=pr.email||"";["p_mobil","p_telefon","p_email"].forEach(i=>$(i).disabled=!darf);$("p_los").style.display=darf?"":"none";$("p_code_box").style.display="none"}
+async function profilSpeichern(){const b={mobil:$("p_mobil").value.trim(),telefon:$("p_telefon").value.trim()};const em=$("p_email").value.trim();if(em.toLowerCase()!=String((D.profil||{}).email||"").toLowerCase())b.email=em;
+ try{const d=await post("/mein/profil",b);msg("m_profil",d.text,true);if(d.bestaetigen){$("p_code_box").style.display="block";$("p_code").focus()}else laden()}catch(e){msg("m_profil",e.message)}}
+async function codeBestaetigen(){try{const d=await post("/mein/profil_bestaetigen",{code:$("p_code").value});msg("m_profil",d.text,true);$("p_code").value="";laden()}catch(e){msg("m_profil",e.message)}}
+function personenZeigen(p){const darf=D.erlaubt.personen&&p.haupt;$("h_personen").textContent="Personen der Parzelle "+p.parzelle;
+ $("d_personen").innerHTML=(p.personen||[]).map(x=>`<div class="geraet"><div style="flex:1"><b>${esc((x.vorname+" "+x.nachname).trim())}</b><br><span class="klein">${x.haupt?"Pächter":"weitere Person"}${x.email?" · "+esc(x.email):""}</span></div>${darf&&!x.haupt?`<button class="k2" onclick="personEntfernen('${esc(x.email)}')">Entfernen</button>`:""}</div>`).join("")
+  +(!darf&&D.erlaubt.personen?'<p class="hint">Weitere Personen kann der Pächter der Parzelle anlegen.</p>':"");$("s_person_neu").style.display=darf?"":"none"}
+async function personNeu(){const b={id:P().id};["vorname","nachname","email","mobil","telefon"].forEach(k=>b[k]=$("n_"+k).value.trim());try{const d=await post("/mein/person_neu",b);msg("m_personen",d.text,true);["vorname","nachname","email","mobil","telefon"].forEach(k=>$("n_"+k).value="");$("s_person_neu").open=false;laden()}catch(e){msg("m_personen",e.message)}}
+async function personEntfernen(email){if(!confirm("Person entfernen? Sie hat danach keinen Zugang mehr zum Mitgliederbereich dieser Parzelle."))return;try{const d=await post("/mein/person_entfernen",{id:P().id,email});msg("m_personen",d.text,true);laden()}catch(e){msg("m_personen",e.message)}}
+farbeSetzen(farbe());appLink();
 laden();</script></body></html>"""
 
 
