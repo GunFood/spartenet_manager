@@ -17,7 +17,7 @@ import urllib.request as _ur
 MB_STANDARD = {"aktiv": False, "tarifwechsel": True, "downgrade": True, "neubuchung": True, "verlaengern": True, "geraete": True, "modus": "anfrage",
                "link_api": "", "checkout_vorlage": "", "hinweis": "", "minuten": 30, "adresse": "",
                "titel": "Mitgliederbereich", "text_anmeldung": "", "zeige_rechnungen": True, "zeige_anfragen": True, "neue_anfrage": True,
-               "zugangskarte": True, "tarife": [], "stoerung_zeigen": True, "stoerung_farbe": "#b42318",
+               "zugangskarte": True, "profil": True, "personen": True, "geraete_trennen": False, "tarife": [], "stoerung_zeigen": True, "stoerung_farbe": "#b42318",
                "stoerung_meldung": "Achtung: {geraet} ist aktuell ausgefallen (seit {seit}). Ein Störungsticket {ticket} ist erstellt und an den Verein verschickt – wir kümmern uns darum.",
                "stoerung_text": ""}
 _MB_SITZ, _MB_CODES = {}, {}
@@ -315,11 +315,16 @@ def _parzellen_netz_plan(d, kz, p):
     return f"10.{sp['sid']}.{int(p)}.0/24" if sp and sp.get("sid") is not None else None
 
 
-def mb_geraete(d, kz, p):
-    """Geräte im Netz der Parzelle (IP 10.<Sparte>.<Parzelle>.<Gerät>) – aus der Client-Liste des Gateways, 60 s zwischengespeichert"""
+def _geraet_ref(kz, p, mac):
+    """undurchsichtige Kennung eines Geräts für das Mitglied – verrät weder MAC- noch IP-Adresse"""
+    return hashlib.sha256(f"SparteNet-Geraet|{kz}|{p}|{str(mac).lower()}".encode()).hexdigest()[:20]
+
+
+def _geraete_roh(d, kz, p):
+    """(Liste der Clients im Netz der Parzelle, Fehlertext) – Client-Liste des Gateways, 60 s zwischengespeichert"""
     netz = _parzellen_netz_plan(d, kz, p)
     if not netz:
-        return {"geraete": [], "fehler": "Für diese Parzelle ist kein Netz geplant."}
+        return [], "Für diese Parzelle ist kein Netz geplant."
     if time.time() - _GERAETE_CACHE["zeit"] > 60:
         try:
             _GERAETE_CACHE.update(liste=Gateway(d).alle("/v1/sites/{site}/clients"), fehler="", zeit=time.time())
@@ -329,20 +334,77 @@ def mb_geraete(d, kz, p):
     try:
         n = ipaddress.ip_network(netz, strict=False)
     except ValueError:
-        return {"geraete": [], "fehler": "Netz der Parzelle ungültig."}
+        return [], "Netz der Parzelle ungültig."
     aus = []
     for c in _GERAETE_CACHE["liste"]:
         ip = c.get("ipAddress") or ""
         try:
             if ip and ipaddress.ip_address(ip) in n:
-                mac = str(c.get("macAddress") or "")
-                aus.append({"name": c.get("name") or c.get("hostname") or "Gerät", "ip": ip, "geraet": ip.rsplit(".", 1)[-1],
-                            "mac": ("…" + mac[-8:]) if len(mac) > 8 else mac, "art": {"WIRELESS": "WLAN", "WIRED": "Kabel"}.get(str(c.get("type") or "").upper(), c.get("type") or ""),
-                            "seit": c.get("connectedAt") or ""})
+                aus.append(c)
         except ValueError:
             continue
-    aus.sort(key=lambda x: int(x["geraet"]) if x["geraet"].isdigit() else 999)
-    return {"geraete": aus, "netz": netz, "fehler": _GERAETE_CACHE["fehler"]}
+    aus.sort(key=lambda c: int(str(c.get("ipAddress")).rsplit(".", 1)[-1]))
+    return aus, _GERAETE_CACHE["fehler"]
+
+
+def gesperrte_geraete(d):
+    g = d.get("mb_gesperrte_geraete")
+    if not isinstance(g, dict):
+        g = {}
+        d["mb_gesperrte_geraete"] = g
+    return g
+
+
+def mb_geraete(d, kz, p):
+    """Geräte im Netz der Parzelle – fortlaufend nummeriert, ohne IP- und MAC-Adresse; dazu „x von y“ nach dem Tarif
+    und die vom Mitglied getrennten (gesperrten) Geräte"""
+    roh, fehler = _geraete_roh(d, kz, p)
+    aus = [{"nr": i + 1, "name": c.get("name") or c.get("hostname") or "Gerät", "ref": _geraet_ref(kz, p, c.get("macAddress") or ""),
+            "art": {"WIRELESS": "WLAN", "WIRED": "Kabel"}.get(str(c.get("type") or "").upper(), c.get("type") or ""), "seit": c.get("connectedAt") or ""}
+           for i, c in enumerate(roh)]
+    tarif = ((d.get("buchungen") or {}).get(kz) or {}).get(str(p), "")
+    t = next((x for x in tarife_pruefen(d["tarife"]) if x["name"] == tarif), None)
+    gesp = [{"ref": x["ref"], "name": x.get("name", "Gerät"), "zeit": x.get("zeit", "")} for x in gesperrte_geraete(d).get(f"{kz}-{p}", [])]
+    return {"geraete": aus, "anzahl": len(aus), "max": int(t.get("geraete") or 0) if t else 0, "tarif": tarif, "gesperrt": gesp, "fehler": fehler}
+
+
+def mb_geraet_trennen(d, kz, p, b):
+    """Gerät der Parzelle vom WLAN trennen und sperren (bis das Mitglied es wieder zulässt) – nur mit Bestätigung und nur,
+    wenn der Administrator es unter „Mitgliederbereich“ ausdrücklich eingeschaltet hat (Änderung am Gateway)"""
+    if not mb_einstellungen(d)["geraete_trennen"]:
+        raise Fehler("Geräte trennen ist hier nicht eingeschaltet – bitte beim Verein melden.")
+    if not b.get("bestaetigt"):
+        raise Fehler("Bitte das Trennen bestätigen.")
+    ref = str(b.get("ref") or "")
+    _GERAETE_CACHE["zeit"] = 0                     # frische Liste: das Gerät muss jetzt im Netz der Parzelle sein
+    roh, _f = _geraete_roh(d, kz, p)
+    c = next((c for c in roh if c.get("macAddress") and hmac.compare_digest(_geraet_ref(kz, p, c["macAddress"]), ref)), None)
+    if not c:
+        raise Fehler("Dieses Gerät ist gerade nicht im Netz Ihrer Parzelle.")
+    mac = str(c["macAddress"]).lower()
+    Gateway(d).legacy_cmd("cmd/stamgr", {"cmd": "block-sta", "mac": mac})
+    liste = gesperrte_geraete(d).setdefault(f"{kz}-{p}", [])
+    if not any(x.get("mac") == mac for x in liste):
+        liste.append({"ref": ref, "mac": mac, "name": text_einzeilig(c.get("name") or c.get("hostname") or "Gerät", 60), "zeit": time.strftime("%d.%m.%Y %H:%M")})
+    del liste[:-20]
+    _GERAETE_CACHE["zeit"] = 0
+    speichere(d)
+    journal(f"Mitgliederbereich: Gerät in {kz} Parzelle {p} vom Mitglied getrennt (gesperrt)")
+    return {"ok": True, "text": "Das Gerät ist getrennt und gesperrt. Unter „Getrennte Geräte“ können Sie es wieder zulassen."}
+
+
+def mb_geraet_zulassen(d, kz, p, b):
+    if not mb_einstellungen(d)["geraete_trennen"]:
+        raise Fehler("Geräte trennen ist hier nicht eingeschaltet – bitte beim Verein melden.")
+    liste = gesperrte_geraete(d).get(f"{kz}-{p}", [])
+    x = next((x for x in liste if hmac.compare_digest(x.get("ref", ""), str(b.get("ref") or ""))), None)
+    if not x:
+        raise Fehler("Dieses Gerät ist für Ihre Parzelle nicht gesperrt.")
+    Gateway(d).legacy_cmd("cmd/stamgr", {"cmd": "unblock-sta", "mac": x["mac"]})
+    liste.remove(x)
+    speichere(d)
+    journal(f"Mitgliederbereich: Gerät in {kz} Parzelle {p} vom Mitglied wieder zugelassen")
+    return {"ok": True, "text": "Das Gerät ist wieder zugelassen und kann sich neu verbinden."}
 
 
 def _tarif_info(t):
@@ -419,6 +481,7 @@ def mb_daten(d, email):
         sl = sparten_logo_id(d, kz)
         parz.append({"id": mid, "sparte": kz, "sparte_name": _sparten_kz(d).get(kz, kz), "parzelle": p,
                      "sparte_logo": f"/spartenlogo/{urllib.parse.quote(kz)}?v={sl[:6]}" if sl else "", "name": f"{m.get('vorname', '')} {m.get('nachname', '')}".strip(),
+                     "haupt": bool(m.get("_haupt")), "personen": _mb_personen(d, mid),
                      "tarif": tarif, "laufzeit": ({"start": time.strftime("%d.%m.%Y %H:%M", time.localtime(lz["start"])), "ende": time.strftime("%d.%m.%Y %H:%M", time.localtime(lz["ende"])),
                                                    "aktiv": lz.get("status") == "aktiv", "rest_tage": max(0, int((lz["ende"] - time.time()) // 86400))} if lz else None),
                      "gesperrt": bool(gesp), "rechnungen": rechn, "offen": round(sum(float(x["brutto"] or 0) - float(x["bezahlt"] or 0) for x in rechn), 2),
@@ -426,7 +489,8 @@ def mb_daten(d, email):
                      **({"tarif_laufzeit": laufzeit_text(akt_t.get("laufzeit", 0), akt_t.get("laufzeit_einheit", "tage")) if akt_t.get("laufzeit") else "unbegrenzt",
                          "tarif_preis": akt_t.get("preis", 0), "tarif_down": akt_t["down"], "tarif_up": akt_t["up"], "tarif_geraete": akt_t.get("geraete", 0)} if akt_t else {})})
     return {"mitglied": parz[0]["name"] if parz else "", "parzellen": parz, "tarife": tarife,
-            "erlaubt": {k: e[k] for k in ("tarifwechsel", "downgrade", "neubuchung", "verlaengern", "geraete", "zeige_rechnungen", "zeige_anfragen", "neue_anfrage", "zugangskarte")},
+            "erlaubt": {k: e[k] for k in ("tarifwechsel", "downgrade", "neubuchung", "verlaengern", "geraete", "zeige_rechnungen", "zeige_anfragen", "neue_anfrage", "zugangskarte", "profil", "personen", "geraete_trennen")},
+            "profil": mb_profil(d, email),
             "modus": e["modus"], "hinweis": e["hinweis"], "titel": e["titel"], "kategorien": list(ticket_kategorien(d)),
             "stoerung_text": e["stoerung_text"] if e["stoerung_zeigen"] else "", "stoerung_farbe": e["stoerung_farbe"],
             "logo_verein": "/seitenbild/portal/logo" if seitenbild(d, "portal", "logo") else ""}
@@ -437,6 +501,250 @@ def _mb_parzelle(d, email, mid):
     if not m or not m.get("sparte") or not str(m.get("parzelle") or "").isdigit():
         raise Fehler("Parzelle nicht gefunden.")
     return str(mid), m, m["sparte"], str(m["parzelle"])
+
+
+# ---- Profil und weitere Personen der Parzelle ---------------------------------------------------------------------------
+_MB_EMAILWECHSEL = {}
+
+
+def _mb_personen(d, mid):
+    m = mitglieder(d).get(mid) or {}
+    return [{"vorname": x.get("vorname", ""), "nachname": x.get("nachname", ""), "email": x.get("email", ""), "haupt": x["haupt"]} for x in personen(m)]
+
+
+def mb_profil(d, email):
+    """eigene Angaben: Vorname, Nachname und Parzelle(n) nur zum Lesen; Telefon, Mobil und E-Mail änderbar"""
+    treffer = sorted(mb_mitglieder_von(d, email).items(), key=lambda x: (x[1].get("sparte", ""), str(x[1].get("parzelle", ""))))
+    if not treffer:
+        return {}
+    m = treffer[0][1]
+    return {"vorname": m.get("vorname", ""), "nachname": m.get("nachname", ""), "email": m.get("email", ""), "telefon": m.get("telefon", ""),
+            "mobil": m.get("mobil", ""), "haupt": any(x.get("_haupt") for _i, x in treffer),
+            "parzellen": [f"{_sparten_kz(d).get(x.get('sparte', ''), x.get('sparte', ''))} · Parzelle {x.get('parzelle', '')}" for _i, x in treffer]}
+
+
+def _mb_person_eintraege(d, email):
+    """[(Mitglied, Eintrag)] – der Eintrag ist das Mitglied selbst oder eine weitere Person mit dieser E-Mail-Adresse"""
+    e = name_norm(email)
+    aus = []
+    for m in mitglieder(d).values():
+        if m.get("email") and name_norm(m["email"]) == e:
+            aus.append((m, m))
+        for w in m.get("weitere") or []:
+            if isinstance(w, dict) and w.get("email") and name_norm(w["email"]) == e:
+                aus.append((m, w))
+    return aus
+
+
+def _email_gueltig(x):
+    return bool(re.fullmatch(r"[^@\s,;<>]{1,64}@[A-Za-z0-9.-]{1,190}\.[A-Za-z]{2,}", x))
+
+
+def mb_profil_speichern(d, email, b):
+    """Telefon und Mobil sofort; eine neue E-Mail-Adresse erst nach dem Code, der an die neue Adresse geht"""
+    if not mb_einstellungen(d)["profil"]:
+        raise Fehler("Das Profil kann hier nicht geändert werden – bitte beim Verein melden.")
+    werte = {k: text_einzeilig(b.get(k) or "", 30).strip() for k in ("telefon", "mobil") if k in b}
+    for k, t in (("telefon", "Telefonnummer"), ("mobil", "Mobilnummer")):
+        if werte.get(k) and not _TEL_RE.match(werte[k]):
+            raise Fehler(f"{t}: nur Ziffern, Leerzeichen und + ( ) / -.")
+    eintraege = _mb_person_eintraege(d, email)
+    if not eintraege:
+        raise Fehler("Profil nicht gefunden.")
+    for m, x in eintraege:
+        x.update(werte)
+        m["geaendert"] = time.strftime("%Y-%m-%d %H:%M")
+    antwort = {"ok": True, "text": "Gespeichert."}
+    neu = str(b.get("email") or "").strip().lower()
+    if neu and name_norm(neu) != name_norm(email):
+        if not _email_gueltig(neu):
+            raise Fehler("Bitte eine gültige E-Mail-Adresse eingeben.")
+        if mb_mitglieder_von(d, neu):
+            raise Fehler("Diese E-Mail-Adresse ist schon bei einem Mitglied eingetragen – bitte beim Verein melden.")
+        if not mb_versand_bereit(d):
+            raise Fehler("Die E-Mail-Adresse kann gerade nicht geändert werden (E-Mail-Versand des Vereins nicht eingerichtet).")
+        _grenze("mb_code_mail", name_norm(neu))
+        code = f"{secrets.randbelow(1000000):06d}"
+        with _MB_LOCK:
+            _MB_EMAILWECHSEL[name_norm(email)] = {"neu": neu, "hash": _mb_hash(code), "bis": time.time() + 600, "versuche": 0}
+        m0 = eintraege[0][1]
+        email_senden(d, neu, f"Bestätigungscode: {code}", None,
+                     f"<p>Hallo {html_mod.escape(m0.get('vorname') or '')},</p><p>mit diesem Code bestätigen Sie Ihre neue E-Mail-Adresse für den Mitgliederbereich:</p>"
+                     f"<p style='font-size:28px;letter-spacing:6px;font-weight:bold'>{code}</p><p>Er gilt 10 Minuten. Haben Sie das nicht veranlasst, ignorieren Sie diese E-Mail.</p>",
+                     sparte=eintraege[0][0].get("sparte") or None)
+        antwort = {"ok": True, "bestaetigen": True, "text": f"Gespeichert. An {neu} ist ein Code unterwegs – bitte eingeben, um die neue E-Mail-Adresse zu bestätigen."}
+    speichere(d)
+    journal("Mitgliederbereich: Profil eines Mitglieds geändert")
+    return antwort
+
+
+def mb_profil_bestaetigen(d, email, b):
+    alt = name_norm(email)
+    code = re.sub(r"\D", "", str(b.get("code") or ""))
+    with _MB_LOCK:
+        w = _MB_EMAILWECHSEL.get(alt)
+        if not w or time.time() > w["bis"] or w["versuche"] >= 5:
+            _MB_EMAILWECHSEL.pop(alt, None)
+            raise Fehler("Der Code ist abgelaufen oder ungültig – bitte die E-Mail-Adresse erneut speichern.")
+        if not hmac.compare_digest(w["hash"], _mb_hash(code)):
+            w["versuche"] += 1
+            raise Fehler("Der Code stimmt nicht.")
+        _MB_EMAILWECHSEL.pop(alt, None)
+    neu = w["neu"]
+    if mb_mitglieder_von(d, neu):
+        raise Fehler("Diese E-Mail-Adresse ist inzwischen schon eingetragen – bitte beim Verein melden.")
+    eintraege = _mb_person_eintraege(d, email)
+    if not eintraege:
+        raise Fehler("Profil nicht gefunden.")
+    alte_adresse = eintraege[0][1].get("email", "")
+    for m, x in eintraege:
+        x["email"] = neu
+        m["geaendert"] = time.strftime("%Y-%m-%d %H:%M")
+    for a in mitglied_apps(d).values():          # angemeldete Apps bleiben angemeldet
+        if a.get("email") == alt:
+            a["email"] = name_norm(neu)
+    with _MB_LOCK:
+        for s in _MB_SITZ.values():
+            if s.get("email") == alt:
+                s["email"] = name_norm(neu)
+    speichere(d)
+    journal("Mitgliederbereich: E-Mail-Adresse eines Mitglieds geändert (mit Code bestätigt)")
+    _mb_mail(d, {"email": alte_adresse, "vorname": eintraege[0][1].get("vorname", ""), "sparte": eintraege[0][0].get("sparte")},
+             "Ihre E-Mail-Adresse wurde geändert", f"<p>Ihre E-Mail-Adresse für den Mitgliederbereich wurde auf <b>{html_mod.escape(neu)}</b> geändert. "
+             "Waren Sie das nicht, melden Sie sich bitte sofort beim Verein.</p>")
+    return {"ok": True, "text": "Ihre neue E-Mail-Adresse ist bestätigt.", "email": neu}
+
+
+def mb_person_neu(d, email, b):
+    """der Pächter trägt eine weitere Person seiner Parzelle ein (Mitpächter, Partner …) – sie meldet sich mit ihrer E-Mail-Adresse an"""
+    if not mb_einstellungen(d)["personen"]:
+        raise Fehler("Weitere Personen kann hier nur der Verein eintragen.")
+    mid, m, kz, p = _mb_parzelle(d, email, b.get("id"))
+    if not m.get("_haupt"):
+        raise Fehler("Weitere Personen kann nur der Pächter der Parzelle eintragen.")
+    neu = {k: text_einzeilig(b.get(k) or "", 120).strip() for k in ("vorname", "nachname", "email", "telefon", "mobil")}
+    if not (neu["vorname"] and neu["nachname"]):
+        raise Fehler("Bitte Vorname und Nachname angeben.")
+    if not _email_gueltig(neu["email"]):
+        raise Fehler("Bitte eine gültige E-Mail-Adresse angeben – damit meldet sich die Person an.")
+    rec = mitglieder(d)[mid]
+    rec["weitere"] = weitere_pruefen([dict(x) for x in (rec.get("weitere") or []) if isinstance(x, dict)] + [neu], rec.get("email", ""))
+    rec["geaendert"] = time.strftime("%Y-%m-%d %H:%M")
+    speichere(d)
+    journal(f"Mitgliederbereich: weitere Person für {kz} Parzelle {p} vom Pächter eingetragen")
+    wo = mb_einstellungen(d)["titel"]
+    _mb_mail(d, {"email": neu["email"], "vorname": neu["vorname"], "sparte": kz}, f"Sie sind für Parzelle {p} eingetragen",
+             f"<p>{html_mod.escape(m.get('vorname', ''))} {html_mod.escape(m.get('nachname', ''))} hat Sie als weitere Person für Parzelle {p} "
+             f"({html_mod.escape(_sparten_kz(d).get(kz, kz))}) eingetragen.</p><p>Sie können sich jetzt im {html_mod.escape(wo)} oder in der App „SparteNet Mitglied“ "
+             "mit dieser E-Mail-Adresse und einem Einmalcode anmelden.</p>")
+    return {"ok": True, "text": f"{neu['vorname']} {neu['nachname']} ist eingetragen und per E-Mail informiert."}
+
+
+def mb_person_entfernen(d, email, b):
+    if not mb_einstellungen(d)["personen"]:
+        raise Fehler("Weitere Personen kann hier nur der Verein ändern.")
+    mid, m, kz, p = _mb_parzelle(d, email, b.get("id"))
+    if not m.get("_haupt"):
+        raise Fehler("Weitere Personen kann nur der Pächter der Parzelle entfernen.")
+    weg = name_norm(b.get("email"))
+    rec = mitglieder(d)[mid]
+    vorher = [x for x in (rec.get("weitere") or []) if isinstance(x, dict)]
+    rec["weitere"] = [x for x in vorher if name_norm(x.get("email")) != weg]
+    if len(rec["weitere"]) == len(vorher):
+        raise Fehler("Diese Person ist bei Ihrer Parzelle nicht eingetragen.")
+    rec["geaendert"] = time.strftime("%Y-%m-%d %H:%M")
+    speichere(d)
+    journal(f"Mitgliederbereich: weitere Person bei {kz} Parzelle {p} vom Pächter entfernt")
+    return {"ok": True, "text": "Die Person ist entfernt."}
+
+
+# ---- App-Updates: neue APK (Mitglieder-App oder Manager-App) im Manager hochladen, die App lädt sie herunter -------------
+APP_ARTEN = {"mitglied": "Mitglieder-App „SparteNet Mitglied“", "manager": "Manager-App „SparteNet Manager“"}
+
+
+def app_apk_pfad(art):
+    return os.path.join(HIER, f"SparteNet_{'Mitglied' if art == 'mitglied' else 'Manager'}_App.apk")
+
+
+def _app_dateien(d):
+    a = d.get("app_dateien")
+    if not isinstance(a, dict):
+        a = {}
+        d["app_dateien"] = a
+    return a
+
+
+def app_update_info(d, art):
+    """Angaben zur hochgeladenen Version (ohne Datei: leer) – für die App, um ein Update zu melden"""
+    a = (d.get("app_dateien") or {}).get(art) if isinstance(d.get("app_dateien"), dict) else None
+    if not isinstance(a, dict) or not os.path.isfile(app_apk_pfad(art)):
+        return {}
+    return {k: a.get(k) for k in ("version_code", "version_name", "sha256", "groesse", "hinweis", "hochgeladen")}
+
+
+def app_apk_lesen(d, art):
+    if not app_update_info(d, art):
+        raise Fehler("Kein Update hinterlegt.")
+    with open(app_apk_pfad(art), "rb") as f:
+        return f.read()
+
+
+def akt_app_update(d, b=None, ich=""):
+    """Administrator: hochgeladene Versionen beider Apps ansehen oder eine entfernen ({"art": "mitglied", "entfernen": true})"""
+    log = []
+    if isinstance(b, dict) and b.get("entfernen"):
+        art = b.get("art")
+        if art not in APP_ARTEN:
+            raise Fehler("Unbekannte App.")
+        _app_dateien(d).pop(art, None)
+        try:
+            os.remove(app_apk_pfad(art))
+        except FileNotFoundError:
+            pass
+        speichere(d)
+        journal(f"App-Update ({art}) entfernt durch {ich}")
+        log = [f"✔ Update der {APP_ARTEN[art]} entfernt – die App meldet kein Update mehr."]
+    return {"apps": {k: {"titel": t, **app_update_info(d, k)} for k, t in APP_ARTEN.items()}, "log": log}
+
+
+def akt_app_update_hochladen(d, q, roh, ich):
+    """neue APK hochladen (?art=mitglied|manager&version_code=3&version_name=1.2&hinweis=…). Die App meldet das Update,
+    lädt die Datei herunter, prüft die SHA-256-Prüfsumme und startet die Installation. Android installiert ein Update nur,
+    wenn die APK mit demselben Schlüssel signiert ist wie die installierte App."""
+    art = (q.get("art") or [""])[0]
+    if art not in APP_ARTEN:
+        raise Fehler("Bitte wählen: Mitglieder-App oder Manager-App.")
+    try:
+        vc = int((q.get("version_code") or [""])[0])
+    except ValueError:
+        raise Fehler("Versionsnummer (versionCode) als ganze Zahl angeben, z. B. 3.")
+    vn = text_einzeilig((q.get("version_name") or [""])[0], 40).strip() or str(vc)
+    hinweis = text_einzeilig((q.get("hinweis") or [""])[0], 300).strip()
+    if not 1 <= vc <= 2_100_000_000:
+        raise Fehler("Versionsnummer (versionCode) muss größer als 0 sein.")
+    alt = app_update_info(d, art)
+    if alt and vc <= int(alt.get("version_code") or 0):
+        raise Fehler(f"Die Versionsnummer muss größer sein als die bisherige ({alt.get('version_code')}).")
+    if not roh or len(roh) < 1000 or not roh.startswith(b"PK\x03\x04"):
+        raise Fehler("Das ist keine APK-Datei.")
+    try:
+        with zipfile.ZipFile(io.BytesIO(roh)) as z:
+            namen = set(z.namelist())
+    except zipfile.BadZipFile:
+        raise Fehler("Das ist keine gültige APK-Datei.")
+    if "AndroidManifest.xml" not in namen or not any(n.startswith("classes") and n.endswith(".dex") for n in namen):
+        raise Fehler("Das ist keine Android-App (AndroidManifest.xml oder classes.dex fehlt).")
+    ziel = app_apk_pfad(art)
+    with open(ziel + ".neu", "wb") as f:
+        f.write(roh)
+    os.replace(ziel + ".neu", ziel)
+    _app_dateien(d)[art] = {"version_code": vc, "version_name": vn, "hinweis": hinweis, "sha256": hashlib.sha256(roh).hexdigest(),
+                            "groesse": len(roh), "hochgeladen": time.strftime("%d.%m.%Y %H:%M"), "von": ich}
+    speichere(d)
+    journal(f"App-Update {art}: Version {vn} ({vc}) hochgeladen durch {ich}")
+    r = akt_app_update(d)
+    r["log"] = [f"✔ {APP_ARTEN[art]}: Version {vn} hochgeladen. Die Apps melden das Update beim nächsten Öffnen."]
+    return r
 
 
 # ---- Zahlungsaufträge -------------------------------------------------------------------------------------------------
@@ -652,6 +960,18 @@ def mb_anfrage(pfad, b, email, quelle, basis):
                 raise Fehler("Die Geräteanzeige ist ausgeschaltet.")
             return 200, mb_geraete(d, kz, p)
         _grenze("mb_aktion", email)
+        if pfad in ("/mein/geraet_trennen", "/mein/geraet_zulassen"):
+            if not mb_einstellungen(d)["geraete"]:
+                raise Fehler("Die Geräteanzeige ist ausgeschaltet.")
+            with SCHREIB_SPERRE:
+                d = lade()
+                _mid, _m, kz, p = _mb_parzelle(d, email, (b or {}).get("id"))
+                return 200, (mb_geraet_trennen if pfad.endswith("trennen") else mb_geraet_zulassen)(d, kz, p, b or {})
+        aktionen = {"/mein/profil": mb_profil_speichern, "/mein/profil_bestaetigen": mb_profil_bestaetigen,
+                    "/mein/person_neu": mb_person_neu, "/mein/person_entfernen": mb_person_entfernen}
+        if pfad in aktionen:
+            with SCHREIB_SPERRE:
+                return 200, aktionen[pfad](lade(), email, b or {})
         if pfad == "/mein/buchen":
             with SCHREIB_SPERRE:
                 return 200, mb_buchen(lade(), email, b or {}, basis)
@@ -749,10 +1069,10 @@ MEIN_HTML = r"""__KOPF__<main>
 <div id="v_daten" style="display:none"><div class="zeile" style="margin-bottom:10px"><p class="hint" id="d_hallo" style="margin:0"></p><div style="flex:none"><select id="d_parz" onchange="zeigen()" style="min-width:200px"></select></div><button class="k2" style="flex:none" onclick="abmelden()">Abmelden</button></div>
 <div id="d_stoerung"></div><p class="hint" id="d_hinweis"></p><div class="msg" id="m_daten"></div>
 <section class="karte" style="display:block"><h2 style="margin-top:0">Mein Tarif</h2><div id="d_tarif"></div><div id="d_wechsel"></div></section>
-<section class="karte" style="display:block" id="s_geraete"><h2 style="margin-top:0">Meine Geräte im WLAN</h2><p class="hint">Geräte, die gerade im Netz Ihrer Parzelle angemeldet sind. Erkennbar an der IP-Adresse: <span id="d_netz"></span> – die letzte Zahl ist das Gerät.</p><div id="d_geraete">…</div><div class="knoepfe"><button class="k2" onclick="geraete()">Aktualisieren</button><button class="k2" id="b_karte" onclick="karte()">Zugangskarte per E-Mail</button></div></section>
+<section class="karte" style="display:block" id="s_geraete"><h2 style="margin-top:0">Meine Geräte im WLAN</h2><p class="hint">Geräte, die gerade im WLAN Ihrer Parzelle angemeldet sind. <b id="d_netz"></b></p><div id="d_geraete">…</div><div class="knoepfe"><button class="k2" onclick="geraete()">Aktualisieren</button><button class="k2" id="b_karte" onclick="karte()">Zugangskarte per E-Mail</button></div></section>
 <section class="karte" style="display:block" id="s_rechnungen"><h2 style="margin-top:0">Meine Rechnungen</h2><div id="d_rechnungen"></div></section>
-<section class="karte" style="display:block" id="s_anfragen"><h2 style="margin-top:0">Meine Anfragen</h2><div id="d_tickets"></div>
-<details style="margin-top:10px" id="s_neu"><summary style="cursor:pointer;font-weight:600">Neue Anfrage</summary><label for="t_kat">Worum geht es?</label><select id="t_kat"></select><label for="t_betreff">Betreff</label><input id="t_betreff" maxlength="160" onkeydown="if(event.key=='Enter'){event.preventDefault();$('t_text').focus()}"><label for="t_text">Nachricht</label><textarea id="t_text" maxlength="5000" onkeydown="if(event.key=='Enter'&&(event.ctrlKey||event.metaKey))ticket()" placeholder="Strg+Enter sendet"></textarea><button class="los" onclick="ticket()">Anfrage senden</button></details><div class="msg" id="m_ticket"></div></section></div>
+<section class="karte" style="display:block" id="s_anfragen"><h2 style="margin-top:0">Support</h2><div id="d_tickets"></div>
+<details style="margin-top:10px" id="s_neu"><summary style="cursor:pointer;font-weight:600">Ticket anlegen</summary><label for="t_kat">Worum geht es?</label><select id="t_kat"></select><label for="t_betreff">Betreff</label><input id="t_betreff" maxlength="160" onkeydown="if(event.key=='Enter'){event.preventDefault();$('t_text').focus()}"><label for="t_text">Nachricht</label><textarea id="t_text" maxlength="5000" onkeydown="if(event.key=='Enter'&&(event.ctrlKey||event.metaKey))ticket()" placeholder="Strg+Enter sendet"></textarea><button class="los" onclick="ticket()">Ticket senden</button></details><div class="msg" id="m_ticket"></div></section></div>
 </main>__FUSS__<script>const $=i=>document.getElementById(i),esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));let D=null,WAHL=null;
 const eur=x=>Number(x||0).toLocaleString("de-DE",{style:"currency",currency:"EUR"});
 function msg(id,t,ok){const m=$(id);m.className="msg "+(t?(ok?"ok":"f"):"");m.textContent=t||""}
@@ -803,8 +1123,8 @@ function waehlen(wie){const p=P();const e=D.erlaubt,hoeher=(t)=>p.rang&&(t.rang[
  <button class="los" id="d_los" disabled>${esc(knopf)}</button>`;
  let wahl=wie=="verlaengern"?p.tarif:null;document.querySelectorAll(".tarif").forEach(x=>{if(x.dataset.t==wahl)x.classList.add("akt");x.onclick=()=>{wahl=x.dataset.t;document.querySelectorAll(".tarif").forEach(y=>y.classList.toggle("akt",y===x));$("d_los").disabled=false}});
  $("d_los").disabled=!wahl;$("d_los").onclick=async()=>{try{$("d_los").disabled=true;const d=await post("/mein/buchen",{id:p.id,art,tarif:wahl});if(d.url){location.href=d.url;return}msg("m_daten",d.text,true);laden()}catch(e){msg("m_daten",e.message);$("d_los").disabled=false}}}
-async function geraete(){const p=P();$("d_geraete").textContent="…";try{const d=await post("/mein/geraete",{id:p.id});$("d_netz").textContent=d.netz||"";
- $("d_geraete").innerHTML=d.geraete.length?'<table class="tabelle"><tr><th>Gerät</th><th>IP-Adresse</th><th>Nr.</th><th>Verbindung</th></tr>'+d.geraete.map(g=>`<tr><td>${esc(g.name)}<br><span class="klein">${esc(g.mac)}</span></td><td>${esc(g.ip)}</td><td>${esc(g.geraet)}</td><td>${esc(g.art)}</td></tr>`).join("")+"</table>":`<p class="hint">${esc(d.fehler||"Gerade ist kein Gerät angemeldet.")}</p>`}catch(e){$("d_geraete").textContent=e.message}}
+async function geraete(){const p=P();$("d_geraete").textContent="…";try{const d=await post("/mein/geraete",{id:p.id});$("d_netz").textContent=d.tarif?(d.tarif+": "+d.anzahl+(d.max?" von "+d.max:"")+" Geräte"+(d.max?"":" (unbegrenzt)")):"";
+ $("d_geraete").innerHTML=d.geraete.length?'<table class="tabelle"><tr><th>Nr.</th><th>Gerät</th><th>Verbindung</th></tr>'+d.geraete.map(g=>`<tr><td>Gerät ${esc(g.nr)}</td><td>${esc(g.name)}</td><td>${esc(g.art)}</td></tr>`).join("")+"</table>":`<p class="hint">${esc(d.fehler||"Gerade ist kein Gerät angemeldet.")}</p>`}catch(e){$("d_geraete").textContent=e.message}}
 async function karte(){try{const d=await post("/mein/zugangskarte",{id:P().id});msg("m_daten",d.text,true)}catch(e){msg("m_daten",e.message)}}
 async function ticket(){try{const d=await post("/mein/ticket",{id:P().id,kategorie:$("t_kat").value,betreff:$("t_betreff").value,text:$("t_text").value});msg("m_ticket",d.text,true);$("t_betreff").value="";$("t_text").value="";laden()}catch(e){msg("m_ticket",e.message)}}
 laden();</script></body></html>"""

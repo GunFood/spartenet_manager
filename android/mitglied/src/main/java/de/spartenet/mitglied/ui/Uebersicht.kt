@@ -9,7 +9,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -28,6 +27,18 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.LinkOff
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Receipt
+import androidx.compose.material.icons.filled.SupportAgent
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.RadioButton
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -49,7 +60,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -72,6 +82,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import de.spartenet.mitglied.data.Api
 import de.spartenet.mitglied.data.ApiFehler
+import de.spartenet.mitglied.data.AppUpdate
 import de.spartenet.mitglied.data.Datei
 import de.spartenet.mitglied.data.Speicher
 import de.spartenet.mitglied.data.b
@@ -91,9 +102,17 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 
-/** Hauptbildschirm: Tarif mit Laufzeit, Geräte im Parzellen-Netz, Rechnungen, Anfragen. Auf Tablets zweispaltig. */
+/** Bereiche der App (unten als Navigationsleiste) */
+private enum class Bereich(val titel: String, val symbol: ImageVector) {
+    START("Übersicht", Icons.Filled.Home),
+    RECHNUNGEN("Rechnungen", Icons.Filled.Receipt),
+    SUPPORT("Support", Icons.Filled.SupportAgent),
+    PROFIL("Profil", Icons.Filled.Person),
+}
+
+/** Hauptbildschirm: Kopf mit Logos und Begrüßung, unten Übersicht (Tarif, Geräte), Rechnungen, Support und Profil. */
 @Composable
-fun Uebersicht(speicher: Speicher, token: String, onAbgemeldet: () -> Unit) {
+fun Uebersicht(speicher: Speicher, token: String, ansicht: String, onAnsicht: (String) -> Unit, onAbgemeldet: () -> Unit) {
     val api = remember(token) { Api(speicher.server, token) }
     val scope = rememberCoroutineScope()
     val ctx = LocalContext.current
@@ -102,8 +121,9 @@ fun Uebersicht(speicher: Speicher, token: String, onAbgemeldet: () -> Unit) {
     var fehler by remember { mutableStateOf<String?>(null) }
     var laedt by remember { mutableStateOf(false) }
     var wahl by remember { mutableStateOf<String?>(null) }
+    var bereich by remember { mutableStateOf(Bereich.START) }
     var abmeldenFragen by remember { mutableStateOf(false) }
-    var dialog by remember { mutableStateOf<String?>(null) }        // "upgrade", "downgrade", "neu", "verlaengern", "anfrage"
+    var dialog by remember { mutableStateOf<String?>(null) }        // "upgrade", "downgrade", "neu", "verlaengern", "ticket"
     var beschaeftigt by remember { mutableStateOf(false) }
 
     fun melden(text: String) {
@@ -146,28 +166,36 @@ fun Uebersicht(speicher: Speicher, token: String, onAbgemeldet: () -> Unit) {
 
     LaunchedEffect(token) { laden() }
 
+    // App-Update: hat der Verein eine neuere Version hochgeladen, zeigt die App einen Hinweis mit „Aktualisieren“
+    var update by remember { mutableStateOf<JSONObject?>(null) }
+    LaunchedEffect(token) {
+        update = try {
+            api.post("/mein/app").optJSONObject("app")?.takeIf { AppUpdate.neuer(ctx, it.optLong("version_code")) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     val d = daten
+    val parzellen = d?.liste("parzellen") ?: emptyList()
+    val p = parzellen.firstOrNull { it.s("id") == wahl } ?: parzellen.firstOrNull()
     Scaffold(
         topBar = {
-            TopAppBar(
-                navigationIcon = {
-                    val p0 = d?.liste("parzellen")?.let { l -> l.firstOrNull { it.s("id") == wahl } ?: l.firstOrNull() }
-                    Row(Modifier.padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        d?.s("logo_verein")?.takeIf { it.isNotEmpty() }?.let { NetzBild(api, it, "Vereinslogo") }
-                        p0?.s("sparte_logo")?.takeIf { it.isNotEmpty() }?.let { NetzBild(api, it, p0.s("sparte_name")) }
-                    }
-                },
-                title = {
-                    Column {
-                        Text(speicher.titel.ifEmpty { "Mitgliederbereich" }, fontWeight = FontWeight.SemiBold)
-                        if (d != null && d.s("mitglied").isNotEmpty()) Text("Hallo " + d.s("mitglied"), style = MaterialTheme.typography.bodySmall)
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { laden() }) { Icon(Icons.Filled.Refresh, "Aktualisieren") }
-                    IconButton(onClick = { abmeldenFragen = true }) { Icon(Icons.AutoMirrored.Filled.Logout, "Abmelden") }
-                },
+            Kopf(
+                api = api, titel = speicher.titel.ifEmpty { "Mitgliederbereich" }, spartenLogo = p?.s("sparte_logo") ?: "",
+                spartenName = p?.s("sparte_name") ?: "", name = d?.s("mitglied") ?: "", ansicht = ansicht,
+                onAnsicht = { onAnsicht(ANSICHTEN[(ANSICHTEN.indexOfFirst { it.first == ansicht } + 1).mod(ANSICHTEN.size)].first) },
+                onAktualisieren = { laden() }, onAbmelden = { abmeldenFragen = true },
             )
+        },
+        bottomBar = {
+            NavigationBar {
+                Bereich.entries.forEach { b ->
+                    NavigationBarItem(selected = bereich == b, onClick = { bereich = b }, icon = { Icon(b.symbol, null) }, label = { Text(b.titel) })
+                }
+            }
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { pad ->
@@ -178,82 +206,82 @@ fun Uebersicht(speicher: Speicher, token: String, onAbgemeldet: () -> Unit) {
                     OutlinedButton(onClick = { laden() }, modifier = Modifier.padding(top = 12.dp)) { Text("Erneut versuchen") }
                 }
                 d == null -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                p == null && bereich != Bereich.PROFIL -> Text(
+                    "Zu Ihrer E-Mail-Adresse ist gerade keine Parzelle hinterlegt. Bitte beim Verein melden.",
+                    Modifier.align(Alignment.Center).padding(24.dp),
+                )
                 else -> {
-                    val parzellen = d.liste("parzellen")
-                    val p = parzellen.firstOrNull { it.s("id") == wahl } ?: parzellen.firstOrNull()
-                    if (p == null) {
-                        Text(
-                            "Zu Ihrer E-Mail-Adresse ist gerade keine Parzelle hinterlegt. Bitte beim Verein melden.",
-                            Modifier.align(Alignment.Center).padding(24.dp),
-                        )
-                    } else {
-                        BoxWithConstraints(Modifier.fillMaxSize()) {
-                            val breit = maxWidth >= 840.dp
-                            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                if (laedt || beschaeftigt) LinearProgressIndicator(Modifier.fillMaxWidth())
-                                if (parzellen.size > 1) {
-                                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        parzellen.forEach { x ->
-                                            FilterChip(
-                                                selected = x.s("id") == p.s("id"), onClick = { wahl = x.s("id") },
-                                                label = { Text("${x.s("sparte_name")} · Parzelle ${x.s("parzelle")}") },
-                                            )
-                                        }
-                                    }
-                                }
-                                StoerungsBanner(p.liste("stoerungen").map { it.s("text") }, d.s("stoerung_text"), d.s("stoerung_farbe"))
-                                if (d.s("hinweis").isNotEmpty()) Text(d.s("hinweis"), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                fehler?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                                val erlaubt = d.o("erlaubt") ?: JSONObject()
-                                val tarif: @Composable () -> Unit = { TarifKarte(d, p, erlaubt) { dialog = it } }
-                                val geraete: @Composable () -> Unit = {
-                                    if (erlaubt.b("geraete") || erlaubt.b("zugangskarte")) GeraeteKarte(api, p, erlaubt, ::aktion, ::melden)
-                                }
-                                val rechnungen: @Composable () -> Unit = {
-                                    if (erlaubt.b("zeige_rechnungen")) RechnungenKarte(p) { r ->
-                                        aktion {
-                                            val f = api.datei("/mein/rechnung", mapOf("id" to r.s("id")))
-                                            pdfOeffnen(ctx, f)
-                                        }
-                                    }
-                                }
-                                val anfragen: @Composable () -> Unit = {
-                                    if (erlaubt.b("zeige_anfragen") || erlaubt.b("neue_anfrage")) AnfragenKarte(p, erlaubt) { dialog = "anfrage" }
-                                }
-                                if (breit) {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) { tarif(); geraete() }
-                                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) { rechnungen(); anfragen() }
-                                    }
-                                } else {
-                                    tarif(); geraete(); rechnungen(); anfragen()
-                                }
-                                Spacer(Modifier.height(24.dp))
+                    val erlaubt = d.o("erlaubt") ?: JSONObject()
+                    Column(
+                        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp).widthIn(max = 900.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        if (laedt || beschaeftigt) LinearProgressIndicator(Modifier.fillMaxWidth())
+                        update?.let { u ->
+                            Karte("Neue App-Version ${u.s("version_name")}") {
+                                Text(u.s("hinweis").ifEmpty { "Eine neue Version der App ist verfügbar." }, style = MaterialTheme.typography.bodyMedium)
+                                Button(onClick = {
+                                    aktion { AppUpdate.installieren(ctx, api.datei("/mein/app.apk").daten, u.s("sha256")) }
+                                }) { Text("Aktualisieren") }
                             }
                         }
-                        when (val wie = dialog) {
-                            null -> {}
-                            "anfrage" -> AnfrageDialog(d.texte("kategorien"), onAbbrechen = { dialog = null }) { kat, betreff, text ->
-                                aktion {
-                                    val r = api.post("/mein/ticket", JSONObject().put("id", p.s("id")).put("kategorie", kat).put("betreff", betreff).put("text", text))
-                                    dialog = null
-                                    melden(r.s("text"))
-                                    laden()
+                        if (parzellen.size > 1 && p != null) {
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                parzellen.forEach { x ->
+                                    FilterChip(
+                                        selected = x.s("id") == p.s("id"), onClick = { wahl = x.s("id") },
+                                        label = { Text("${x.s("sparte_name")} · Parzelle ${x.s("parzelle")}") },
+                                    )
                                 }
                             }
-                            else -> TarifDialog(d, p, wie, onAbbrechen = { dialog = null }) { art, name ->
-                                aktion {
-                                    val r = api.post("/mein/buchen", JSONObject().put("id", p.s("id")).put("art", art).put("tarif", name))
-                                    dialog = null
-                                    val url = r.s("url")
-                                    if (url.isNotEmpty()) {
-                                        oeffnen(ctx, url)
-                                        melden("Bezahlseite geöffnet – nach der Zahlung hier aktualisieren.")
-                                    } else {
-                                        melden(r.s("text"))
+                        }
+                        if (p != null) StoerungsBanner(p.liste("stoerungen").map { it.s("text") }, d.s("stoerung_text"), d.s("stoerung_farbe"))
+                        fehler?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                        when (bereich) {
+                            Bereich.START -> if (p != null) {
+                                if (d.s("hinweis").isNotEmpty()) Text(d.s("hinweis"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                TarifKarte(d, p, erlaubt) { dialog = it }
+                                if (erlaubt.b("geraete") || erlaubt.b("zugangskarte")) GeraeteKarte(api, p, erlaubt, ::aktion, ::melden)
+                            }
+                            Bereich.RECHNUNGEN -> if (p != null) {
+                                if (erlaubt.b("zeige_rechnungen")) RechnungenKarte(p) { r ->
+                                    aktion {
+                                        val f = api.datei("/mein/rechnung", mapOf("id" to r.s("id")))
+                                        pdfOeffnen(ctx, f)
                                     }
-                                    laden()
+                                } else Text("Rechnungen werden hier nicht angezeigt.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Bereich.SUPPORT -> if (p != null) SupportKarte(p, erlaubt) { dialog = "ticket" }
+                            Bereich.PROFIL -> {
+                                ProfilKarte(api, d.o("profil") ?: JSONObject(), erlaubt, ::aktion, ::melden, onEmail = { speicher.email = it; laden() }) { laden() }
+                                if (p != null) PersonenKarte(api, p, erlaubt, ::aktion, ::melden) { laden() }
+                                AnsichtKarte(ansicht, onAnsicht)
+                            }
+                        }
+                        Spacer(Modifier.height(24.dp))
+                    }
+                    if (p != null) when (val wie = dialog) {
+                        null -> {}
+                        "ticket" -> AnfrageDialog(d.texte("kategorien"), onAbbrechen = { dialog = null }) { kat, betreff, text ->
+                            aktion {
+                                val r = api.post("/mein/ticket", JSONObject().put("id", p.s("id")).put("kategorie", kat).put("betreff", betreff).put("text", text))
+                                dialog = null
+                                melden(r.s("text"))
+                                laden()
+                            }
+                        }
+                        else -> TarifDialog(d, p, wie, onAbbrechen = { dialog = null }) { art, name ->
+                            aktion {
+                                val r = api.post("/mein/buchen", JSONObject().put("id", p.s("id")).put("art", art).put("tarif", name))
+                                dialog = null
+                                val url = r.s("url")
+                                if (url.isNotEmpty()) {
+                                    oeffnen(ctx, url)
+                                    melden("Bezahlseite geöffnet – nach der Zahlung hier aktualisieren.")
+                                } else {
+                                    melden(r.s("text"))
                                 }
+                                laden()
                             }
                         }
                     }
@@ -286,10 +314,36 @@ fun Uebersicht(speicher: Speicher, token: String, onAbgemeldet: () -> Unit) {
     }
 }
 
+/** Kopf: „Mitgliederbereich“, darunter Spartenlogo und Firmenlogo, dann „Hallo Vorname Nachname“ */
+@Composable
+private fun Kopf(
+    api: Api, titel: String, spartenLogo: String, spartenName: String, name: String, ansicht: String,
+    onAnsicht: () -> Unit, onAktualisieren: () -> Unit, onAbmelden: () -> Unit,
+) {
+    Surface(color = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) {
+        Column(Modifier.fillMaxWidth().statusBarsPadding().padding(start = 16.dp, end = 4.dp, bottom = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(titel, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                val sym = ANSICHTEN.firstOrNull { it.first == ansicht } ?: ANSICHTEN[0]
+                TextButton(onClick = onAnsicht, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onPrimary)) {
+                    Text(sym.second, style = MaterialTheme.typography.titleLarge)
+                }
+                IconButton(onClick = onAktualisieren) { Icon(Icons.Filled.Refresh, "Aktualisieren") }
+                IconButton(onClick = onAbmelden) { Icon(Icons.AutoMirrored.Filled.Logout, "Abmelden") }
+            }
+            Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (spartenLogo.isNotEmpty()) NetzBild(api, spartenLogo, spartenName.ifEmpty { "Spartenlogo" }, 48.dp)
+                Image(painterResource(de.spartenet.mitglied.R.drawable.firmenlogo), "Firmenlogo", Modifier.size(48.dp))
+            }
+            if (name.isNotEmpty()) Text("Hallo $name", Modifier.padding(top = 6.dp), style = MaterialTheme.typography.titleMedium)
+        }
+    }
+}
+
 // ---- Karten ----------------------------------------------------------------------------------------------------
 
 @Composable
-private fun Karte(titel: String, inhalt: @Composable () -> Unit) {
+internal fun Karte(titel: String, inhalt: @Composable () -> Unit) {
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(titel, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
@@ -308,7 +362,7 @@ private fun Wert(beschriftung: String, wert: String, unten: String = "", modifie
 }
 
 @Composable
-private fun Hinweis(text: String, fehler: Boolean = false) {
+internal fun Hinweis(text: String, fehler: Boolean = false) {
     Surface(
         color = if (fehler) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer,
         shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth(),
@@ -372,6 +426,7 @@ private fun GeraeteKarte(api: Api, p: JSONObject, erlaubt: JSONObject, aktion: (
     var antwort by remember(p.s("id")) { mutableStateOf<JSONObject?>(null) }
     var laedt by remember(p.s("id")) { mutableStateOf(false) }
     var fehler by remember(p.s("id")) { mutableStateOf<String?>(null) }
+    var trennen by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     fun laden() {
         if (!erlaubt.b("geraete")) return
@@ -390,13 +445,26 @@ private fun GeraeteKarte(api: Api, p: JSONObject, erlaubt: JSONObject, aktion: (
     }
     LaunchedEffect(p.s("id")) { laden() }
     Karte(if (erlaubt.b("geraete")) "Meine Geräte im WLAN" else "WLAN-Zugang") {
+        val a = antwort
         if (erlaubt.b("geraete")) {
-            val a = antwort
-            Text(
-                "Geräte, die gerade im Netz Ihrer Parzelle angemeldet sind – erkennbar an der IP-Adresse" +
-                    (a?.s("netz")?.takeIf { it.isNotEmpty() }?.let { " ($it)" } ?: "") + ". Die letzte Zahl ist das Gerät.",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (a != null) {
+                // Verbrauch der Endgeräte nach dem Tarif, z. B. „Basic: 3 von 5 Geräten“
+                val anzahl = a.i("anzahl")
+                val max = a.i("max")
+                val tarif = a.s("tarif")
+                Text(
+                    (if (tarif.isNotEmpty()) "$tarif: " else "") + if (max > 0) "$anzahl von $max Geräten" else "$anzahl Geräte (unbegrenzt)",
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
+                )
+                if (max > 0) LinearProgressIndicator(
+                    progress = { (anzahl.toFloat() / max).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth(),
+                    color = if (anzahl >= max) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                )
+                if (max in 1..anzahl) Text(
+                    "Alle Plätze belegt – trennen Sie ein Gerät oder wechseln Sie in einen größeren Tarif.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error,
+                )
+            }
             when {
                 laedt && a == null -> LinearProgressIndicator(Modifier.fillMaxWidth())
                 fehler != null -> Text(fehler ?: "", color = MaterialTheme.colorScheme.error)
@@ -404,24 +472,88 @@ private fun GeraeteKarte(api: Api, p: JSONObject, erlaubt: JSONObject, aktion: (
                 a != null -> a.liste("geraete").forEachIndexed { n, g ->
                     if (n > 0) HorizontalDivider()
                     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(g.s("name"), fontWeight = FontWeight.Medium)
-                            Text("${g.s("ip")} · ${g.s("art")}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
                         Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = MaterialTheme.shapes.small) {
-                            Text("Nr. ${g.s("geraet")}", Modifier.padding(horizontal = 8.dp, vertical = 2.dp), style = MaterialTheme.typography.labelMedium)
+                            Text("Gerät ${g.i("nr")}", Modifier.padding(horizontal = 8.dp, vertical = 2.dp), style = MaterialTheme.typography.labelMedium)
                         }
+                        Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                            Text(g.s("name"), fontWeight = FontWeight.Medium)
+                            if (g.s("art").isNotEmpty()) Text(g.s("art"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+            val gesperrt = a?.liste("gesperrt") ?: emptyList()
+            if (gesperrt.isNotEmpty()) {
+                HorizontalDivider()
+                Text("Getrennte Geräte", style = MaterialTheme.typography.labelLarge)
+                gesperrt.forEach { g ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(g.s("name"))
+                            Text("getrennt am ${g.s("zeit")}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        TextButton(onClick = {
+                            aktion {
+                                melden(api.post("/mein/geraet_zulassen", JSONObject().put("id", p.s("id")).put("ref", g.s("ref"))).s("text"))
+                                laden()
+                            }
+                        }) { Text("Wieder zulassen") }
                     }
                 }
             }
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (erlaubt.b("geraete")) OutlinedButton(onClick = { laden() }) { Text("Aktualisieren") }
+            if (erlaubt.b("geraete") && erlaubt.b("geraete_trennen") && (a?.liste("geraete")?.isNotEmpty() == true)) {
+                OutlinedButton(onClick = { trennen = true }) {
+                    Icon(Icons.Filled.LinkOff, null, Modifier.size(18.dp))
+                    Text("Gerät trennen", Modifier.padding(start = 6.dp))
+                }
+            }
             if (erlaubt.b("zugangskarte")) OutlinedButton(onClick = {
                 aktion { melden(api.post("/mein/zugangskarte", JSONObject().put("id", p.s("id"))).s("text")) }
             }) { Text("Zugangskarte per E-Mail") }
         }
     }
+    if (trennen && a != null) {
+        TrennenDialog(a.liste("geraete"), onAbbrechen = { trennen = false }) { ref ->
+            trennen = false
+            aktion {
+                melden(api.post("/mein/geraet_trennen", JSONObject().put("id", p.s("id")).put("ref", ref).put("bestaetigt", true)).s("text"))
+                laden()
+            }
+        }
+    }
+}
+
+/** Auswahl, welches Gerät getrennt wird – mit ausdrücklicher Bestätigung */
+@Composable
+private fun TrennenDialog(geraete: List<JSONObject>, onAbbrechen: () -> Unit, onTrennen: (String) -> Unit) {
+    var gewaehlt by remember { mutableStateOf<String?>(null) }
+    AlertDialog(
+        onDismissRequest = onAbbrechen,
+        icon = { Icon(Icons.Filled.LinkOff, null) },
+        title = { Text("Welches Gerät trennen?") },
+        text = {
+            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                Text(
+                    "Das Gerät wird vom WLAN getrennt und gesperrt, bis Sie es unter „Getrennte Geräte“ wieder zulassen.",
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                geraete.forEach { g ->
+                    Row(
+                        Modifier.fillMaxWidth().clickable { gewaehlt = g.s("ref") }.padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = gewaehlt == g.s("ref"), onClick = { gewaehlt = g.s("ref") })
+                        Text("Gerät ${g.i("nr")} · ${g.s("name")}")
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { gewaehlt?.let(onTrennen) }, enabled = gewaehlt != null) { Text("Trennen") } },
+        dismissButton = { TextButton(onClick = onAbbrechen) { Text("Abbrechen") } },
+    )
 }
 
 @Composable
@@ -444,11 +576,15 @@ private fun RechnungenKarte(p: JSONObject, onOeffnen: (JSONObject) -> Unit) {
 }
 
 @Composable
-private fun AnfragenKarte(p: JSONObject, erlaubt: JSONObject, onNeu: () -> Unit) {
-    Karte("Meine Anfragen") {
+private fun SupportKarte(p: JSONObject, erlaubt: JSONObject, onNeu: () -> Unit) {
+    Karte("Support") {
+        Text("Fragen, Störungen oder Wünsche? Legen Sie ein Ticket an – Sie bekommen die Antwort per E-Mail.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (erlaubt.b("neue_anfrage")) Button(onClick = onNeu) { Text("Ticket anlegen") }
         if (erlaubt.b("zeige_anfragen")) {
+            Text("Meine Tickets", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
             val liste = p.liste("tickets")
-            if (liste.isEmpty()) Text("Keine Anfragen.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (liste.isEmpty()) Text("Noch keine Tickets.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             liste.forEachIndexed { n, t ->
                 if (n > 0) HorizontalDivider()
                 Column(Modifier.padding(vertical = 4.dp)) {
@@ -458,7 +594,6 @@ private fun AnfragenKarte(p: JSONObject, erlaubt: JSONObject, onNeu: () -> Unit)
                 }
             }
         }
-        if (erlaubt.b("neue_anfrage")) Button(onClick = onNeu) { Text("Neue Anfrage") }
     }
 }
 
@@ -530,7 +665,7 @@ private fun AnfrageDialog(kategorien: List<String>, onAbbrechen: () -> Unit, onS
     var text by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onAbbrechen,
-        title = { Text("Neue Anfrage") },
+        title = { Text("Ticket anlegen") },
         text = {
             Column(Modifier.widthIn(min = 280.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box {

@@ -1,5 +1,5 @@
 """Tests ohne Webserver: VLAN-Schema, Zuteilung nach Buchung, Umzugshilfe, TOTP, Prüfungen – mit nachgebautem Gateway"""
-import os, sys, tempfile, time, unittest
+import json, os, sys, tempfile, time, unittest
 from collections import Counter
 
 _ORDNER = tempfile.mkdtemp(prefix="spartenet_logik_")
@@ -548,9 +548,20 @@ class Mitgliederbereich(unittest.TestCase):
             {"name": "Handy", "ipAddress": f"10.{sid}.12.121", "macAddress": "aa:bb:cc:dd:ee:ff", "type": "WIRELESS"},
             {"name": "Nachbar", "ipAddress": f"10.{sid}.13.20", "macAddress": "11:22:33:44:55:66"},
             {"name": "Laptop", "ipAddress": f"10.{sid}.12.15", "macAddress": "aa:bb:cc:00:11:22", "type": "WIRED"}])
+        d.setdefault("buchungen", {}).setdefault(kz, {})["12"] = "Basic"
         g = S.mb_geraete(d, kz, "12")
         self.assertEqual([x["name"] for x in g["geraete"]], ["Laptop", "Handy"])
-        self.assertEqual((g["geraete"][1]["geraet"], g["geraete"][1]["art"], g["geraete"][1]["mac"]), ("121", "WLAN", "…dd:ee:ff"))
+        self.assertEqual([(x["nr"], x["art"]) for x in g["geraete"]], [(1, "Kabel"), (2, "WLAN")])      # fortlaufend nummeriert
+        roh = json.dumps(g)
+        for geheim in ("10.", "aa:bb", "dd:ee:ff", '"ip"', '"mac"'):                                  # keine IP- oder MAC-Adresse
+            self.assertNotIn(geheim, roh)
+        self.assertEqual((g["anzahl"], g["max"], g["tarif"]), (2, 5, "Basic"))                           # „Basic: 2 von 5“
+        self.assertNotEqual(g["geraete"][0]["ref"], S._geraet_ref(kz, "13", "aa:bb:cc:00:11:22"))      # Kennung hängt an der Parzelle
+        with self.assertRaises(S.Fehler):                                                               # Trennen nur, wenn eingeschaltet
+            S.mb_geraet_trennen(d, kz, "12", {"ref": g["geraete"][0]["ref"], "bestaetigt": True})
+        d["mitgliederbereich"] = {"geraete_trennen": True}
+        with self.assertRaises(S.Fehler):                                                               # nur mit Bestätigung
+            S.mb_geraet_trennen(d, kz, "12", {"ref": g["geraete"][0]["ref"]})
         S._GERAETE_CACHE.update(zeit=0, liste=[])
 
     def test_webhook_signatur(self):
@@ -562,6 +573,37 @@ class Mitgliederbereich(unittest.TestCase):
         roh = b'{"referenz":"SN-X"}'
         with self.assertRaises(S.Fehler):                     # Signatur stimmt, Auftrag gibt es nicht
             S.mb_webhook(d, roh, "sha256=" + hmac.new(b"g", roh, hashlib.sha256).hexdigest())
+
+
+class AppUpdates(unittest.TestCase):
+    def test_apk_hochladen_pruefen_entfernen(self):
+        """neue APK für Mitglieder- oder Manager-App: nur echte APK, Versionsnummer muss steigen, Prüfsumme für die App"""
+        import hashlib, io, zipfile
+        d = frisch()
+        q = lambda **k: {x: [str(v)] for x, v in k.items()}
+        self.assertEqual(S.app_update_info(d, "mitglied"), {})
+        with self.assertRaises(S.Fehler):
+            S.akt_app_update_hochladen(d, q(art="mitglied", version_code=3), b"kein apk" * 200, "admin")
+        puffer = io.BytesIO()
+        with zipfile.ZipFile(puffer, "w") as z:
+            z.writestr("AndroidManifest.xml", b"\x03\x00" * 400)
+            z.writestr("classes.dex", b"dex\n035" + bytes(2000))
+        apk = puffer.getvalue()
+        with self.assertRaises(S.Fehler):
+            S.akt_app_update_hochladen(d, q(art="unbekannt", version_code=3), apk, "admin")
+        r = S.akt_app_update_hochladen(d, q(art="mitglied", version_code=3, version_name="1.2", hinweis="Neu"), apk, "admin")
+        info = S.app_update_info(d, "mitglied")
+        self.assertEqual((info["version_code"], info["version_name"], info["sha256"]), (3, "1.2", hashlib.sha256(apk).hexdigest()))
+        self.assertEqual(r["apps"]["manager"].get("version_code"), None)
+        self.assertEqual(S.app_apk_lesen(d, "mitglied"), apk)
+        with self.assertRaises(S.Fehler):                                   # Versionsnummer muss steigen
+            S.akt_app_update_hochladen(d, q(art="mitglied", version_code=3), apk, "admin")
+        S.akt_app_update_hochladen(d, q(art="manager", version_code=7), apk, "admin")
+        self.assertEqual(S.app_update_info(d, "manager")["version_code"], 7)
+        S.akt_app_update(d, {"art": "mitglied", "entfernen": True}, "admin")
+        self.assertEqual(S.app_update_info(d, "mitglied"), {})
+        with self.assertRaises(S.Fehler):
+            S.app_apk_lesen(d, "mitglied")
 
 
 class AppZugangstokens(unittest.TestCase):

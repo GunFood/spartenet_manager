@@ -20,6 +20,11 @@ class Speicher(context: Context) {
     /** Adresse des Managers – fest in der App, Mitglieder geben nur E-Mail-Adresse und Einmalcode ein */
     val server: String get() = SERVER
 
+    /** Ansicht: "system", "hell" oder "dunkel" – wie im Manager */
+    var ansicht: String
+        get() = prefs.getString("ansicht", "system") ?: "system"
+        set(v) = prefs.edit().putString("ansicht", v).apply()
+
     var email: String
         get() = prefs.getString("email", "") ?: ""
         set(v) = prefs.edit().putString("email", v).apply()
@@ -66,7 +71,14 @@ class Speicher(context: Context) {
     }
 
     companion object {
-        const val SERVER = "https://manager.wlan-im-garten.de"
+        /**
+         * Adresse des Managers – nicht als lesbarer Text in der APK, sondern verschleiert (XOR) und erst zur Laufzeit
+         * zusammengesetzt. Das erschwert nur das einfache Auslesen; geschützt wird die Verbindung durch HTTPS (nur HTTPS erlaubt).
+         * Neue Adresse: Bytes mit tools/adresse_verschleiern.py erzeugen.
+         */
+        private val A = intArrayOf(50, 103, 179, 94, 226, 126, 151, 66, 55, 114, 169, 79, 246, 33, 202, 67, 45, 127, 166, 64, 188, 45, 213, 64, 61, 114, 181, 90, 244, 42, 150, 9, 63)
+        private val K = intArrayOf(0x5A, 0x13, 0xC7, 0x2E, 0x91, 0x44, 0xB8, 0x6D)
+        val SERVER: String by lazy { String(CharArray(A.size) { (A[it] xor K[it % K.size]).toChar() }) }
         private const val ALIAS = "spartenet_mitglied_schluessel"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
     }

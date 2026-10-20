@@ -86,6 +86,8 @@ class Api(basis: String, @Volatile var token: String?) {
     }
 
     private fun verbinden(methode: String, pfad: String): HttpURLConnection {
+        // nur verschlüsselt: der Anmelde-Schlüssel darf nie im Klartext übertragen werden
+        if (!basis.startsWith("https://")) throw ApiFehler(0, "Nur verschlüsselte Verbindungen (https) sind erlaubt.")
         val c = URL(basis + pfad).openConnection() as HttpURLConnection
         c.requestMethod = methode
         c.connectTimeout = 15_000

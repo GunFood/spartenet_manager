@@ -655,7 +655,39 @@ class Version50(unittest.TestCase):
         self.assertEqual((p["parzelle"], p["tarif"], x["mitglied"]), ("42", "Basic", "Paul Portal"))
         code, g = s.req("/mein/geraete", {"id": p["id"]})
         self.assertEqual(code, 200, g)
-        self.assertRegex(g["netz"], r"^10\.\d+\.42\.0/24$")                          # Parzellen-Netz 10.<Sparte>.<Parzelle>.x
+        self.assertEqual((g["tarif"], g["anzahl"], g["max"]), ("Basic", 0, 5))                    # „Basic: 0 von 5 Geräte“, ohne IP-Adressen
+        self.assertNotIn("netz", g)
+        self.assertEqual(s.req("/mein/geraet_trennen", {"id": p["id"], "ref": "x", "bestaetigt": True})[0], 400)   # nicht eingeschaltet
+        # Profil: Name und Parzelle nur lesen, Telefon/Mobil ändern, neue E-Mail nur mit Code
+        pr = x["profil"]
+        self.assertEqual((pr["vorname"], pr["nachname"], pr["haupt"]), ("Paul", "Portal", True))
+        self.assertEqual(s.req("/mein/profil", {"mobil": "abc"})[0], 400)
+        code, r = s.req("/mein/profil", {"telefon": "03381 1234", "mobil": "0170 123456", "vorname": "Hacker"})
+        self.assertEqual(code, 200, r)
+        pr = s.req("/mein/daten", {})[1]["profil"]
+        self.assertEqual((pr["vorname"], pr["telefon"], pr["mobil"]), ("Paul", "03381 1234", "0170 123456"))
+        n = len(SMTP.mails)
+        code, r = s.req("/mein/profil", {"email": "paul.neu@example.org"})
+        self.assertEqual((code, r.get("bestaetigen")), (200, True), r)
+        def code_aus(m):
+            teile = [q.get_payload(decode=True).decode("utf-8", "replace") for q in em.message_from_string(m["text"]).walk() if not q.is_multipart()]
+            return re.search(r">(\d{6})<", " ".join(teile)).group(1)
+        mails = self._mails_seit(n)
+        self.assertIn("paul.neu@example.org", mails[0]["an"])                                    # Code geht an die NEUE Adresse
+        neucode = code_aus(mails[0])
+        self.assertEqual(s.req("/mein/profil_bestaetigen", {"code": "000000" if neucode != "000000" else "111111"})[0], 400)
+        code, r = s.req("/mein/profil_bestaetigen", {"code": neucode})
+        self.assertEqual(code, 200, r)
+        self.assertEqual(s.req("/mein/daten", {})[1]["profil"]["email"], "paul.neu@example.org")      # Sitzung bleibt angemeldet
+        # weitere Person der Parzelle anlegen und wieder entfernen (nur der Pächter)
+        code, r = s.req("/mein/person_neu", {"id": p["id"], "vorname": "Petra", "nachname": "Portal", "email": "petra@example.org"})
+        self.assertEqual(code, 200, r)
+        self.assertIn("petra@example.org", [q["email"] for q in s.req("/mein/daten", {})[1]["parzellen"][0]["personen"]])
+        self.assertEqual(s.req("/mein/person_neu", {"id": p["id"], "vorname": "Petra", "nachname": "Portal", "email": "petra@example.org"})[0], 400)
+        self.assertEqual(s.req("/mein/person_entfernen", {"id": p["id"], "email": "petra@example.org"})[0], 200)
+        code, r = s.req("/mein/profil", {"email": "paul@example.org"})                              # zurück auf die alte Adresse
+        n2 = code_aus(SMTP.mails[-1])
+        self.assertEqual(s.req("/mein/profil_bestaetigen", {"code": n2})[0], 200)
         # fremde Rechnung (Rita) nicht abrufbar
         _, rl = a.req("/api/rechnungen")
         rita = next((r for r in (rl.get("zeilen") or []) if r.get("parzelle") == 41), None)

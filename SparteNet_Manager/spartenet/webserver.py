@@ -165,6 +165,13 @@ class Handler(BaseHTTPRequestHandler):
                 except Fehler as f:
                     return self._send(404, {"fehler": str(f)})
                 return self._send(200, pdf, "application/pdf", extra={"Content-Disposition": f'inline; filename="{name}"'})
+            if pfad == "/mein/app.apk":                  # Update der Mitglieder-App (die App prüft die SHA-256-Prüfsumme)
+                try:
+                    _grenze("mb_logo", self._quelle())
+                    apk = app_apk_lesen(d, "mitglied")
+                except Fehler as f:
+                    return self._send(404, {"fehler": str(f)})
+                return self._send(200, apk, "application/vnd.android.package-archive", extra={"Content-Disposition": 'attachment; filename="SparteNet_Mitglied.apk"'})
             return self._send(404, {"fehler": "nicht gefunden"})
         try:
             n = int(self.headers.get("Content-Length") or 0)
@@ -200,6 +207,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, mb_stoerung_oeffentlich(d, self._quelle()))
             if pfad == "/mein/logo":                 # Vereinslogo zur eingegebenen E-Mail-Adresse (Anmeldeseite und App)
                 return self._send(200, mb_logo_zur_email(d, b.get("email"), self._quelle()))
+            if pfad == "/mein/app":                  # für die Mitglieder-App: gibt es eine neuere Version?
+                _grenze("mb_logo", self._quelle())
+                return self._send(200, {"app": app_update_info(d, "mitglied")})
             if pfad == "/mein/info":                 # für die Mitglieder-App: ist der Bereich erreichbar?
                 e = mb_einstellungen(d)
                 return self._send(200, {"ok": True, "titel": e["titel"], "version": VERSION, "app_tage": MB_APP_TAGE})
@@ -271,6 +281,17 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(400, {"ok": False, "fehler": "Ungültiges JSON."})
             except Fehler as e:
                 return self._send(401, {"ok": False, "fehler": str(e)})
+        if u.path.rstrip("/") in ("/api/v1/app/update", "/api/v1/app/update.apk") and methode == "GET":     # Update der Manager-App
+            d = lade()
+            if not app_token_pruefen(d, self.headers.get("Authorization"), self.headers.get("X-App-Token")):
+                return self._send(401, {"ok": False, "fehler": "App-Schlüssel oder Zugangstoken fehlt bzw. ist ungültig."}, extra={"WWW-Authenticate": "Bearer"})
+            if u.path.endswith(".apk"):
+                try:
+                    return self._send(200, app_apk_lesen(d, "manager"), "application/vnd.android.package-archive",
+                                      extra={"Content-Disposition": 'attachment; filename="SparteNet_Manager.apk"'})
+                except Fehler as f:
+                    return self._send(404, {"ok": False, "fehler": str(f)})
+            return self._send(200, {"ok": True, "app": app_update_info(d, "manager")})
         if u.path.rstrip("/") in ("/api/v1/app/funktionen", "/api/v1/app/info") and methode == "GET":
             d = lade()
             wer = app_token_pruefen(d, self.headers.get("Authorization"), self.headers.get("X-App-Token"))
@@ -657,6 +678,8 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/wochenbericht": lambda: akt_wochenbericht(d, b, ich),
                 "/api/portal-einstellungen": lambda: akt_portal_einstellungen(d, b, ich),
                 "/api/mitgliederbereich": lambda: akt_mitgliederbereich(d, b if isinstance(b, dict) and b else None, ich),
+                "/api/app-update": lambda: akt_app_update(d, b if isinstance(b, dict) and b else None, ich),
+                "/api/app-update-hochladen": lambda: akt_app_update_hochladen(d, q, roh, ich),
                 "/api/app-uebersicht": lambda: akt_app_uebersicht(d, ich, rechte),
                 "/api/gestaltung": lambda: akt_gestaltung(d, ich),
                 "/api/seiten-design": lambda: akt_seiten_design(d, b or {}, ich),
@@ -724,7 +747,7 @@ class Handler(BaseHTTPRequestHandler):
                 SCHREIB_SPERRE.release()
 
 
-ROH_PFADE = {"/api/zahlungen-import", "/api/mitglieder-import", "/api/excel", "/api/logo", "/api/kalk-import", "/api/gwplan-import", "/api/unterlage-hochladen", "/api/sicherung-einspielen"}
+ROH_PFADE = {"/api/zahlungen-import", "/api/mitglieder-import", "/api/excel", "/api/logo", "/api/kalk-import", "/api/gwplan-import", "/api/unterlage-hochladen", "/api/sicherung-einspielen", "/api/app-update-hochladen"}
 
 
 def main():

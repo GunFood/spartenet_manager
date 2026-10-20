@@ -45,6 +45,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.ui.platform.LocalContext
+import de.spartenet.manager.data.AppUpdate
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -220,6 +224,34 @@ private fun Hauptansicht(
         bereich = b
         auftrag = a
         mehrOffen = false
+    }
+
+    // App-Update: hat der Administrator eine neuere Version hochgeladen, bietet die App sie an (einmal je Anmeldung)
+    val ctx = LocalContext.current
+    LaunchedEffect(s) {
+        val info = try {
+            s.api.get("/api/v1/app/update").optJSONObject("app")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
+        if (info != null && AppUpdate.neuer(ctx, info.optLong("version_code"))) {
+            val hinweis = info.optString("hinweis").takeIf { it.isNotEmpty() }?.let { " – $it" } ?: ""
+            val r = snackbar.showSnackbar(
+                "Neue App-Version ${info.optString("version_name")} verfügbar$hinweis", actionLabel = "Aktualisieren",
+                withDismissAction = true, duration = SnackbarDuration.Indefinite,
+            )
+            if (r == SnackbarResult.ActionPerformed) {
+                try {
+                    AppUpdate.installieren(ctx, s.api.datei("/api/v1/app/update.apk").daten, info.optString("sha256"))
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    snackbar.showSnackbar(e.message ?: "Update fehlgeschlagen.")
+                }
+            }
+        }
     }
 
     BackHandler(enabled = bereich != Bereich.START || mehrOffen) {

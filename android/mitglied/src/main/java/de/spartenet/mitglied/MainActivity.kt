@@ -19,7 +19,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         val speicher = Speicher(this)
         setContent {
-            MitgliedTheme {
+            var ansicht by remember { mutableStateOf(speicher.ansicht) }
+            MitgliedTheme(ansicht) {
                 var token by remember { mutableStateOf(speicher.token) }
                 val t = token
                 if (t == null) {
@@ -28,7 +29,7 @@ class MainActivity : ComponentActivity() {
                         token = neu
                     }
                 } else {
-                    Uebersicht(speicher, t) {
+                    Uebersicht(speicher, t, ansicht, onAnsicht = { neu -> speicher.ansicht = neu; ansicht = neu }) {
                         speicher.token = null
                         token = null
                     }

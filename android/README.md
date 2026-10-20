@@ -13,21 +13,44 @@ Die Mitglieder-App hat **keinen** Zugang zum Manager – nur zum Mitgliederberei
 
 Nutzt den Mitgliederbereich des Managers (ab 5.6, muss im Manager eingeschaltet sein: Reiter „Tickets“ → „Mitgliederbereich“).
 
-* **Anmelden:** nur E-Mail-Adresse → Einmalcode kommt per E-Mail → Code eingeben. Die Internetadresse des Managers ist fest
-  in der App (`https://manager.wlan-im-garten.de`, Konstante `SERVER` in `mitglied/…/data/Speicher.kt`); Mitglieder geben
-  keine Adresse ein. Die App bekommt
-  einen eigenen Schlüssel `snm_…` (180 Tage gültig, nur als Prüfsumme gespeichert, verschlüsselt im Android Keystore).
-  „Abmelden“ entfernt den Schlüssel auch am Manager; der Administrator kann alle Mitglieder-Apps auf einmal abmelden.
+* **Anmelden:** nur E-Mail-Adresse → Einmalcode kommt per E-Mail → Code eingeben. Die Adresse des Managers
+  (`https://manager.wlan-im-garten.de`) steht **verschleiert** in `mitglied/…/data/Speicher.kt` (kein Klartext in der APK;
+  neue Adresse mit `android/tools/adresse_verschleiern.py` erzeugen). Die App spricht **nur HTTPS** (Klartext-HTTP ist verboten,
+  nur System-Zertifikate). Die App bekommt einen eigenen Schlüssel `snm_…` (180 Tage gültig, nur als Prüfsumme gespeichert,
+  verschlüsselt im Android Keystore). „Abmelden“ entfernt den Schlüssel auch am Manager.
+* **Kopf:** „Mitgliederbereich“, darunter Spartenlogo und Firmenlogo, dann „Hallo Vorname Nachname“; oben ◐/☀/☾ für die Ansicht.
+* **Unten vier Bereiche:** Übersicht (Tarif und Geräte), Rechnungen, Support, Profil.
 * **Mein Tarif:** Tarif, Laufzeit mit Resttagen, offener Betrag, Sperre; Upgrade jederzeit, kleinerer Tarif als Antrag
   (Freigabe im Ticket), Neu buchen, Verlängern – je nach Einstellung im Manager; mit Bezahldienst öffnet sich die Bezahlseite.
-* **Geräte im WLAN:** angemeldete Geräte im Netz der Parzelle (IP 10.<Sparte>.<Parzelle>.<Gerät>), Zugangskarte per E-Mail.
-* **Rechnungen** als PDF öffnen, **Anfragen** ansehen und neue stellen.
-* **Tablet:** ab 840 dp zwei Spalten. Mehrere Parzellen mit derselben E-Mail-Adresse: Auswahl oben.
+* **Geräte im WLAN:** Verbrauch nach Tarif („Basic: 3 von 5 Geräten“), die Geräte fortlaufend nummeriert (Gerät 1, 2, 3) –
+  **ohne IP- und MAC-Adressen**. „Gerät trennen“ (Auswahl, welches; mit Bestätigung) trennt und sperrt das Gerät am Gateway,
+  „Wieder zulassen“ hebt die Sperre auf – nur wenn der Administrator das unter „Mitgliederbereich“ einschaltet. Zugangskarte per E-Mail.
+* **Rechnungen** als PDF öffnen. **Support:** Tickets ansehen und „Ticket anlegen“.
+* **Profil:** Vorname, Nachname und Parzelle gesperrt (ändert nur der Verein); Rufnummer (Mobil), Telefon und E-Mail änderbar –
+  eine neue E-Mail-Adresse gilt erst nach dem Code, der an sie geht (die alte Adresse bekommt eine Info).
+  **Personen der Parzelle:** der Pächter legt weitere Personen an (Mitpächter, Partner …) und entfernt sie; die Person bekommt eine
+  Info-E-Mail und meldet sich mit eigener E-Mail-Adresse an. **Ansicht:** ◐ System, ☀ Hell, ☾ Dunkel (wie im Manager).
+* **App-Update:** siehe unten.
+* Mehrere Parzellen mit derselben E-Mail-Adresse: Auswahl oben.
 * **Firmenlogo:** im Anmeldebildschirm `mitglied/src/main/res/drawable/firmenlogo` – den Platzhalter `firmenlogo.xml` löschen und
   das eigene Logo als `firmenlogo.png` dort ablegen (oder in Android Studio: Rechtsklick `res` → *New → Vector Asset* bzw. *Image Asset*,
   Name `firmenlogo`). App-Symbol auf dem Handy: Rechtsklick `res` (Modul *mitglied*) → *New → Image Asset* → *Launcher Icons*, Name `ic_launcher`.
-* Schnittstelle: `POST /mein/info`, `/mein/code`, `/mein/anmelden` (`"app": true`), danach mit `Authorization: Bearer snm_…`:
-  `/mein/daten`, `/mein/geraete`, `/mein/buchen`, `/mein/ticket`, `/mein/zugangskarte`, `/mein/abmelden`, `GET /mein/rechnung?id=`.
+* Schnittstelle: `POST /mein/info`, `/mein/code`, `/mein/anmelden` (`"app": true`), `/mein/app` (Update), `GET /mein/app.apk`,
+  danach mit `Authorization: Bearer snm_…`: `/mein/daten`, `/mein/geraete`, `/mein/geraet_trennen`, `/mein/geraet_zulassen`,
+  `/mein/buchen`, `/mein/ticket`, `/mein/zugangskarte`, `/mein/profil`, `/mein/profil_bestaetigen`, `/mein/person_neu`,
+  `/mein/person_entfernen`, `/mein/abmelden`, `GET /mein/rechnung?id=`.
+
+## App-Updates (beide Apps)
+
+Im Manager unter **Mitgliederbereich → App-Updates** (nur Administratoren) die neue APK hochladen: App wählen (Mitglieder-App oder
+Manager-App), `versionCode` (aus `build.gradle.kts`, muss größer sein als vorher) und Versionsname eintragen, optional einen Hinweis.
+Beim Öffnen meldet die App „Neue App-Version … verfügbar“ → **Aktualisieren**: Download, Prüfung der SHA-256-Prüfsumme, dann der
+Android-Installer. Beim ersten Mal fragt Android nach „Apps aus dieser Quelle zulassen“.
+
+* Android installiert ein Update **nur, wenn die APK mit demselben Schlüssel signiert ist** wie die installierte App – also immer die
+  signierte Release-APK mit demselben Keystore hochladen (keine Debug-APK).
+* Schnittstellen: Mitglieder-App `POST /mein/app` und `GET /mein/app.apk`; Manager-App (mit App-Schlüssel) `GET /api/v1/app/update`
+  und `GET /api/v1/app/update.apk`.
 
 ## SparteNet Manager (`manager/`)
 

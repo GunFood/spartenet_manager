@@ -8,12 +8,13 @@ import csv
 
 from .automation import *  # noqa: F401,F403 – alle Namen der vorherigen Module
 
-M_FELDER = ("vorname", "nachname", "email", "telefon", "sparte", "parzelle", "notiz")
+M_FELDER = ("vorname", "nachname", "email", "telefon", "mobil", "sparte", "parzelle", "notiz")
 _KOEPFE = {
     "vorname": ("vorname", "first name", "firstname"),
     "nachname": ("nachname", "name", "familienname", "last name", "lastname", "pächter", "paechter"),
     "email": ("e-mail", "email", "mail", "e-mail-adresse", "emailadresse"),
-    "telefon": ("telefon", "tel", "tel.", "handy", "mobil", "telefonnummer", "phone"),
+    "telefon": ("telefon", "tel", "tel.", "telefonnummer", "festnetz", "phone"),
+    "mobil": ("mobil", "handy", "mobilnummer", "rufnummer", "mobile", "handynummer"),
     "sparte": ("sparte", "kürzel", "kuerzel", "verein", "anlage"),
     "parzelle": ("parzelle", "parzellennr", "parzellen-nr", "parzellen-nr.", "nr", "nr.", "garten"),
     "notiz": ("notiz", "bemerkung", "hinweis"),
@@ -48,8 +49,9 @@ def mitglied_pruefen(d, roh, alt=None):
     if x.get("email") and not re.fullmatch(r"[^@\s,;<>]{1,64}@[A-Za-z0-9.-]{1,190}\.[A-Za-z]{2,}", x["email"]):
         raise Fehler(f"E-Mail-Adresse „{x['email']}“ ist ungültig.")
     x["email"] = (x.get("email") or "").lower()
-    if x.get("telefon") and not _TEL_RE.match(x["telefon"]):
-        raise Fehler(f"Telefonnummer „{x['telefon']}“: nur Ziffern, Leerzeichen und + ( ) / -.")
+    for k, t in (("telefon", "Telefonnummer"), ("mobil", "Mobilnummer")):
+        if x.get(k) and not _TEL_RE.match(x[k]):
+            raise Fehler(f"{t} „{x[k]}“: nur Ziffern, Leerzeichen und + ( ) / -.")
     sp = _sparten_kz(d)
     if x["sparte"] and x["sparte"] not in sp:
         raise Fehler(f"Sparte „{x['sparte']}“ gibt es nicht.")
@@ -79,7 +81,7 @@ def weitere_pruefen(liste, haupt_email=""):
     for p in (liste if isinstance(liste, list) else [])[:WEITERE_MAX + 4]:
         if not isinstance(p, dict):
             continue
-        e = {k: text_einzeilig(p.get(k) or "", 120).strip() for k in ("vorname", "nachname", "email", "telefon")}
+        e = {k: text_einzeilig(p.get(k) or "", 120).strip() for k in ("vorname", "nachname", "email", "telefon", "mobil")}
         if not any(e.values()):
             continue                                  # leere Zeile
         if not (e["vorname"] or e["nachname"]):
@@ -90,8 +92,11 @@ def weitere_pruefen(liste, haupt_email=""):
         if e["email"] and e["email"] in gesehen:
             raise Fehler(f"Die E-Mail-Adresse „{e['email']}“ ist bei dieser Parzelle schon eingetragen.")
         gesehen.add(e["email"])
-        if e["telefon"] and not _TEL_RE.match(e["telefon"]):
-            raise Fehler(f"Weitere Person: Telefonnummer „{e['telefon']}“ ungültig.")
+        for k, t in (("telefon", "Telefonnummer"), ("mobil", "Mobilnummer")):
+            if e[k] and not _TEL_RE.match(e[k]):
+                raise Fehler(f"Weitere Person: {t} „{e[k]}“ ungültig.")
+        if not e["mobil"]:
+            e.pop("mobil")
         aus.append(e)
     if len(aus) > WEITERE_MAX:
         raise Fehler(f"Höchstens {WEITERE_MAX} weitere Personen je Parzelle.")
@@ -100,7 +105,7 @@ def weitere_pruefen(liste, haupt_email=""):
 
 def personen(m):
     """alle Personen eines Mitglieds: zuerst das Mitglied selbst, dann die weiteren Personen der Parzelle"""
-    haupt = {k: m.get(k, "") for k in ("vorname", "nachname", "email", "telefon")}
+    haupt = {k: m.get(k, "") for k in ("vorname", "nachname", "email", "telefon", "mobil")}
     return [{**haupt, "haupt": True}] + [{**p, "haupt": False} for p in (m.get("weitere") or []) if isinstance(p, dict)]
 
 
@@ -110,7 +115,7 @@ def mitglied_emails(m):
 
 def person_sicht(m, person):
     """Mitglied aus Sicht einer Person (Name, E-Mail, Telefon der Person) – nur zum Lesen, nicht speichern"""
-    return {**m, **{k: person.get(k, "") for k in ("vorname", "nachname", "email", "telefon")}, "_haupt": bool(person.get("haupt"))}
+    return {**m, **{k: person.get(k, "") for k in ("vorname", "nachname", "email", "telefon", "mobil")}, "_haupt": bool(person.get("haupt"))}
 
 
 def _suchen(d, x):
