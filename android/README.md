@@ -48,8 +48,9 @@ Nutzt den Mitgliederbereich des Managers (ab 5.7, muss im Manager eingeschaltet 
 
 ## App-Updates (beide Apps)
 
-Im Manager unter **Mitgliederbereich → App-Updates** (nur Administratoren) die neue APK hochladen: App wählen (Mitglieder-App oder
-Manager-App), `versionCode` (aus `build.gradle.kts`, muss größer sein als vorher) und Versionsname eintragen, optional einen Hinweis.
+Im Manager unter **Mitgliederbereich → App-Updates** (nur Administratoren) die neue APK hochladen und die App wählen (Mitglieder-App
+oder Manager-App), optional einen Hinweis. **Versionsnummer und Versionsname liest der Manager aus der APK**; jede neu gebaute APK hat
+automatisch eine höhere Nummer (`versionCode` = Minuten seit 1.1.2024, Versionsname mit Baudatum, z. B. „1.3 (20.10.2026 19:40)“).
 Beim Öffnen meldet die App „Neue App-Version … verfügbar“ → **Aktualisieren**: Download, Prüfung der SHA-256-Prüfsumme, dann der
 Android-Installer. Beim ersten Mal fragt Android nach „Apps aus dieser Quelle zulassen“.
 

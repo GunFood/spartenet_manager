@@ -59,7 +59,8 @@ def _aktiv_datei():
 
 
 def _code_ordner():
-    """aktualisierte Version aus dem Datenordner (updates/), wenn sie neuer ist als die mitgelieferte"""
+    """aktualisierte Version aus dem Datenordner (updates/), wenn sie mindestens so neu ist wie die mitgelieferte
+    (gleiche Nummer: die über die Aktualisierung installierte Korrektur wird genommen)"""
     if os.environ.get("SPARTENET_UPDATE_AUS") == "1":
         return MITGELIEFERT, None
     try:
@@ -70,7 +71,7 @@ def _code_ordner():
     if not isinstance(a, dict) or not a.get("ordner") or a.get("fehler"):
         return MITGELIEFERT, None
     p = os.path.join(os.path.dirname(_aktiv_datei()), os.path.basename(a["ordner"]))
-    if os.path.isfile(os.path.join(p, "spartenet", "webserver.py")) and _version(p) > _version(MITGELIEFERT):
+    if os.path.isfile(os.path.join(p, "spartenet", "webserver.py")) and _version(p) >= _version(MITGELIEFERT):
         return p, a
     return MITGELIEFERT, None
 

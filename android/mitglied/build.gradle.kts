@@ -21,8 +21,10 @@ android {
         applicationId = "de.spartenet.mitglied"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.2"
+        // Versionsnummer automatisch: Minuten seit 1.1.2024 – jede neu gebaute APK hat eine höhere Nummer, damit das
+        // App-Update im Manager sie als neuer erkennt. Der Versionsname zeigt zusätzlich das Baudatum.
+        versionCode = ((System.currentTimeMillis() / 1000 - 1_704_067_200L) / 60).toInt()
+        versionName = "1.3 (" + java.text.SimpleDateFormat("dd.MM.yyyy HH:mm").format(java.util.Date()) + ")"
         // Adresse des Managers steht verschleiert in data/Speicher.kt (https://manager.wlan-im-garten.de, nur HTTPS)
     }
 

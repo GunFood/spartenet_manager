@@ -704,18 +704,78 @@ def akt_app_update(d, b=None, ich=""):
     return {"apps": {k: {"titel": t, **app_update_info(d, k)} for k, t in APP_ARTEN.items()}, "log": log}
 
 
+def apk_version(roh):
+    """liest versionCode, versionName und Paketname aus der APK (binäres AndroidManifest.xml) – (code, name, paket) oder (None, "", "")"""
+    import struct
+    try:
+        with zipfile.ZipFile(io.BytesIO(roh)) as z:
+            m = z.read("AndroidManifest.xml")
+    except (zipfile.BadZipFile, KeyError):
+        return None, "", ""
+    if len(m) < 8 or struct.unpack_from("<H", m, 0)[0] != 0x0003:
+        return None, "", ""
+    strings, res_ids, pos = [], [], 8
+    while pos + 8 <= len(m):
+        typ, kopf, groesse = struct.unpack_from("<HHI", m, pos)
+        if groesse < 8:
+            break
+        if typ == 0x0001:                          # String-Pool
+            anzahl, _stile, flags, start = struct.unpack_from("<IIII", m, pos + 8)
+            utf8 = bool(flags & 0x100)
+            for n in range(anzahl):
+                o = pos + start + struct.unpack_from("<I", m, pos + kopf + 4 * n)[0]
+                if utf8:
+                    o += 2 if m[o] & 0x80 else 1               # Länge in UTF-16-Zeichen
+                    laenge = ((m[o] & 0x7F) << 8 | m[o + 1]) if m[o] & 0x80 else m[o]
+                    o += 2 if m[o] & 0x80 else 1
+                    strings.append(m[o:o + laenge].decode("utf-8", "replace"))
+                else:
+                    laenge = struct.unpack_from("<H", m, o)[0]
+                    if laenge & 0x8000:
+                        laenge = ((laenge & 0x7FFF) << 16) | struct.unpack_from("<H", m, o + 2)[0]
+                        o += 2
+                    strings.append(m[o + 2:o + 2 + 2 * laenge].decode("utf-16-le", "replace"))
+        elif typ == 0x0180:                        # Ressourcen-Kennungen der Attributnamen
+            res_ids = list(struct.unpack_from(f"<{(groesse - kopf) // 4}I", m, pos + kopf))
+        elif typ == 0x0102:                        # erstes Element: <manifest …>
+            a_start, a_groesse, a_anzahl = struct.unpack_from("<HHH", m, pos + kopf + 8)
+            code, name, paket = None, "", ""
+            for n in range(a_anzahl):
+                o = pos + kopf + a_start + n * a_groesse
+                _ns, nm, rohwert, _sz, _r, dtyp, daten = struct.unpack_from("<IIIHBBI", m, o)
+                rid = res_ids[nm] if nm < len(res_ids) else 0
+                text = strings[rohwert] if rohwert != 0xFFFFFFFF and rohwert < len(strings) else (strings[daten] if dtyp == 0x03 and daten < len(strings) else "")
+                if rid == 0x0101021B:
+                    code = daten if dtyp in (0x10, 0x11) else (int(text) if text.isdigit() else None)
+                elif rid == 0x0101021C:
+                    name = text
+                elif nm < len(strings) and strings[nm] == "package":
+                    paket = text
+            return code, name, paket
+        pos += groesse
+    return None, "", ""
+
+
+APP_PAKETE = {"mitglied": "de.spartenet.mitglied", "manager": "de.spartenet.manager"}
+
+
 def akt_app_update_hochladen(d, q, roh, ich):
-    """neue APK hochladen (?art=mitglied|manager&version_code=3&version_name=1.2&hinweis=…). Die App meldet das Update,
+    """neue APK hochladen (?art=mitglied|manager&hinweis=…; versionCode und -name liest der Manager aus der APK, sonst
+    ?version_code=…&version_name=…). Die App meldet das Update,
     lädt die Datei herunter, prüft die SHA-256-Prüfsumme und startet die Installation. Android installiert ein Update nur,
     wenn die APK mit demselben Schlüssel signiert ist wie die installierte App."""
     art = (q.get("art") or [""])[0]
     if art not in APP_ARTEN:
         raise Fehler("Bitte wählen: Mitglieder-App oder Manager-App.")
+    apk_code, apk_name, apk_paket = apk_version(roh or b"")        # Versionsnummer und -name stehen in der APK selbst
+    if apk_paket and apk_paket.split(".debug")[0] != APP_PAKETE[art]:
+        raise Fehler(f"Diese APK gehört nicht zur {APP_ARTEN[art]} (Paket {apk_paket}) – bitte die richtige App wählen.")
+    roh_vc = (q.get("version_code") or [""])[0].strip()
     try:
-        vc = int((q.get("version_code") or [""])[0])
+        vc = apk_code if apk_code is not None else int(roh_vc)
     except ValueError:
-        raise Fehler("Versionsnummer (versionCode) als ganze Zahl angeben, z. B. 3.")
-    vn = text_einzeilig((q.get("version_name") or [""])[0], 40).strip() or str(vc)
+        raise Fehler("Die Versionsnummer ließ sich nicht aus der APK lesen – bitte versionCode als ganze Zahl angeben.")
+    vn = text_einzeilig(apk_name or (q.get("version_name") or [""])[0], 60).strip() or str(vc)
     hinweis = text_einzeilig((q.get("hinweis") or [""])[0], 300).strip()
     if not 1 <= vc <= 2_100_000_000:
         raise Fehler("Versionsnummer (versionCode) muss größer als 0 sein.")

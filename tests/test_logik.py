@@ -606,6 +606,46 @@ class AppUpdates(unittest.TestCase):
             S.app_apk_lesen(d, "mitglied")
 
 
+def _axml(paket, code, name):
+    """kleines binäres AndroidManifest.xml (wie aapt2 es schreibt): String-Pool, Ressourcen-Kennungen, <manifest>"""
+    import struct
+    strs = ["versionCode", "versionName", "package", "manifest", name, paket]
+    pool_daten, offs = b"", []
+    for x in strs:
+        offs.append(len(pool_daten))
+        pool_daten += struct.pack("<H", len(x)) + x.encode("utf-16-le") + b"\0\0"
+    while len(pool_daten) % 4:
+        pool_daten += b"\0"
+    kopf = 28
+    start = kopf + 4 * len(strs)
+    pool = struct.pack("<HHIIIIII", 0x0001, kopf, start + len(pool_daten), len(strs), 0, 0, start, 0) + b"".join(struct.pack("<I", o) for o in offs) + pool_daten
+    resmap = struct.pack("<HHI", 0x0180, 8, 8 + 8) + struct.pack("<II", 0x0101021B, 0x0101021C)
+    attrs = [struct.pack("<IIIHBBI", 0xFFFFFFFF, 0, 0xFFFFFFFF, 8, 0, 0x10, code),
+             struct.pack("<IIIHBBI", 0xFFFFFFFF, 1, 4, 8, 0, 0x03, 4),
+             struct.pack("<IIIHBBI", 0xFFFFFFFF, 2, 5, 8, 0, 0x03, 5)]
+    ext = struct.pack("<IIHHHHHH", 0xFFFFFFFF, 3, 20, 20, len(attrs), 0, 0, 0)
+    el_inhalt = struct.pack("<II", 1, 0xFFFFFFFF) + ext + b"".join(attrs)
+    element = struct.pack("<HHI", 0x0102, 16, 8 + len(el_inhalt)) + el_inhalt
+    rumpf = pool + resmap + element
+    return struct.pack("<HHI", 0x0003, 8, 8 + len(rumpf)) + rumpf
+
+
+class ApkVersion(unittest.TestCase):
+    def test_version_aus_manifest(self):
+        import io, zipfile
+        puffer = io.BytesIO()
+        with zipfile.ZipFile(puffer, "w") as z:
+            z.writestr("AndroidManifest.xml", _axml("de.spartenet.mitglied", 1_500_123, "1.3 (20.10.2026 19:40)"))
+            z.writestr("classes.dex", b"dex\n035" + bytes(2000))
+        apk = puffer.getvalue()
+        self.assertEqual(S.apk_version(apk), (1_500_123, "1.3 (20.10.2026 19:40)", "de.spartenet.mitglied"))
+        d = frisch()
+        r = S.akt_app_update_hochladen(d, {"art": ["mitglied"]}, apk, "admin")          # ohne Angaben – alles aus der APK
+        self.assertEqual((r["apps"]["mitglied"]["version_code"], r["apps"]["mitglied"]["version_name"]), (1_500_123, "1.3 (20.10.2026 19:40)"))
+        with self.assertRaises(S.Fehler):                                               # falsche App gewählt
+            S.akt_app_update_hochladen(d, {"art": ["manager"]}, apk, "admin")
+
+
 class AppZugangstokens(unittest.TestCase):
     def test_alter_gemeinsamer_token_bleibt_gueltig(self):
         """der eine Token aus 5.3/5.4 wird übernommen und gilt weiter für alle Konten, bis der Administrator ihn entfernt"""

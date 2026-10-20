@@ -101,14 +101,25 @@ def update_pruefen(d, still=False):
     neu = _version_aus_quelltext(text)
     if not neu:
         raise Fehler("Auf GitHub ist keine Versionsnummer zu finden (spartenet/basis.py).")
-    lage = {"aktuell": VERSION, "neu": neu, "sha": sha, "kurz": sha[:7], "kanal": kanal, "ref": ref, "datum": datum[:16].replace("T", " "),
-            "notiz": notiz[:3000], "verfuegbar": version_tupel(neu) > version_tupel(VERSION), "zeit": time.strftime("%Y-%m-%d %H:%M"),
-            "repo": UPDATE_REPO}
+    ist_sha = installierter_commit()
+    # neuer: höhere Versionsnummer – oder gleiche Nummer, aber ein anderer Stand auf GitHub (Korrekturen ohne neue Nummer)
+    verfuegbar = version_tupel(neu) > version_tupel(VERSION) or (version_tupel(neu) == version_tupel(VERSION) and bool(ist_sha) and ist_sha != sha)
+    lage = {"aktuell": VERSION, "neu": neu, "sha": sha,
+            "kurz": sha[:7], "kanal": kanal, "ref": ref, "datum": datum[:16].replace("T", " "), "installiert": (ist_sha or "")[:7],
+            "notiz": notiz[:3000], "verfuegbar": verfuegbar, "zeit": time.strftime("%Y-%m-%d %H:%M"), "repo": UPDATE_REPO}
     with _UPDATE["lock"]:
         _UPDATE["lage"], _UPDATE["geprueft"] = lage, time.time()
     if not still:
         LOG.info("Update-Prüfung: installiert %s, auf GitHub %s (%s)", VERSION, neu, sha[:7])
     return lage
+
+
+def installierter_commit():
+    """Commit der laufenden Version, wenn sie über die Aktualisierung installiert wurde (sonst leer)"""
+    a = update_aktiv_lesen()
+    if a.get("ordner") and a.get("sha") and os.path.abspath(CODE_DIR) == os.path.abspath(os.path.join(UPDATE_DIR, a["ordner"])):
+        return str(a["sha"])
+    return ""
 
 
 def update_aktiv_lesen():
