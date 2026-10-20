@@ -525,8 +525,9 @@ private fun GeraeteKarte(api: Api, p: JSONObject, erlaubt: JSONObject, aktion: (
             }) { Text("Zugangskarte per E-Mail") }
         }
     }
-    if (trennen && a != null) {
-        TrennenDialog(a.liste("geraete"), onAbbrechen = { trennen = false }) { ref ->
+    val liste = antwort?.liste("geraete") ?: emptyList()       // „a“ gilt nur innerhalb der Karte
+    if (trennen && liste.isNotEmpty()) {
+        TrennenDialog(liste, onAbbrechen = { trennen = false }) { ref ->
             trennen = false
             aktion {
                 melden(api.post("/mein/geraet_trennen", JSONObject().put("id", p.s("id")).put("ref", ref).put("bestaetigt", true)).s("text"))
