@@ -562,6 +562,30 @@ class Mitgliederbereich(unittest.TestCase):
         d["mitgliederbereich"] = {"geraete_trennen": True}
         with self.assertRaises(S.Fehler):                                                               # nur mit Bestätigung
             S.mb_geraet_trennen(d, kz, "12", {"ref": g["geraete"][0]["ref"]})
+        with self.assertRaises(S.Fehler):                                                               # Sperren hat einen eigenen Schalter
+            S.mb_geraet_trennen(d, kz, "12", {"ref": g["geraete"][0]["ref"], "bestaetigt": True, "sperren": True})
+        from unittest import mock
+        befehle = []
+        class GW:                                                                                       # Gateway-Attrappe: merkt sich die Befehle
+            def __init__(self, d): pass
+            def legacy_cmd(self, pfad, body): befehle.append(body["cmd"]); return {}
+        modul = S.mb_geraet_trennen.__globals__
+        roh = S._geraete_roh(d, kz, "12")
+        d["mitgliederbereich"] = {"geraete_trennen": True, "geraete_sperren": True}
+        with mock.patch.dict(modul, {"Gateway": GW, "speichere": lambda d: None, "_geraete_roh": lambda d, kz, p: roh}):
+            with self.assertRaises(S.Fehler):                                                           # Kabel lässt sich nur sperren, nicht trennen
+                S.mb_geraet_trennen(d, kz, "12", {"ref": g["geraete"][0]["ref"], "bestaetigt": True})
+            S.mb_geraet_trennen(d, kz, "12", {"ref": g["geraete"][1]["ref"], "bestaetigt": True})          # WLAN trennen: kick-sta
+            S.mb_geraet_trennen(d, kz, "12", {"ref": g["geraete"][0]["ref"], "bestaetigt": True, "sperren": True})
+            self.assertEqual(befehle, ["kick-sta", "block-sta"])
+            gs = S.mb_geraete(d, kz, "12")["gesperrt"]
+            self.assertEqual([x["name"] for x in gs], ["Laptop"])
+            self.assertNotIn("aa:bb", json.dumps(gs))                                                    # Liste ohne MAC
+            S.mb_geraet_zulassen(d, kz, "12", {"ref": gs[0]["ref"]})
+            self.assertEqual(befehle[-1], "unblock-sta")
+            self.assertEqual(S.mb_geraete(d, kz, "12")["gesperrt"], [])
+            with self.assertRaises(S.Fehler):
+                S.mb_geraet_zulassen(d, kz, "12", {"ref": gs[0]["ref"]})
         S._GERAETE_CACHE.update(zeit=0, liste=[])
 
     def test_webhook_signatur(self):

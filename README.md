@@ -119,7 +119,9 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
   - Update über GitHub: auch eine Korrektur mit gleicher Versionsnummer wird als Update angeboten (anderer Stand auf GitHub) und
     nach dem Update auch gestartet.
   - App-Updates: Versionsnummer automatisch beim Bauen, der Manager liest sie aus der APK; falsche App wird abgelehnt.
-  - Gerät trennen ohne Sperre, Prüfung im Manager, Tablet-Layout für /mein und die Mitglieder-App.
+  - Gerät trennen ohne Sperre (kick-sta, eigener Schalter) und wieder "Gerät sperren" (block-sta, eigener Schalter "Mitglieder dürfen
+    eigene Geräte sperren und wieder zulassen") mit Liste "Gesperrte Geräte" und "Wieder zulassen" – auf /mein und in der App.
+  - Prüfung im Manager, ob das Gateway Trennen/Sperren zulässt; Tablet-Layout für /mein und die Mitglieder-App.
 
 ### NEU IN 5.7 – MITGLIEDERBEREICH WIE DIE APP, MITGLIEDER-APP 1.2 UND APP-UPDATES
   - Mitgliederbereich (/mein) und Mitglieder-App sehen gleich aus und können dasselbe. Kopf mit Spartenlogo, Firmenlogo und "Hallo Vorname Nachname"; Bereiche Übersicht, Rechnungen, Support, Profil;
