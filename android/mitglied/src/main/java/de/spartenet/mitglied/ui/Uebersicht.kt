@@ -35,6 +35,10 @@ import androidx.compose.material.icons.filled.SupportAgent
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material3.RadioButton
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -189,6 +193,10 @@ fun Uebersicht(speicher: Speicher, token: String, ansicht: String, onAnsicht: (S
             Hintergrund.jetzt(ctx)
         }
     }
+    // Tablet: ab 600 dp Navigationsleiste an der Seite, ab 840 dp Übersicht und Profil zweispaltig
+    val cfg = LocalConfiguration.current
+    val breit = cfg.screenWidthDp >= 600
+    val zweispaltig = cfg.screenWidthDp >= 840
     Scaffold(
         topBar = {
             Kopf(
@@ -199,7 +207,7 @@ fun Uebersicht(speicher: Speicher, token: String, ansicht: String, onAnsicht: (S
             )
         },
         bottomBar = {
-            NavigationBar {
+            if (!breit) NavigationBar {
                 Bereich.entries.forEach { b ->
                     NavigationBarItem(selected = bereich == b, onClick = { bereich = b }, icon = { Icon(b.symbol, null) }, label = { Text(b.titel) })
                 }
@@ -207,7 +215,13 @@ fun Uebersicht(speicher: Speicher, token: String, ansicht: String, onAnsicht: (S
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { pad ->
-        Box(Modifier.padding(pad).fillMaxSize()) {
+        Row(Modifier.padding(pad).fillMaxSize()) {
+        if (breit) NavigationRail(Modifier.padding(top = 8.dp)) {
+            Bereich.entries.forEach { b ->
+                NavigationRailItem(selected = bereich == b, onClick = { bereich = b }, icon = { Icon(b.symbol, null) }, label = { Text(b.titel) })
+            }
+        }
+        Box(Modifier.weight(1f).fillMaxHeight()) {
             when {
                 d == null && fehler != null -> Column(Modifier.align(Alignment.Center).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(fehler ?: "", color = MaterialTheme.colorScheme.error)
@@ -220,8 +234,9 @@ fun Uebersicht(speicher: Speicher, token: String, ansicht: String, onAnsicht: (S
                 )
                 else -> {
                     val erlaubt = d.o("erlaubt") ?: JSONObject()
+                    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Column(
-                        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp).widthIn(max = 900.dp),
+                        Modifier.widthIn(max = if (zweispaltig) 1200.dp else 720.dp).fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         if (laedt || beschaeftigt) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -248,8 +263,18 @@ fun Uebersicht(speicher: Speicher, token: String, ansicht: String, onAnsicht: (S
                         when (bereich) {
                             Bereich.START -> if (p != null) {
                                 if (d.s("hinweis").isNotEmpty()) Text(d.s("hinweis"), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                TarifKarte(d, p, erlaubt) { dialog = it }
-                                if (erlaubt.b("geraete") || erlaubt.b("zugangskarte")) GeraeteKarte(api, p, erlaubt, ::aktion, ::melden)
+                                val tarifKarte: @Composable () -> Unit = { TarifKarte(d, p, erlaubt) { dialog = it } }
+                                val geraeteKarte: @Composable () -> Unit = {
+                                    if (erlaubt.b("geraete") || erlaubt.b("zugangskarte")) GeraeteKarte(api, p, erlaubt, ::aktion, ::melden)
+                                }
+                                if (zweispaltig) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                        Column(Modifier.weight(1f)) { tarifKarte() }
+                                        Column(Modifier.weight(1f)) { geraeteKarte() }
+                                    }
+                                } else {
+                                    tarifKarte(); geraeteKarte()
+                                }
                             }
                             Bereich.RECHNUNGEN -> if (p != null) {
                                 if (erlaubt.b("zeige_rechnungen")) RechnungenKarte(p) { r ->
@@ -261,14 +286,27 @@ fun Uebersicht(speicher: Speicher, token: String, ansicht: String, onAnsicht: (S
                             }
                             Bereich.SUPPORT -> if (p != null) SupportKarte(p, erlaubt) { dialog = "ticket" }
                             Bereich.PROFIL -> {
-                                ProfilKarte(api, d.o("profil") ?: JSONObject(), erlaubt, ::aktion, ::melden, onEmail = { speicher.email = it; laden() }) { laden() }
-                                if (p != null) PersonenKarte(api, p, erlaubt, ::aktion, ::melden) { laden() }
-                                BenachrichtigungKarte(speicher, ::melden)
-                                WidgetKarte()
-                                AnsichtKarte(ansicht, onAnsicht)
+                                val links: @Composable () -> Unit = {
+                                    ProfilKarte(api, d.o("profil") ?: JSONObject(), erlaubt, ::aktion, ::melden, onEmail = { speicher.email = it; laden() }) { laden() }
+                                    if (p != null) PersonenKarte(api, p, erlaubt, ::aktion, ::melden) { laden() }
+                                }
+                                val rechts: @Composable () -> Unit = {
+                                    BenachrichtigungKarte(speicher, ::melden)
+                                    WidgetKarte()
+                                    AnsichtKarte(ansicht, onAnsicht)
+                                }
+                                if (zweispaltig) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) { links() }
+                                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) { rechts() }
+                                    }
+                                } else {
+                                    links(); rechts()
+                                }
                             }
                         }
                         Spacer(Modifier.height(24.dp))
+                    }
                     }
                     if (p != null) when (val wie = dialog) {
                         null -> {}
@@ -297,6 +335,7 @@ fun Uebersicht(speicher: Speicher, token: String, ansicht: String, onAnsicht: (S
                     }
                 }
             }
+        }
         }
     }
 
@@ -492,29 +531,10 @@ private fun GeraeteKarte(api: Api, p: JSONObject, erlaubt: JSONObject, aktion: (
                     }
                 }
             }
-            val gesperrt = a?.liste("gesperrt") ?: emptyList()
-            if (gesperrt.isNotEmpty()) {
-                HorizontalDivider()
-                Text("Getrennte Geräte", style = MaterialTheme.typography.labelLarge)
-                gesperrt.forEach { g ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(g.s("name"))
-                            Text("getrennt am ${g.s("zeit")}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        TextButton(onClick = {
-                            aktion {
-                                melden(api.post("/mein/geraet_zulassen", JSONObject().put("id", p.s("id")).put("ref", g.s("ref"))).s("text"))
-                                laden()
-                            }
-                        }) { Text("Wieder zulassen") }
-                    }
-                }
-            }
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (erlaubt.b("geraete")) OutlinedButton(onClick = { laden() }) { Text("Aktualisieren") }
-            if (erlaubt.b("geraete") && erlaubt.b("geraete_trennen") && (a?.liste("geraete")?.isNotEmpty() == true)) {
+            if (erlaubt.b("geraete") && erlaubt.b("geraete_trennen") && (a?.liste("geraete")?.any { it.s("art") != "Kabel" } == true)) {
                 OutlinedButton(onClick = { trennen = true }) {
                     Icon(Icons.Filled.LinkOff, null, Modifier.size(18.dp))
                     Text("Gerät trennen", Modifier.padding(start = 6.dp))
@@ -525,8 +545,9 @@ private fun GeraeteKarte(api: Api, p: JSONObject, erlaubt: JSONObject, aktion: (
             }) { Text("Zugangskarte per E-Mail") }
         }
     }
-    if (trennen && a != null) {
-        TrennenDialog(a.liste("geraete"), onAbbrechen = { trennen = false }) { ref ->
+    val liste = antwort?.liste("geraete")?.filter { it.s("art") != "Kabel" } ?: emptyList()       // nur WLAN-Geräte lassen sich trennen
+    if (trennen && liste.isNotEmpty()) {
+        TrennenDialog(liste, onAbbrechen = { trennen = false }) { ref ->
             trennen = false
             aktion {
                 melden(api.post("/mein/geraet_trennen", JSONObject().put("id", p.s("id")).put("ref", ref).put("bestaetigt", true)).s("text"))
@@ -547,7 +568,7 @@ private fun TrennenDialog(geraete: List<JSONObject>, onAbbrechen: () -> Unit, on
         text = {
             Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
                 Text(
-                    "Das Gerät wird vom WLAN getrennt und gesperrt, bis Sie es unter „Getrennte Geräte“ wieder zulassen.",
+                    "Das Gerät wird vom WLAN getrennt. Es wird nicht gesperrt und kann sich bei Bedarf jederzeit wieder verbinden.",
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 geraete.forEach { g ->
