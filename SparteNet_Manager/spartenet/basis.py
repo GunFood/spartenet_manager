@@ -6,7 +6,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from http.cookies import SimpleCookie, CookieError
 
 
-VERSION = "5.7.1"
+VERSION = "5.8"
 HIER = os.path.abspath(os.environ.get("SPARTENET_DATA_DIR") or os.path.dirname(os.path.abspath(sys.argv[0])))
 os.makedirs(HIER, exist_ok=True)
 DATEI = os.path.join(HIER, "SparteNet_Manager.json")

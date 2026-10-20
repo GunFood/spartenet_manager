@@ -72,7 +72,7 @@ _LESEN = {
 _GET_LESEN_SONST_SCHREIBEN = {"/api/sparten-logos": "gestaltung", "/api/manager-logo": "gestaltung", "/api/voucher-vorlagen": "voucher", "/api/tarife": "tarife", "/api/buchungen": "buchungen", "/api/design": "karten", "/api/fern": "verbindung"}
 _VORSCHAU = {"/api/zugang": "wlan_pw", "/api/netze": "netze", "/api/uebertragen": "wlan_pw", "/api/ppsk-hochladen": "wlan_pw", "/api/tarif-uebertragen": "tarife", "/api/voucher": "voucher", "/api/voucher-loeschen": "voucher", "/api/zuteilung-gateway": "netze", "/api/umzug": "netze"}
 _SCHREIBEN = {
-    "/api/laufzeit-verlaengern": "buchungen", "/api/tarif-antrag": "buchungen", "/api/laufzeit-starten": "buchungen", "/api/ticket-schliessen": "tickets", "/api/ticket-zuordnen": "tickets",
+    "/api/laufzeit-verlaengern": "buchungen", "/api/tarif-antrag": "buchungen", "/api/zusatzgeraete": "buchungen", "/api/laufzeit-starten": "buchungen", "/api/ticket-schliessen": "tickets", "/api/ticket-zuordnen": "tickets",
     "/api/seiten-design": "gestaltung", "/api/sparten-logo-erzeugen": "gestaltung", "/api/seiten-vorschau": "gestaltung", "/api/ansicht-profile": "gestaltung",
     "/api/excel": "planung", "/api/schreibtest": "netze", "/api/umzug-rueckgaengig": "netze",
     "/api/ppsk-speichern": "wlan_pw", "/api/rueckgaengig": "wlan_pw", "/api/wlan-zuordnung": "wlan_pw", "/api/passwort": "wlan_pw",
@@ -154,7 +154,7 @@ def konto_rechte(d, name):
 # ---- Rechte je Sparte: Konten mit Sparten-Liste sehen und ändern nur diese Sparten ------------------
 # gateway- oder spartenübergreifende Änderungen bleiben Konten ohne Beschränkung vorbehalten
 SPARTE_PFLICHT = {"/api/ppsk", "/api/ppsk-speichern", "/api/wlans", "/api/wlan-zuordnung", "/api/netze", "/api/uebertragen", "/api/rueckgaengig", "/api/vergleich", "/api/abgleich",
-                  "/api/ppsk-hochladen", "/api/karten", "/api/buchungen", "/api/parzelle", "/api/kalk-sparte"}
+                  "/api/ppsk-hochladen", "/api/karten", "/api/buchungen", "/api/parzelle", "/api/kalk-sparte", "/api/zusatzgeraete"}
 NUR_OHNE_BESCHRAENKUNG = {"/api/seiten-design", "/api/ansicht-profile", "/api/excel", "/api/tarif-zuordnung", "/api/tarif-uebertragen", "/api/tarif-rueckgaengig", "/api/kalk-annahmen",
                           "/api/kalk-import", "/api/gwplan-annahmen", "/api/gwplan-zuruecksetzen", "/api/gwplan-import", "/api/gwplan-vlan-uebernehmen",
                           "/api/logo", "/api/logo-loeschen", "/api/logo-waehlen", "/api/schreibtest", "/api/konsolen", "/api/log-loeschen", "/api/tailscale", "/api/diagnose",

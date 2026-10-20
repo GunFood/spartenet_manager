@@ -1,10 +1,10 @@
-SparteNet Manager 5.7.1 (Cloud)
+SparteNet Manager 5.8 (Cloud)
 ===============================
 
 Funktioniert komplett über die UniFi-Cloud (api.ui.com). Kein lokaler Zugriff, kein VPN.
 Benötigt nur Python 3 – keine Zusatzpakete (nur für MariaDB/MySQL: PyMySQL, im Docker-Image enthalten).
 
-### ÜBERSICHT (Stand 5.7.1)
+### ÜBERSICHT (Stand 5.8)
   Verwaltet das WLAN einer oder mehrerer Kleingarten-Sparten an UniFi-Gateways: Netze und WLAN-Passwörter je Parzelle,
   Tarife mit Laufzeit, Buchungen, Mitglieder, Anfragen (Tickets), Rechnungen, Verträge, Automationen und Störungsüberwachung.
 
@@ -114,6 +114,24 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
     POST /api/v1/buchung   {"sparte":"BW","parzelle":12,"tarif":"Basic"}   ("" = Buchung entfernen)
   Höchstens 120 Anfragen je Minute und Schlüssel (SPARTENET_API_PRO_MINUTE). Zahlungsanbieter über n8n/Zapier/Make
   anbinden. Von außen nur über HTTPS (Reverse-Proxy, dann SPARTENET_PROXY=1).
+
+### NEU IN 5.8 – TARIFREGELN UND ZUSATZGERÄTE
+  - Standard-Tarife: Basic 3, Plus 5, Max 10 Endgeräte (Netzmaske /29, /28, /27 – Platz für Zusatzgeräte). Bestehende Tarife bleiben,
+    wie sie sind; die Endgeräte stellst du unter "Tarife" ein.
+  - Upgrade jederzeit. Downgrade nur eine Stufe nach unten (Max → Plus → Basic) und frühestens 3 Monate nach dem letzten Tarifwechsel –
+    von Max zu Basic also frühestens nach 6 Monaten. Sind mehr Geräte verbunden, als der kleinere Tarif erlaubt, kommt eine Warnung:
+    erst Geräte sperren oder ausschalten. Jeder Tarifwechsel startet eine neue Laufzeit.
+  - Einstellungen unter "Mitgliederbereich → Tarife": nur eine Stufe, Wartezeit in Monaten (0 = keine), Downgrade mit oder ohne Freigabe
+    im Ticket (Standard: ohne, sofort sobald die Regeln erfüllt sind).
+  - Zusatzgeräte: Mitglieder buchen zusätzliche Endgeräte (Standard 1,00 € je Gerät und Jahr, höchstens 5 je Parzelle und nur so viele,
+    wie ins Netz des Tarifs passen). Sie erhöhen den DHCP-Bereich der Parzelle (ans Gateway über "Tarife → Übertragen", wie immer mit
+    Vorschau) und stehen als eigene Position in der Jahresrechnung. In der Buchungsliste setzt du sie je Parzelle von Hand; bei einer
+    Kündigung entfallen sie.
+  - Restguthaben: Beim Tarifwechsel mitten in der Laufzeit wird der nicht genutzte Teil des alten Tarifs gutgeschrieben
+    (Preis × Restzeit / Laufzeit). Ohne Bezahldienst entsteht gleich eine Rechnung über den neuen Tarif mit neuer Laufzeit, das Guthaben
+    ist abgezogen (abschaltbar: "Beim Tarifwechsel gleich eine Rechnung …"); mit Bezahldienst zahlt das Mitglied nur die Differenz.
+    Übrig gebliebenes Guthaben (z. B. nach einem Downgrade) wird mit der nächsten Rechnung verrechnet; Stand in der Buchungsliste,
+    auf /mein und in der App.
 
 ### NEU IN 5.7.1
   - Update über GitHub: auch eine Korrektur mit gleicher Versionsnummer wird als Update angeboten (anderer Stand auf GitHub) und

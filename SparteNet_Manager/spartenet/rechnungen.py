@@ -58,6 +58,69 @@ def _summen(e, brutto):
     return netto, round(brutto - netto, 2), brutto
 
 
+# ---- Guthaben je Parzelle (Restguthaben aus einem Tarifwechsel) ------------------------------------------------------
+def guthaben(d, kz, p):
+    try:
+        return round(float(((d.get("guthaben") or {}).get(f"{kz}-{int(p)}") or {}).get("betrag", 0)), 2)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def guthaben_buchen(d, kz, p, betrag, text):
+    """Guthaben gutschreiben (positiv) oder verbrauchen (negativ) – mit Verlauf; nie unter 0"""
+    betrag = round(float(betrag), 2)
+    if not betrag:
+        return guthaben(d, kz, p)
+    k = f"{kz}-{int(p)}"
+    g = d.setdefault("guthaben", {}).setdefault(k, {"betrag": 0.0, "verlauf": []})
+    g["betrag"] = max(0.0, round(float(g.get("betrag") or 0) + betrag, 2))
+    g.setdefault("verlauf", []).append({"zeit": time.strftime("%Y-%m-%d %H:%M"), "betrag": betrag, "text": text_einzeilig(text, 200), "stand": g["betrag"]})
+    del g["verlauf"][:-50]
+    journal(f"Guthaben {kz} Parzelle {p}: {'+' if betrag > 0 else ''}{geld(betrag)} ({text}) – Stand {geld(g['betrag'])}")
+    return g["betrag"]
+
+
+def restwert(d, kz, p, jetzt=None):
+    """Wert der noch nicht genutzten Laufzeit: Tarifpreis × verbleibende Zeit / gesamte Laufzeit (0 ohne aktive Laufzeit)"""
+    e = (d.get("laufzeiten") or {}).get(f"{kz}-{int(p)}")
+    jetzt = jetzt or time.time()
+    if not isinstance(e, dict) or e.get("status") != "aktiv" or not e.get("ende") or e["ende"] <= jetzt or e["ende"] <= e.get("start", 0):
+        return 0.0
+    t = next((x for x in tarife_pruefen(d["tarife"]) if x["name"] == e.get("tarif")), None)
+    if not t or not float(t.get("preis") or 0):
+        return 0.0
+    return round(float(t["preis"]) * (e["ende"] - jetzt) / (e["ende"] - e["start"]), 2)
+
+
+def _guthaben_positionen(d, kz, p, summe):
+    """negative Position „Restguthaben“ – höchstens bis zum Rechnungsbetrag"""
+    g = min(guthaben(d, kz, p), round(summe, 2))
+    return ([{"text": f"Abzüglich Guthaben (Restguthaben aus Tarifwechsel), Parzelle {p}", "menge": 1, "einzel": -g, "gesamt": -g}] if g > 0 else []), g
+
+
+def rechnung_anlegen(d, kz, p, tarif, positionen, ich, jahr=None, notiz=""):
+    """einzelne Rechnung für eine Parzelle anlegen (Positionen brutto); Betrag 0 gilt gleich als bezahlt"""
+    e = rechnung_einstellungen(d)
+    mid, m = _mitglied_der_parzelle(d, kz, p)
+    if not m:
+        raise Fehler(f"{kz} Parzelle {p} hat kein Mitglied – keine Rechnung möglich.")
+    jahr = int(jahr or time.strftime("%Y"))
+    summe = round(sum(float(x["gesamt"]) for x in positionen), 2)
+    netto, ust, brutto = _summen(e, summe)
+    r = rechnungen_daten(d)
+    rid = secrets.token_hex(6)
+    r["liste"][rid] = {"nr": _neue_nummer(d, jahr), "jahr": jahr, "datum": time.strftime("%Y-%m-%d"),
+                       "faellig": time.strftime("%Y-%m-%d", time.localtime(time.time() + int(e["zahlungsziel"]) * 86400)), "mitglied": mid,
+                       "name": f"{m.get('vorname', '')} {m.get('nachname', '')}".strip(), "email": m.get("email", ""), "sparte": kz,
+                       "sparte_name": _sparten_kz(d).get(kz, kz), "parzelle": int(p), "tarif": tarif, "positionen": positionen,
+                       "netto": netto, "ust": ust, "ust_satz": 0 if e["kleinunternehmer"] else e["ust_satz"], "brutto": brutto, "bezahlt": 0.0,
+                       "status": "bezahlt" if brutto <= 0 else "offen", "zahlungen": [], "erstellt": time.strftime("%Y-%m-%d %H:%M"), "von": ich,
+                       **({"notiz": notiz} if notiz else {})}
+    speichere(d)
+    journal(f"Rechnung {r['liste'][rid]['nr']} angelegt: {kz} Parzelle {p}, {geld(brutto)} ({ich})")
+    return rid, r["liste"][rid]
+
+
 def akt_rechnung_einstellungen(d, b, ich):
     e = rechnung_einstellungen(d)
     for k, std in R_EINST_STANDARD.items():
@@ -131,8 +194,13 @@ def akt_rechnungslauf(d, b, ich):
             if not m:
                 ohne.append(f"{kz} {p}")
                 continue
-            neu.append({"sparte": kz, "parzelle": int(p), "tarif": tarif, "preis": preise.get(tarif, 0), "mitglied": mid,
+            zg = zusatz_geraete(d, kz, p)
+            neu.append({"sparte": kz, "parzelle": int(p), "tarif": tarif, "preis": round(preise.get(tarif, 0) + zg * zusatz_preis(d), 2), "mitglied": mid,
+                        "tarif_preis": preise.get(tarif, 0), "zusatz": zg, "zusatz_preis": zusatz_preis(d),
                         "name": f"{m.get('vorname', '')} {m.get('nachname', '')}".strip(), "email": m.get("email", "")})
+    for x in neu:                                   # Guthaben (Restguthaben aus Tarifwechsel) abziehen
+        x["guthaben"] = min(guthaben(d, x["sparte"], x["parzelle"]), x["preis"])
+        x["preis"] = round(x["preis"] - x["guthaben"], 2)
     summe = sum(x["preis"] for x in neu)
     log = [f"{'Vorschau: ' if not b.get('ausfuehren') else ''}{len(neu)} Rechnung(en) für {jahr} über zusammen {geld(summe)}"
            + (f" · {vorhanden} gibt es schon" if vorhanden else "") + (f" · {len(ohne)} gebuchte Parzelle(n) ohne Mitglied: {', '.join(ohne[:15])}{' …' if len(ohne) > 15 else ''}" if ohne else "")]
@@ -148,9 +216,16 @@ def akt_rechnungslauf(d, b, ich):
         rid = secrets.token_hex(6)
         r["liste"][rid] = {"nr": _neue_nummer(d, jahr), "jahr": jahr, "datum": heute, "faellig": faellig, "mitglied": x["mitglied"], "name": x["name"],
                            "email": x["email"], "sparte": x["sparte"], "sparte_name": namen.get(x["sparte"], x["sparte"]), "parzelle": x["parzelle"],
-                           "tarif": x["tarif"], "positionen": [{"text": f"WLAN-Tarif „{x['tarif']}“, Parzelle {x['parzelle']}, Jahr {jahr}", "menge": 1, "einzel": brutto, "gesamt": brutto}],
+                           "tarif": x["tarif"], "positionen": [{"text": f"WLAN-Tarif „{x['tarif']}“, Parzelle {x['parzelle']}, Jahr {jahr}", "menge": 1,
+                                                                "einzel": round(x["tarif_preis"], 2), "gesamt": round(x["tarif_preis"], 2)}]
+                           + ([{"text": f"Zusätzliche Endgeräte, Parzelle {x['parzelle']}, Jahr {jahr}", "menge": x["zusatz"], "einzel": x["zusatz_preis"],
+                                "gesamt": round(x["zusatz"] * x["zusatz_preis"], 2)}] if x["zusatz"] else [])
+                           + ([{"text": f"Abzüglich Guthaben (Restguthaben aus Tarifwechsel), Parzelle {x['parzelle']}", "menge": 1,
+                                "einzel": -x["guthaben"], "gesamt": -x["guthaben"]}] if x["guthaben"] else []),
                            "netto": netto, "ust": ust, "ust_satz": 0 if e["kleinunternehmer"] else e["ust_satz"], "brutto": brutto, "bezahlt": 0.0,
-                           "status": "offen", "zahlungen": [], "erstellt": time.strftime("%Y-%m-%d %H:%M"), "von": ich}
+                           "status": "bezahlt" if brutto <= 0 else "offen", "zahlungen": [], "erstellt": time.strftime("%Y-%m-%d %H:%M"), "von": ich}
+        if x["guthaben"]:
+            guthaben_buchen(d, x["sparte"], x["parzelle"], -x["guthaben"], f"verrechnet mit Rechnung {r['liste'][rid]['nr']}")
     speichere(d)
     journal(f"Rechnungslauf {jahr}: {len(neu)} Rechnung(en) über {geld(summe)} durch {ich}")
     x = akt_rechnungen(d, {"jahr": [str(jahr)]})

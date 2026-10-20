@@ -655,7 +655,7 @@ class Version50(unittest.TestCase):
         self.assertEqual((p["parzelle"], p["tarif"], x["mitglied"]), ("42", "Basic", "Paul Portal"))
         code, g = s.req("/mein/geraete", {"id": p["id"]})
         self.assertEqual(code, 200, g)
-        self.assertEqual((g["tarif"], g["anzahl"], g["max"]), ("Basic", 0, 5))                    # „Basic: 0 von 5 Geräte“, ohne IP-Adressen
+        self.assertEqual((g["tarif"], g["anzahl"], g["max"]), ("Basic", 0, 3))                    # „Basic: 0 von 3 Geräte“, ohne IP-Adressen
         self.assertNotIn("netz", g)
         self.assertEqual(s.req("/mein/geraet_trennen", {"id": p["id"], "ref": "x", "bestaetigt": True})[0], 400)   # nicht eingeschaltet
         # Profil: Name und Parzelle nur lesen, Telefon/Mobil ändern, neue E-Mail nur mit Code
@@ -705,7 +705,13 @@ class Version50(unittest.TestCase):
         code, x = s.req("/mein/buchen", {"id": p["id"], "art": "wechsel", "tarif": "Max"})
         self.assertEqual(code, 200, x)
         self.assertEqual(s.req("/mein/daten", {})[1]["parzellen"][0]["tarif"], "Max")
-        # Downgrade nur als Antrag mit Freigabe im Ticketsystem
+        # Downgrade frühestens 3 Monate nach dem letzten Wechsel
+        code, x = s.req("/mein/buchen", {"id": p["id"], "art": "wechsel", "tarif": "Basic"})
+        self.assertEqual(code, 400, x)
+        self.assertIn("frühestens", x["fehler"])
+        self.assertTrue(s.req("/mein/daten", {})[1]["parzellen"][0]["downgrade"]["ab_text"])
+        # Downgrade als Antrag mit Freigabe im Ticketsystem (Wartezeit aus)
+        self.assertEqual(a.req("/api/mitgliederbereich", {"downgrade_monate": 0, "downgrade_freigabe": True})[0], 200)
         code, x = s.req("/mein/buchen", {"id": p["id"], "art": "wechsel", "tarif": "Basic"})
         self.assertEqual(code, 200, x)
         self.assertIn("freigegeben", x["text"])
@@ -751,6 +757,18 @@ class Version50(unittest.TestCase):
         code, x = a.req("/api/tarif-antrag", {"id": tid, "freigeben": False, "grund": "Vertrag läuft noch"})
         self.assertEqual((code, x["ticket"]["antrag"]["status"]), (200, "abgelehnt"), x)
         self.assertEqual(s.req("/mein/daten", {})[1]["parzellen"][0]["tarif"], "Max")
+        # ohne Freigabe: Downgrade sofort (eine Stufe), Zusatzgeräte buchen
+        self.assertEqual(a.req("/api/mitgliederbereich", {"downgrade_freigabe": False, "modus": "anfrage"})[0], 200)
+        code, x = s.req("/mein/buchen", {"id": p["id"], "art": "wechsel", "tarif": "Basic"})
+        self.assertEqual(code, 200, x)
+        self.assertIn("Laufzeit beginnt neu", x["text"])
+        self.assertEqual(s.req("/mein/buchen", {"id": p["id"], "art": "zusatz", "anzahl": 3})[0], 400)      # nur 2 passen ins /29
+        code, x = s.req("/mein/buchen", {"id": p["id"], "art": "zusatz", "anzahl": 2})
+        self.assertEqual(code, 200, x)
+        dd = s.req("/mein/daten", {})[1]["parzellen"][0]
+        self.assertEqual((dd["tarif"], dd["zusatz"], dd["geraete_erlaubt"]), ("Basic", 2, 5))
+        self.assertEqual(s.req("/mein/geraete", {"id": p["id"]})[1]["max"], 5)
+        self.assertEqual(s.req("/mein/buchen", {"id": p["id"], "art": "zusatz", "anzahl": 0})[0], 200)       # reduzieren
         s.req("/mein/abmelden", {})
         self.assertEqual(s.req("/mein/daten", {})[0], 401)
         # weitere Person derselben Parzelle: eigener Einmalcode, gleiche Parzelle, gleiche Rechnungen

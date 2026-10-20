@@ -199,6 +199,7 @@ def akt_buchungen(d, kz, erlaubt=None):
     namen = {t["name"] for t in tarife_pruefen(d["tarife"])}
     return {"sparte": sp["name"], "kz": kz, "n": sp["n"], "tarife": sorted(namen),
             "zeilen": [{"p": p, "netz": NETZ_PARZELLE.format(kz=kz, p=p), "tarif": b.get(str(p), ""), "unbekannt": bool(b.get(str(p))) and b.get(str(p)) not in namen,
+                        "zusatz": zusatz_geraete(d, kz, p), "guthaben": round(float(((d.get("guthaben") or {}).get(f"{kz}-{p}") or {}).get("betrag", 0)), 2),
                         **_laufzeit_info(d, kz, p)} for p in range(1, sp["n"] + 1)], "log": []}
 
 

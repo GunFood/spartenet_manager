@@ -193,7 +193,8 @@ def tarif_lage(d):
         if t:
             router = n["ip_subnet"].split("/")[0]
             try:
-                netz, ip_subnet, start, stop, platz = dhcp_bereich(router, t["praefix"], t["geraete"])
+                zp = netz_parzelle(n.get("name"))                    # Parzellen-Netz: Endgeräte des Tarifs + gebuchte Zusatzgeräte
+                netz, ip_subnet, start, stop, platz = dhcp_bereich(router, t["praefix"], geraete_im_tarif(d, t, *zp) if zp else t["geraete"])
                 neu_netz = ipaddress.ip_network(netz)
                 for m in netze:
                     if m is not n and ipaddress.ip_network(m["ip_subnet"], strict=False).overlaps(neu_netz):
@@ -456,6 +457,35 @@ PAZ_RE = re.compile(r"^(.+)-Paz\.(\d{1,3})$")
 def netz_parzelle(name):
     m = PAZ_RE.match(str(name or ""))
     return (m.group(1), int(m.group(2))) if m else None
+
+
+def zusatz_geraete(d, kz, p):
+    """vom Mitglied zusätzlich gebuchte Endgeräte einer Parzelle"""
+    try:
+        return max(0, int((d.get("zusatzgeraete") or {}).get(f"{kz}-{int(p)}", 0)))
+    except (TypeError, ValueError):
+        return 0
+
+
+def zusatz_preis(d):
+    """Preis je Zusatzgerät und Jahr (Einstellung im Mitgliederbereich, Standard 1,00 €)"""
+    try:
+        return round(float((d.get("mitgliederbereich") or {}).get("zusatz_preis", 1.0)), 2)
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def geraete_im_tarif(d, t, kz=None, p=None):
+    """erlaubte Endgeräte einer Parzelle: Endgeräte des Tarifs + gebuchte Zusatzgeräte (0 = unbegrenzt)"""
+    g = int((t or {}).get("geraete") or 0)
+    return g + zusatz_geraete(d, kz, p) if g and kz and str(p or "").isdigit() else g
+
+
+def zusatz_platz(t):
+    """wie viele Zusatzgeräte passen noch ins Netz des Tarifs (Netzmaske)?"""
+    if not t or not t.get("geraete"):
+        return 0
+    return max(0, dhcp_bereich("10.0.0.1", t["praefix"])[4] - int(t["geraete"]))
 
 
 def tarif_von_netz(d, nid, name):

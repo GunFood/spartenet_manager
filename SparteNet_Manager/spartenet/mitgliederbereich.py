@@ -17,7 +17,8 @@ import urllib.request as _ur
 MB_STANDARD = {"aktiv": False, "tarifwechsel": True, "downgrade": True, "neubuchung": True, "verlaengern": True, "geraete": True, "modus": "anfrage",
                "link_api": "", "checkout_vorlage": "", "hinweis": "", "minuten": 30, "adresse": "",
                "titel": "Mitgliederbereich", "text_anmeldung": "", "zeige_rechnungen": True, "zeige_anfragen": True, "neue_anfrage": True,
-               "zugangskarte": True, "profil": True, "personen": True, "geraete_trennen": False, "geraete_sperren": False, "tarife": [], "stoerung_zeigen": True, "stoerung_farbe": "#b42318",
+               "zugangskarte": True, "profil": True, "personen": True, "geraete_trennen": False, "geraete_sperren": False, "tarife": [],
+               "downgrade_monate": 3, "downgrade_stufe": True, "downgrade_freigabe": False, "zusatzgeraete": True, "zusatz_preis": 1.0, "zusatz_max": 5, "wechsel_rechnung": True, "stoerung_zeigen": True, "stoerung_farbe": "#b42318",
                "stoerung_meldung": "Achtung: {geraet} ist aktuell ausgefallen (seit {seit}). Ein Störungsticket {ticket} ist erstellt und an den Verein verschickt – wir kümmern uns darum.",
                "stoerung_text": ""}
 _MB_SITZ, _MB_CODES = {}, {}
@@ -35,7 +36,10 @@ def mb_einstellungen(d):
             if isinstance(s, list):
                 e[k] = [str(x) for x in roh[k]] if isinstance(roh[k], list) else []
             else:
-                e[k] = bool(roh[k]) if isinstance(s, bool) else (int(roh[k]) if isinstance(s, int) else str(roh[k]))
+                try:
+                    e[k] = bool(roh[k]) if isinstance(s, bool) else (float(roh[k]) if isinstance(s, float) else (int(roh[k]) if isinstance(s, int) else str(roh[k])))
+                except (TypeError, ValueError):
+                    pass
     g = seiten_design(d, "mein")                  # Titel und Texte stehen unter „Oberfläche gestalten → Mitgliederbereich“
     e["titel"], e["text_anmeldung"], e["hinweis"] = g.get("titel") or "Mitgliederbereich", g.get("text_anmeldung", ""), g.get("hinweis", "")
     e["geheim_gesetzt"] = bool(roh.get("geheim"))
@@ -60,6 +64,18 @@ def akt_mitgliederbereich(d, b=None, ich=""):
             v = b[k]
             if isinstance(s, bool):
                 roh[k] = bool(v)
+            elif k == "zusatz_preis":
+                try:
+                    roh[k] = round(float(str(v if v not in (None, "") else 1).replace(",", ".")), 2)
+                except ValueError:
+                    raise Fehler("Preis je Zusatzgerät: eine Zahl, z. B. 1,00.")
+                if not 0 <= roh[k] <= 1000:
+                    raise Fehler("Preis je Zusatzgerät: 0 bis 1000 € im Jahr.")
+            elif k in ("downgrade_monate", "zusatz_max"):
+                try:
+                    roh[k] = max(0, min(24 if k == "downgrade_monate" else 50, int(v or 0)))
+                except (TypeError, ValueError):
+                    raise Fehler("Monate und Anzahl Zusatzgeräte: ganze Zahlen.")
             elif isinstance(s, int):
                 roh[k] = max(5, min(240, int(v or 30)))
             elif k == "tarife":
@@ -365,7 +381,8 @@ def mb_geraete(d, kz, p):
     tarif = ((d.get("buchungen") or {}).get(kz) or {}).get(str(p), "")
     t = next((x for x in tarife_pruefen(d["tarife"]) if x["name"] == tarif), None)
     gesp = [{"ref": x["ref"], "name": x.get("name", "Gerät"), "zeit": x.get("zeit", "")} for x in (d.get("mb_gesperrte_geraete") or {}).get(f"{kz}-{p}", [])]
-    return {"geraete": aus, "anzahl": len(aus), "max": int(t.get("geraete") or 0) if t else 0, "tarif": tarif, "gesperrt": gesp, "fehler": fehler}
+    return {"geraete": aus, "anzahl": len(aus), "max": geraete_im_tarif(d, t, kz, p) if t else 0, "zusatz": zusatz_geraete(d, kz, p), "tarif": tarif,
+            "gesperrt": gesp, "fehler": fehler}
 
 
 def mb_geraet_trennen(d, kz, p, b):
@@ -453,6 +470,138 @@ def tarif_rang(t):
     return (float(t.get("preis") or 0), float(t.get("down") or 0), float(t.get("up") or 0)) if t else (0, 0, 0)
 
 
+def tarif_seit(d, kz, p):
+    """Zeitpunkt des letzten Tarifwechsels bzw. der Buchung (für die Wartezeit vor einem Downgrade)"""
+    k = f"{kz}-{int(p)}"
+    t = (d.get("tarif_seit") or {}).get(k) or (laufzeiten(d).get(k) or {}).get("start")
+    try:
+        return float(t or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _tarif_ereignis(typ, daten, d):
+    """merkt sich den Zeitpunkt jeder Buchung bzw. jedes Tarifwechsels; bei Kündigung entfallen auch die Zusatzgeräte"""
+    if typ not in ("buchung", "kuendigung") or d is None or not str(daten.get("parzelle") or "").isdigit():
+        return
+    k = f"{daten.get('sparte')}-{int(daten['parzelle'])}"
+    if typ == "buchung":
+        alt = daten.get("tarif_alt") or ""
+        if alt and alt != daten.get("tarif"):          # Restguthaben: nicht genutzte Laufzeit des alten Tarifs gutschreiben (läuft vor dem Neustart der Laufzeit)
+            lz = laufzeiten(d).get(k) or {}
+            rest = restwert(d, daten.get("sparte"), daten["parzelle"]) if lz.get("tarif") == alt else 0
+            if rest > 0:
+                guthaben_buchen(d, daten.get("sparte"), daten["parzelle"], rest,
+                                f"Restguthaben {alt} (Laufzeit bis {time.strftime('%d.%m.%Y', time.localtime(lz['ende']))})")
+        d.setdefault("tarif_seit", {})[k] = time.time()
+    else:
+        (d.get("tarif_seit") or {}).pop(k, None)
+        (d.get("zusatzgeraete") or {}).pop(k, None)
+
+
+EREIGNIS_EMPFAENGER.insert(0, _tarif_ereignis)
+
+
+def downgrade_info(d, kz, p, e=None):
+    """Wechsel in einen kleineren Tarif: welche Tarife (nur eine Stufe nach unten) und ab wann (x Monate nach dem letzten Wechsel)"""
+    e = e or mb_einstellungen(d)
+    alle = {x["name"]: x for x in tarife_pruefen(d["tarife"])}
+    akt = alle.get(((d.get("buchungen") or {}).get(kz) or {}).get(str(p), ""))
+    if not akt:
+        return {"ziele": [], "ab": 0, "ab_text": ""}
+    kleiner = sorted((t for t in mb_buchbar(d) if tarif_rang(t) < tarif_rang(akt)), key=tarif_rang, reverse=True)
+    ziele = [t["name"] for t in (kleiner[:1] if e["downgrade_stufe"] else kleiner)]
+    seit = tarif_seit(d, kz, p)
+    ab = plus_laufzeit(seit, e["downgrade_monate"], "monate") if e["downgrade_monate"] and seit else 0
+    if ab <= time.time():
+        ab = 0
+    return {"ziele": ziele, "ab": ab, "ab_text": time.strftime("%d.%m.%Y", time.localtime(ab)) if ab else "", "monate": e["downgrade_monate"]}
+
+
+def _geraete_zaehlen(d, kz, p):
+    """verbundene Geräte der Parzelle (frisch vom Gateway). Ist das Gateway nicht erreichbar, zählt 0 – die Grenze setzt dann
+    der DHCP-Bereich des Tarifs am Gateway durch."""
+    _GERAETE_CACHE["zeit"] = 0
+    try:
+        return len(_geraete_roh(d, kz, p)[0])
+    except Fehler:
+        return 0
+
+
+def downgrade_pruefen(d, kz, p, ziel, e=None):
+    """Regeln für den Wechsel in einen kleineren Tarif – wirft Fehler mit verständlichem Text:
+    nur eine Stufe nach unten, frühestens x Monate nach dem letzten Wechsel, und nicht mehr Geräte verbunden als der neue Tarif erlaubt"""
+    e = e or mb_einstellungen(d)
+    info = downgrade_info(d, kz, p, e)
+    aktuell = ((d.get("buchungen") or {}).get(kz) or {}).get(str(p), "")
+    if ziel["name"] not in info["ziele"]:
+        if info["ziele"]:
+            raise Fehler(f"Ein kleinerer Tarif geht nur eine Stufe nach unten – von {aktuell} zu {info['ziele'][0]}.")
+        raise Fehler("Einen kleineren Tarif gibt es hier nicht.")
+    if info["ab"]:
+        raise Fehler(f"Ein Wechsel in einen kleineren Tarif ist frühestens ab {info['ab_text']} möglich ({info['monate']} Monate nach dem letzten Tarifwechsel).")
+    erlaubt = geraete_im_tarif(d, ziel, kz, p)
+    if erlaubt:
+        if zusatz_geraete(d, kz, p) > zusatz_platz(ziel):
+            raise Fehler(f"Im Tarif {ziel['name']} ist Platz für höchstens {zusatz_platz(ziel)} Zusatzgeräte – bitte vorher Zusatzgeräte reduzieren.")
+        n = _geraete_zaehlen(d, kz, p)
+        if n > erlaubt:
+            raise Fehler(f"Zu viele Geräte: {n} sind verbunden, {ziel['name']} erlaubt {erlaubt}. Bitte vorher {n - erlaubt} Gerät(e) sperren "
+                         "oder ausschalten – dann ist der Wechsel möglich.")
+
+
+def _wechsel_rechnung(d, kz, p, tarif, wer):
+    """nach einem Tarifwechsel (ohne Bezahldienst): Rechnung über den neuen Tarif mit neuer Laufzeit, abzüglich Guthaben
+    (Restguthaben des alten Tarifs). Übersteigt das Guthaben den Preis, bleibt der Rest für spätere Rechnungen stehen."""
+    if not mb_einstellungen(d)["wechsel_rechnung"]:
+        return None
+    t = next((x for x in tarife_pruefen(d["tarife"]) if x["name"] == tarif), None)
+    if not t or not float(t.get("preis") or 0):
+        return None
+    lz = laufzeiten(d).get(f"{kz}-{int(p)}") or {}
+    bis = f" bis {time.strftime('%d.%m.%Y', time.localtime(lz['ende']))}" if lz.get("ende") else ""
+    pos = [{"text": f"WLAN-Tarif „{tarif}“, Parzelle {p}, neue Laufzeit ab {time.strftime('%d.%m.%Y')}{bis}", "menge": 1,
+            "einzel": round(float(t["preis"]), 2), "gesamt": round(float(t["preis"]), 2)}]
+    abzug, g = _guthaben_positionen(d, kz, p, float(t["preis"]))
+    try:
+        _rid, x = rechnung_anlegen(d, kz, p, tarif, pos + abzug, wer, notiz="Tarifwechsel")
+    except Fehler as f:
+        LOG.warning("Rechnung zum Tarifwechsel nicht angelegt: %s", f)
+        return None
+    if g:
+        guthaben_buchen(d, kz, p, -g, f"verrechnet mit Rechnung {x['nr']}")
+    return x
+
+
+def _zusatz_setzen(d, kz, p, n, wer):
+    z = d.setdefault("zusatzgeraete", {})
+    k = f"{kz}-{int(p)}"
+    if n:
+        z[k] = int(n)
+    else:
+        z.pop(k, None)
+    speichere(d)
+    journal(f"Zusatzgeräte {kz} Parzelle {p}: jetzt {n} ({wer})")
+
+
+def akt_zusatzgeraete(d, b, ich):
+    """Manager: Zusatzgeräte einer Parzelle setzen ({"sparte", "parzelle", "anzahl"}) – ohne Prüfung der verbundenen Geräte"""
+    kz, p = str(b.get("sparte") or ""), str(b.get("parzelle") or "")
+    if not p.isdigit():
+        raise Fehler("Parzelle fehlt.")
+    t = next((x for x in tarife_pruefen(d["tarife"]) if x["name"] == ((d.get("buchungen") or {}).get(kz) or {}).get(p)), None)
+    try:
+        n = int(b.get("anzahl") or 0)
+    except (TypeError, ValueError):
+        raise Fehler("Anzahl Zusatzgeräte: ganze Zahl.")
+    if n and (not t or not t.get("geraete")):
+        raise Fehler("Zusatzgeräte gibt es nur bei einem Tarif mit begrenzter Geräteanzahl.")
+    if not 0 <= n <= zusatz_platz(t):
+        raise Fehler(f"Im Tarif {t['name']} passen 0 bis {zusatz_platz(t)} Zusatzgeräte ins Netz (Netzmaske /{t['praefix']}).")
+    _zusatz_setzen(d, kz, p, n, ich)
+    return {"log": [f"✔ {kz} Parzelle {p}: {n} Zusatzgerät(e) – ans Gateway über „Tarife → Übertragen“."]}
+
+
 def mb_buchbar(d):
     """im Mitgliederbereich buchbare Tarife (Auswahl in den Einstellungen; leer = alle)"""
     wahl = mb_einstellungen(d)["tarife"]
@@ -523,10 +672,14 @@ def mb_daten(d, email):
                      "gesperrt": bool(gesp), "rechnungen": rechn, "offen": round(sum(float(x["brutto"] or 0) - float(x["bezahlt"] or 0) for x in rechn), 2),
                      "tickets": tk, "auftrag": offen_auftrag, "stoerungen": mb_stoerungen(d, e, kz), "antraege": antr, "rang": list(tarif_rang(akt_t)) if akt_t else None,
                      **({"tarif_laufzeit": laufzeit_text(akt_t.get("laufzeit", 0), akt_t.get("laufzeit_einheit", "tage")) if akt_t.get("laufzeit") else "unbegrenzt",
-                         "tarif_preis": akt_t.get("preis", 0), "tarif_down": akt_t["down"], "tarif_up": akt_t["up"], "tarif_geraete": akt_t.get("geraete", 0)} if akt_t else {})})
+                         "tarif_preis": akt_t.get("preis", 0), "tarif_down": akt_t["down"], "tarif_up": akt_t["up"], "tarif_geraete": akt_t.get("geraete", 0),
+                         "zusatz": zusatz_geraete(d, kz, p), "zusatz_platz": min(e["zusatz_max"], zusatz_platz(akt_t)),
+                         "geraete_erlaubt": geraete_im_tarif(d, akt_t, kz, p), "downgrade": downgrade_info(d, kz, p, e),
+                         "restwert": restwert(d, kz, p)} if akt_t else {}),
+                     "guthaben": guthaben(d, kz, p) if kz and p.isdigit() else 0})
     return {"mitglied": parz[0]["name"] if parz else "", "parzellen": parz, "tarife": tarife,
-            "erlaubt": {k: e[k] for k in ("tarifwechsel", "downgrade", "neubuchung", "verlaengern", "geraete", "zeige_rechnungen", "zeige_anfragen", "neue_anfrage", "zugangskarte", "profil", "personen", "geraete_trennen", "geraete_sperren")},
-            "profil": mb_profil(d, email),
+            "erlaubt": {k: e[k] for k in ("tarifwechsel", "downgrade", "neubuchung", "verlaengern", "geraete", "zeige_rechnungen", "zeige_anfragen", "neue_anfrage", "zugangskarte", "profil", "personen", "geraete_trennen", "geraete_sperren", "zusatzgeraete", "downgrade_freigabe")},
+            "zusatz_preis": e["zusatz_preis"], "profil": mb_profil(d, email),
             "modus": e["modus"], "hinweis": e["hinweis"], "titel": e["titel"], "kategorien": list(ticket_kategorien(d)),
             "stoerung_text": e["stoerung_text"] if e["stoerung_zeigen"] else "", "stoerung_farbe": e["stoerung_farbe"],
             "logo_verein": "/seitenbild/portal/logo" if seitenbild(d, "portal", "logo") else ""}
@@ -891,9 +1044,11 @@ def mb_buchen(d, email, b, basis):
     e = mb_einstellungen(d)
     mid, m, kz, p = _mb_parzelle(d, email, b.get("id"))
     art = b.get("art")
-    if art not in ("neu", "wechsel", "verlaengern"):
+    if art not in ("neu", "wechsel", "verlaengern", "zusatz"):
         raise Fehler("Unbekannte Aktion.")
     aktuell = ((d.get("buchungen") or {}).get(kz) or {}).get(p, "")
+    if art == "zusatz":
+        return _mb_zusatz(d, e, mid, m, kz, p, aktuell, b, basis)
     tarif = str(b.get("tarif") or (aktuell if art == "verlaengern" else ""))
     alle = {x["name"]: x for x in tarife_pruefen(d["tarife"])}
     t = alle.get(tarif)
@@ -920,17 +1075,24 @@ def mb_buchen(d, email, b, basis):
     beschr = {"neu": f"Buchung {tarif}", "wechsel": f"{'Upgrade' if upgrade else 'Downgrade'} {aktuell} → {tarif}", "verlaengern": f"Verlängerung {tarif}"}[art] + f" · {kz} Parzelle {p}"
     preis = geld(float(t.get("preis") or 0))
     antrag = {"art": art, "sparte": kz, "parzelle": int(p), "tarif": tarif, "tarif_alt": aktuell}
-    if art == "wechsel" and not upgrade:           # Downgrade: immer Freigabe im Ticketsystem
+    if art == "wechsel" and not upgrade:
+        downgrade_pruefen(d, kz, p, t, e)          # eine Stufe, Wartezeit, nicht zu viele Geräte
+    if art == "wechsel" and not upgrade and e["downgrade_freigabe"]:   # Downgrade mit Freigabe im Ticketsystem
         _tid, tk = _mb_ticket(d, mid, m, kz, p, f"Antrag: {beschr}", f"Antrag aus dem Mitgliederbereich: Wechsel von {aktuell} zu {tarif} ({preis}). "
                               "Bitte im Ticket freigeben oder ablehnen.", antrag=antrag)
         return {"ok": True, "text": f"Ihr Antrag {tk['nr']} auf Wechsel zu {tarif} ist beim Verein eingegangen. Ein Wechsel in einen kleineren Tarif muss freigegeben werden – Sie bekommen Bescheid."}
     if e["modus"] == "anfrage":
-        if upgrade:                                # Upgrade jederzeit: sofort buchen, Vorstand per Ticket informieren
-            akt_buchungen_speichern(d, kz, {p: tarif})
-            _tid, tk = _mb_ticket(d, mid, m, kz, p, beschr, f"Upgrade im Mitgliederbereich gebucht: {aktuell} → {tarif} ({preis}). Zur Info – bereits umgesetzt.", status="erledigt")
+        if art == "wechsel":                       # Upgrade jederzeit, Downgrade nach den Regeln: sofort buchen (neue Laufzeit), Vorstand per Ticket informieren
+            akt_buchungen_speichern(d, kz, {p: tarif})   # schreibt das Restguthaben des alten Tarifs gut
+            re_x = _wechsel_rechnung(d, kz, p, tarif, "Mitgliederbereich")
+            _tid, tk = _mb_ticket(d, mid, m, kz, p, beschr, f"{'Upgrade' if upgrade else 'Downgrade'} im Mitgliederbereich gebucht: {aktuell} → {tarif} ({preis}). "
+                                  "Zur Info – bereits umgesetzt, die Laufzeit beginnt neu.", status="erledigt")
             journal(f"Mitgliederbereich: {beschr} gebucht ({tk['nr']})")
-            _mb_mail(d, m, f"Tarif gewechselt: {tarif}", f"<p>Ihr Tarif für Parzelle {p} ist jetzt <b>{html_mod.escape(tarif)}</b> (vorher {html_mod.escape(aktuell)}).</p>")
-            return {"ok": True, "text": f"Erledigt – Ihr Tarif ist jetzt {tarif}. Die Änderung wird im WLAN vom Verein übernommen."}
+            _mb_mail(d, m, f"Tarif gewechselt: {tarif}", f"<p>Ihr Tarif für Parzelle {p} ist jetzt <b>{html_mod.escape(tarif)}</b> (vorher {html_mod.escape(aktuell)}). "
+                     "Die Laufzeit beginnt mit dem Wechsel neu.</p>")
+            rt = (f" Rechnung {re_x['nr']} über {geld(re_x['brutto'])} (Restguthaben angerechnet)." if re_x else "") + \
+                 (f" Verbleibendes Guthaben: {geld(guthaben(d, kz, p))}." if guthaben(d, kz, p) else "")
+            return {"ok": True, "text": f"Erledigt – Ihr Tarif ist jetzt {tarif}, die Laufzeit beginnt neu.{rt} Die Änderung wird im WLAN vom Verein übernommen."}
         _tid, tk = _mb_ticket(d, mid, m, kz, p, f"Antrag: {beschr}", f"Antrag aus dem Mitgliederbereich: {beschr} ({preis}). Bitte im Ticket freigeben oder ablehnen.", antrag=antrag)
         return {"ok": True, "text": f"Danke! Ihr Antrag {tk['nr']} ist beim Verein eingegangen. Sie bekommen Bescheid, sobald er freigegeben ist."}
     ref = "SN-" + secrets.token_hex(5).upper()
@@ -938,6 +1100,15 @@ def mb_buchen(d, email, b, basis):
          "email": m.get("email", ""), "name": name, "beschreibung": beschr, "status": "offen", "erstellt": time.strftime("%Y-%m-%d %H:%M")}
     if a["betrag"] <= 0:
         raise Fehler("Für diesen Tarif ist kein Preis hinterlegt – bitte beim Verein melden.")
+    if art == "wechsel":                           # Restguthaben des alten Tarifs und vorhandenes Guthaben anrechnen
+        a["angerechnet"] = min(a["betrag"], round(restwert(d, kz, p) + guthaben(d, kz, p), 2))
+        a["betrag"] = round(a["betrag"] - a["angerechnet"], 2)
+        if a["betrag"] <= 0:                       # vollständig durch Guthaben gedeckt: sofort buchen
+            akt_buchungen_speichern(d, kz, {p: tarif})
+            guthaben_buchen(d, kz, p, -a["angerechnet"], f"angerechnet auf {beschr}")
+            _mb_ticket(d, mid, m, kz, p, beschr, f"Im Mitgliederbereich gebucht, vollständig mit Guthaben verrechnet ({geld(a['angerechnet'])}).", status="erledigt")
+            return {"ok": True, "text": f"Erledigt – Ihr Tarif ist jetzt {tarif}, vollständig mit Ihrem Guthaben verrechnet. "
+                                        f"Verbleibendes Guthaben: {geld(guthaben(d, kz, p))}."}
     url = _link_erzeugen(d, e, ref, a, basis)
     z = zahlungsauftraege(d)
     z[ref] = a
@@ -945,6 +1116,57 @@ def mb_buchen(d, email, b, basis):
         z.pop(k, None)
     speichere(d)
     journal(f"Zahlungsauftrag {ref} angelegt: {beschr}, {geld(a['betrag'])}")
+    return {"ok": True, "url": url, "referenz": ref}
+
+
+def _mb_zusatz(d, e, mid, m, kz, p, aktuell, b, basis):
+    """Zusatzgeräte buchen oder reduzieren ({"art": "zusatz", "anzahl": neue Gesamtzahl}). Preis je Gerät und Jahr; mehr Geräte sofort
+    (Abrechnung mit der Jahresrechnung) bzw. über den Bezahldienst; weniger nur, wenn nicht mehr Geräte verbunden sind."""
+    if not e["zusatzgeraete"]:
+        raise Fehler("Zusatzgeräte sind hier nicht buchbar – bitte beim Verein melden.")
+    t = next((x for x in tarife_pruefen(d["tarife"]) if x["name"] == aktuell), None)
+    if not t:
+        raise Fehler("Bitte zuerst einen Tarif buchen.")
+    if not t.get("geraete"):
+        raise Fehler(f"Im Tarif {aktuell} sind beliebig viele Geräte erlaubt – Zusatzgeräte sind nicht nötig.")
+    try:
+        neu = int(b.get("anzahl"))
+    except (TypeError, ValueError):
+        raise Fehler("Bitte die Anzahl der Zusatzgeräte angeben.")
+    hoechst = min(e["zusatz_max"], zusatz_platz(t))
+    if not 0 <= neu <= hoechst:
+        raise Fehler(f"Im Tarif {aktuell} sind 0 bis {hoechst} Zusatzgeräte möglich.")
+    alt = zusatz_geraete(d, kz, p)
+    if neu == alt:
+        raise Fehler("Die Anzahl ist unverändert.")
+    preis = e["zusatz_preis"]
+    if neu < alt:
+        erlaubt = int(t["geraete"]) + neu
+        n = _geraete_zaehlen(d, kz, p)
+        if n > erlaubt:
+            raise Fehler(f"Zu viele Geräte: {n} sind verbunden, mit {neu} Zusatzgerät(en) sind {erlaubt} erlaubt. Bitte vorher {n - erlaubt} Gerät(e) sperren oder ausschalten.")
+        _zusatz_setzen(d, kz, p, neu, "Mitgliederbereich")
+        _mb_ticket(d, mid, m, kz, p, f"Zusatzgeräte {alt} → {neu} · {kz} Parzelle {p}", "Im Mitgliederbereich reduziert. Zur Info – bereits umgesetzt.", status="erledigt")
+        return {"ok": True, "text": f"Erledigt – Sie haben jetzt {neu} Zusatzgerät(e), insgesamt {erlaubt} Geräte."}
+    mehr = neu - alt
+    betrag = round(mehr * preis, 2)
+    beschr = f"{mehr} Zusatzgerät(e) ({alt} → {neu}) · {kz} Parzelle {p}"
+    if e["modus"] == "anfrage" or betrag <= 0:
+        _zusatz_setzen(d, kz, p, neu, "Mitgliederbereich")
+        _mb_ticket(d, mid, m, kz, p, f"Zusatzgeräte {alt} → {neu} · {kz} Parzelle {p}",
+                   f"Im Mitgliederbereich gebucht: {mehr} × {geld(preis)} im Jahr. Zur Info – bereits umgesetzt; Netz am Gateway über „Tarife“ übernehmen.", status="erledigt")
+        _mb_mail(d, m, "Zusatzgeräte gebucht", f"<p>Für Parzelle {p} sind jetzt <b>{neu} Zusatzgerät(e)</b> gebucht ({geld(preis)} je Gerät und Jahr, "
+                 "abgerechnet mit der Jahresrechnung).</p>")
+        return {"ok": True, "text": f"Erledigt – {neu} Zusatzgerät(e) gebucht, insgesamt {int(t['geraete']) + neu} Geräte. "
+                                    f"Je Gerät {geld(preis)} im Jahr (mit der Jahresrechnung). Die Änderung am WLAN übernimmt der Verein."}
+    ref = "SN-" + secrets.token_hex(5).upper()
+    a = {"mitglied": mid, "sparte": kz, "parzelle": int(p), "tarif": aktuell, "tarif_alt": aktuell, "art": "zusatz", "anzahl": neu, "betrag": betrag,
+         "email": m.get("email", ""), "name": f"{m.get('vorname', '')} {m.get('nachname', '')}".strip(), "beschreibung": beschr, "status": "offen",
+         "erstellt": time.strftime("%Y-%m-%d %H:%M")}
+    url = _link_erzeugen(d, e, ref, a, basis)
+    zahlungsauftraege(d)[ref] = a
+    speichere(d)
+    journal(f"Zahlungsauftrag {ref} angelegt: {beschr}, {geld(betrag)}")
     return {"ok": True, "url": url, "referenz": ref}
 
 
@@ -975,6 +1197,8 @@ def akt_tarif_antrag(d, b, ich, erlaubt=None):
             _verlaengern(d, kz, p, 1, f"Antrag {t['nr']} ({ich})")
         else:
             akt_buchungen_speichern(d, kz, {p: tarif})
+            if a["art"] == "wechsel" and mb_einstellungen(d)["modus"] == "anfrage":
+                _wechsel_rechnung(d, kz, p, tarif, ich)
         a.update(status="freigegeben", entschieden=time.strftime("%Y-%m-%d %H:%M"), von=ich)
         loesung = f"Freigegeben durch {ich}: {t.get('betreff', '').replace('Antrag: ', '')} – gebucht."
         _mb_mail(d, m, f"[{t['nr']}] Ihr Antrag ist freigegeben", f"<p>Ihr Antrag <b>{html_mod.escape(t['nr'])}</b> ({html_mod.escape(t.get('betreff', ''))}) ist freigegeben und gebucht.</p>")
@@ -1006,8 +1230,12 @@ def zahlungsauftrag_bezahlt(d, ref, betrag=None, quelle=""):
     kz, p = a["sparte"], str(a["parzelle"])
     if a["art"] == "verlaengern":
         _verlaengern(d, kz, p, 1, f"Bezahlt ({ref})")
+    elif a["art"] == "zusatz":
+        _zusatz_setzen(d, kz, p, int(a.get("anzahl") or 0), f"Bezahlt ({ref})")
     else:
         akt_buchungen_speichern(d, kz, {p: a["tarif"]})
+        if a.get("angerechnet"):
+            guthaben_buchen(d, kz, p, -float(a["angerechnet"]), f"angerechnet auf {a.get('beschreibung', '')} ({ref})")
     a.update(status="bezahlt", bezahlt_am=time.strftime("%Y-%m-%d %H:%M"), quelle=text_einzeilig(quelle, 80))
     speichere(d)
     journal(f"Zahlung bestätigt {ref}: {a['beschreibung']} ({geld(a['betrag'])}) – gebucht")
@@ -1145,11 +1373,13 @@ def _mb_beispiel(d, g):
     t = [{**_tarif_info(x), "rang": list(tarif_rang(x))} for x in tarife_pruefen(d["tarife"])][:3]
     return {"mitglied": "Erika Muster", "hinweis": g.get("hinweis", ""), "titel": g.get("titel", ""), "modus": "anfrage", "kategorien": ["Sonstiges"],
             "erlaubt": {"tarifwechsel": True, "downgrade": True, "neubuchung": True, "verlaengern": True, "geraete": True, "zeige_rechnungen": True,
-                        "zeige_anfragen": True, "neue_anfrage": True, "zugangskarte": True, "profil": True, "personen": True, "geraete_trennen": True, "geraete_sperren": True},
-            "profil": {"vorname": "Erika", "nachname": "Muster", "email": "erika@example.org", "telefon": "", "mobil": "0170 1234567", "haupt": True,
+                        "zeige_anfragen": True, "neue_anfrage": True, "zugangskarte": True, "profil": True, "personen": True, "geraete_trennen": True, "geraete_sperren": True, "zusatzgeraete": True, "downgrade_freigabe": False},
+            "zusatz_preis": 1.0, "profil": {"vorname": "Erika", "nachname": "Muster", "email": "erika@example.org", "telefon": "", "mobil": "0170 1234567", "haupt": True,
                        "parzellen": [f"{sp[1].get('name', sp[0])} · Parzelle 12"]},
             "tarife": t, "parzellen": [{"id": "x", "sparte": sp[0], "sparte_name": sp[1].get("name", sp[0]), "parzelle": "12", "sparte_logo": sl,
                                         "tarif": t[0]["name"] if t else "", "rang": t[0]["rang"] if t else None, "tarif_laufzeit": "unbegrenzt",
+                                        "tarif_geraete": t[0]["geraete"] if t else 0, "zusatz": 1, "zusatz_platz": 3, "geraete_erlaubt": (t[0]["geraete"] + 1) if t and t[0]["geraete"] else 0,
+                                        "downgrade": {"ziele": [], "ab": 0, "ab_text": ""},
                                         "laufzeit": None, "gesperrt": False, "offen": 0, "rechnungen": [{"id": "r", "nr": "RE-2026-0001", "datum": "2026-03-01", "brutto": 120, "status": "bezahlt"}],
                                         "tickets": [{"nr": "T-0001", "betreff": "WLAN langsam", "status": "geschlossen", "erstellt": "2026-05-02 18:10", "loesung": "Access Point neu gestartet"}],
                                         "auftrag": None, "antraege": [], "haupt": True,
@@ -1232,27 +1462,34 @@ function P(){return D.parzellen.find(p=>p.id==$("d_parz").value)||D.parzellen[0]
 function zeigen(){const p=P();if(!p){kopf("");return}WAHL=p.id;const lz=p.laufzeit;
  kopf(p.sparte_logo,p.sparte_name);
  stoerungZeigen("d_stoerung",p.stoerungen,D.stoerung_text,D.stoerung_farbe);
- $("d_tarif").innerHTML=p.tarif?`<div class="zeile"><div><div class="klein">Tarif</div><div class="wert">${esc(p.tarif)}</div></div>${lz?`<div><div class="klein">Laufzeit</div><div><b>${lz.aktiv?"bis "+esc(lz.ende):"abgelaufen am "+esc(lz.ende)}</b>${lz.aktiv?`<br><span class="klein">noch ${lz.rest_tage} Tag(e)</span>`:""}</div></div>`:`<div><div class="klein">Laufzeit</div><div><b>unbegrenzt</b></div></div>`}<div><div class="klein">Offen</div><div class="wert" style="font-size:18px">${eur(p.offen)}</div></div></div>${p.gesperrt?'<div class="gesperrt">Der WLAN-Zugang ist gerade gesperrt (Laufzeit abgelaufen) – mit einer Verlängerung wird er wieder freigegeben.</div>':""}`:'<p class="hint">Für diese Parzelle ist noch kein Tarif gebucht.</p>';
+ $("d_tarif").innerHTML=p.tarif?`<div class="zeile"><div><div class="klein">Tarif</div><div class="wert">${esc(p.tarif)}</div></div>${lz?`<div><div class="klein">Laufzeit</div><div><b>${lz.aktiv?"bis "+esc(lz.ende):"abgelaufen am "+esc(lz.ende)}</b>${lz.aktiv?`<br><span class="klein">noch ${lz.rest_tage} Tag(e)</span>`:""}</div></div>`:`<div><div class="klein">Laufzeit</div><div><b>unbegrenzt</b></div></div>`}<div><div class="klein">Geräte</div><div><b>${p.tarif_geraete?esc(p.geraete_erlaubt):"unbegrenzt"}</b>${p.zusatz?`<br><span class="klein">${esc(p.tarif_geraete)} + ${esc(p.zusatz)} Zusatz</span>`:""}</div></div>${p.guthaben?`<div><div class="klein">Guthaben</div><div class="wert" style="font-size:18px">${eur(p.guthaben)}</div></div>`:""}<div><div class="klein">Offen</div><div class="wert" style="font-size:18px">${eur(p.offen)}</div></div></div>${p.gesperrt?'<div class="gesperrt">Der WLAN-Zugang ist gerade gesperrt (Laufzeit abgelaufen) – mit einer Verlängerung wird er wieder freigegeben.</div>':""}`:'<p class="hint">Für diese Parzelle ist noch kein Tarif gebucht.</p>';
  const e=D.erlaubt,hoeher=(t)=>p.rang&&(t.rang[0]>p.rang[0]||t.rang[0]==p.rang[0]&&(t.rang[1]>p.rang[1]||t.rang[1]==p.rang[1]&&t.rang[2]>p.rang[2]));
  const ups=D.tarife.filter(t=>t.name!=p.tarif&&hoeher(t)),downs=D.tarife.filter(t=>t.name!=p.tarif&&!hoeher(t));let akt=[];
- if(!p.tarif&&e.neubuchung&&D.tarife.length)akt.push(["neu","Tarif buchen"]);if(p.tarif&&e.tarifwechsel&&ups.length)akt.push(["upgrade","⬆ Upgrade"]);if(p.tarif&&e.downgrade&&downs.length&&!p.antraege.length)akt.push(["downgrade","⬇ Kleinerer Tarif"]);
+ if(!p.tarif&&e.neubuchung&&D.tarife.length)akt.push(["neu","Tarif buchen"]);if(p.tarif&&e.tarifwechsel&&ups.length)akt.push(["upgrade","⬆ Upgrade"]);const dg=p.downgrade||{ziele:[]};if(p.tarif&&e.downgrade&&dg.ziele.length&&!p.antraege.length&&!dg.ab_text)akt.push(["downgrade","⬇ Kleinerer Tarif"]);
+ if(p.tarif&&e.zusatzgeraete&&p.tarif_geraete&&(p.zusatz_platz>0||p.zusatz>0))akt.push(["zusatz","＋ Zusatzgeräte"]);
  if(p.tarif&&e.verlaengern&&p.tarif_laufzeit&&p.tarif_laufzeit!="unbegrenzt"&&!p.antraege.length)akt.push(["verlaengern","Laufzeit verlängern ("+p.tarif_laufzeit+")"]);
  $("d_wechsel").innerHTML=(p.auftrag?`<p class="hint">Offener Zahlungsauftrag ${esc(p.auftrag.referenz)} (${esc(p.auftrag.tarif)}, ${eur(p.auftrag.betrag)}) – wird gebucht, sobald die Zahlung bestätigt ist.</p>`:"")
   +p.antraege.map(a=>`<p class="hint">⏳ Antrag ${esc(a.nr)} vom ${esc(a.erstellt.slice(0,10))}: ${{wechsel:"Wechsel zu",neu:"Buchung",verlaengern:"Verlängerung"}[a.art]||""} ${esc(a.tarif)} – wartet auf Freigabe durch den Verein.</p>`).join("")
+  +(p.tarif&&e.downgrade&&dg.ziele.length&&dg.ab_text?`<p class="hint">⬇ Ein kleinerer Tarif (${esc(dg.ziele[0])}) ist ab ${esc(dg.ab_text)} möglich – ${esc(dg.monate)} Monate nach dem letzten Tarifwechsel.</p>`:"")
   +(akt.length?`<div class="knoepfe">${akt.map(([a,t])=>`<button class="k2" onclick="waehlen('${a}')">${esc(t)}</button>`).join("")}</div><div id="d_auswahl"></div>`:"");
  $("s_rechnungen").style.display=e.zeige_rechnungen?"block":"none";$("d_tickets").style.display=$("h_tickets").style.display=e.zeige_anfragen?"":"none";$("s_neu").style.display=e.neue_anfrage?"":"none";$("b_karte").style.display=e.zugangskarte?"":"none";
  $("d_rechnungen").innerHTML=!e.zeige_rechnungen?"":p.rechnungen.length?'<table class="tabelle"><tr><th>Nr.</th><th>Datum</th><th>Betrag</th><th>Status</th><th></th></tr>'+p.rechnungen.map(r=>`<tr><td>${esc(r.nr)}</td><td>${esc(r.datum)}</td><td>${eur(r.brutto)}</td><td>${esc(r.status)}</td><td><a href="/mein/rechnung?id=${encodeURIComponent(r.id)}" target="_blank" rel="noopener">PDF</a></td></tr>`).join("")+"</table>":'<p class="hint">Noch keine Rechnungen.</p>';
  $("d_tickets").innerHTML=p.tickets.length?p.tickets.map(t=>`<div class="antwort"><b>${esc(t.nr)}</b> · ${esc(t.status)} · ${esc(t.erstellt)}<br>${esc(t.betreff)}${t.loesung?"<br><small>Lösung: "+esc(t.loesung)+"</small>":""}</div>`).join(""):'<p class="hint">Noch keine Tickets.</p>';
  personenZeigen(p);$("s_geraete").style.display=e.geraete||e.zugangskarte?"block":"none";$("d_trennen").innerHTML="";if(e.geraete)geraete();else{$("d_geraete").innerHTML="";$("b_trennen").style.display="none"}}
-function waehlen(wie){const p=P();const hoeher=(t)=>p.rang&&(t.rang[0]>p.rang[0]||t.rang[0]==p.rang[0]&&(t.rang[1]>p.rang[1]||t.rang[1]==p.rang[1]&&t.rang[2]>p.rang[2]));
+function waehlen(wie){if(wie=="zusatz")return zusatzZeigen();const p=P();const hoeher=(t)=>p.rang&&(t.rang[0]>p.rang[0]||t.rang[0]==p.rang[0]&&(t.rang[1]>p.rang[1]||t.rang[1]==p.rang[1]&&t.rang[2]>p.rang[2]));
  const art=wie=="upgrade"||wie=="downgrade"?"wechsel":wie;
- const liste=wie=="verlaengern"?[{name:p.tarif,laufzeit:p.tarif_laufzeit,preis:p.tarif_preis,down:p.tarif_down,up:p.tarif_up,geraete:p.tarif_geraete}]:wie=="upgrade"?D.tarife.filter(t=>t.name!=p.tarif&&hoeher(t)):wie=="downgrade"?D.tarife.filter(t=>t.name!=p.tarif&&!hoeher(t)):D.tarife;
- const knopf=wie=="downgrade"?"Antrag stellen (Freigabe durch den Verein)":D.modus=="bezahldienst"?"Weiter zur Bezahlung":wie=="upgrade"?"Jetzt wechseln":"Antrag an den Verein senden";
- const hinweis=wie=="upgrade"?"Ein Upgrade ist jederzeit möglich"+(D.modus=="bezahldienst"?" – nach der Bezahlung sofort gebucht.":" und wird sofort gebucht."):wie=="downgrade"?"Ein Wechsel in einen kleineren Tarif muss vom Verein freigegeben werden. Sie bekommen per E-Mail Bescheid.":"";
+ const liste=wie=="verlaengern"?[{name:p.tarif,laufzeit:p.tarif_laufzeit,preis:p.tarif_preis,down:p.tarif_down,up:p.tarif_up,geraete:p.tarif_geraete}]:wie=="upgrade"?D.tarife.filter(t=>t.name!=p.tarif&&hoeher(t)):wie=="downgrade"?D.tarife.filter(t=>(p.downgrade||{ziele:[]}).ziele.includes(t.name)):D.tarife;
+ const knopf=wie=="downgrade"&&D.erlaubt.downgrade_freigabe?"Antrag stellen (Freigabe durch den Verein)":D.modus=="bezahldienst"?"Weiter zur Bezahlung":wie=="upgrade"||wie=="downgrade"?"Jetzt wechseln":"Antrag an den Verein senden";
+ const hinweis=wie=="upgrade"?"Ein Upgrade ist jederzeit möglich"+(D.modus=="bezahldienst"?" – nach der Bezahlung sofort gebucht.":" und wird sofort gebucht.")+" Die Laufzeit beginnt mit dem Wechsel neu."+(p.restwert?" Restguthaben von etwa "+eur(p.restwert)+" aus der laufenden Laufzeit wird angerechnet.":""):wie=="downgrade"?"Ein kleinerer Tarif geht nur eine Stufe nach unten; die Laufzeit beginnt neu. Es dürfen nicht mehr Geräte verbunden sein, als der neue Tarif erlaubt."+(p.restwert?" Restguthaben von etwa "+eur(p.restwert)+" wird angerechnet.":"")+(D.erlaubt.downgrade_freigabe?" Der Verein muss den Wechsel freigeben – Sie bekommen per E-Mail Bescheid.":""):"";
  $("d_auswahl").innerHTML=(hinweis?`<p class="hint" style="margin:10px 0 0">${esc(hinweis)}</p>`:"")+`<div class="tarife">${liste.map(t=>`<div class="tarif" data-t="${esc(t.name)}"><b>${esc(t.name)}</b><br><span class="klein">${t.down} / ${t.up} Mbit/s · ${t.geraete?t.geraete+" Geräte":"Geräte unbegrenzt"}<br>Laufzeit: ${esc(t.laufzeit)}</span><br><b>${eur(t.preis)}</b></div>`).join("")}</div>
  <button class="los" id="d_los" disabled>${esc(knopf)}</button>`;
- let wahl=wie=="verlaengern"?p.tarif:null;document.querySelectorAll(".tarif").forEach(x=>{if(x.dataset.t==wahl)x.classList.add("akt");x.onclick=()=>{wahl=x.dataset.t;document.querySelectorAll(".tarif").forEach(y=>y.classList.toggle("akt",y===x));$("d_los").disabled=false}});
+ let wahl=wie=="verlaengern"?p.tarif:null;document.querySelectorAll(".tarif").forEach(x=>{if(x.dataset.t==wahl)x.classList.add("akt");x.onclick=()=>{wahl=x.dataset.t;document.querySelectorAll(".tarif").forEach(y=>y.classList.toggle("akt",y===x));$("d_los").disabled=false;if(wie=="downgrade")zuViele(liste.find(t=>t.name==wahl))}});
  $("d_los").disabled=!wahl;$("d_los").onclick=async()=>{try{$("d_los").disabled=true;const d=await post("/mein/buchen",{id:p.id,art,tarif:wahl});if(d.url){location.href=d.url;return}msg("m_daten",d.text,true);laden()}catch(e){msg("m_daten",e.message);$("d_los").disabled=false}}}
+function zuViele(t){const p=P(),erl=t&&t.geraete?t.geraete+(p.zusatz||0):0,n=GER?GER.anzahl:0;const w=$("d_warnung")||$("d_los").insertAdjacentElement("beforebegin",Object.assign(document.createElement("div"),{id:"d_warnung"}));
+ if(erl&&n>erl){w.innerHTML=`<div class="gesperrt">⚠ Zu viele Geräte: ${n} sind verbunden, ${esc(t.name)} erlaubt ${erl}. Ein Wechsel ist erst möglich, wenn Sie ${n-erl} Gerät(e) sperren oder ausschalten.${D.erlaubt.geraete_sperren?' <button class="k2" onclick="trennenZeigen(true);$(\'s_geraete\').scrollIntoView({behavior:\'smooth\'})">⛔ Gerät sperren</button>':""}</div>`;$("d_los").disabled=true}else w.innerHTML=""}
+function zusatzZeigen(){const p=P(),max=Math.max(p.zusatz_platz||0,p.zusatz||0),preis=D.zusatz_preis||0;let o="";for(let i=0;i<=max;i++)o+=`<option value="${i}"${i==p.zusatz?" selected":""}>${i} Zusatzgerät${i==1?"":"e"} – insgesamt ${p.tarif_geraete+i} Geräte${i?" · "+eur(i*preis)+" im Jahr":""}</option>`;
+ $("d_auswahl").innerHTML=`<p class="hint" style="margin:10px 0 0">Mehr Geräte als im Tarif ${esc(p.tarif)} (${esc(p.tarif_geraete)})? Jedes Zusatzgerät kostet ${eur(preis)} im Jahr${D.modus=="bezahldienst"?" und wird gleich bezahlt":" und wird mit der Jahresrechnung abgerechnet"}. Weniger geht, wenn nicht mehr Geräte verbunden sind.</p><select id="z_anzahl" style="max-width:420px">${o}</select><button class="los" id="z_los">${D.modus=="bezahldienst"?"Weiter":"Übernehmen"}</button>`;
+ $("z_los").onclick=async()=>{try{$("z_los").disabled=true;const d=await post("/mein/buchen",{id:p.id,art:"zusatz",anzahl:+$("z_anzahl").value});if(d.url){location.href=d.url;return}msg("m_daten",d.text,true);laden()}catch(e){msg("m_daten",e.message);$("z_los").disabled=false}}}
 async function geraete(){const p=P();$("d_geraete").textContent="…";try{GER=await post("/mein/geraete",{id:p.id})}catch(e){if(VORSCHAU)GER={tarif:p.tarif,anzahl:2,max:5,geraete:[{nr:1,name:"Handy",art:"WLAN",ref:"a"},{nr:2,name:"Laptop",art:"WLAN",ref:"b"}],gesperrt:[{ref:"c",name:"Tablet",zeit:"18.10.2026 17:05"}]};else{$("d_geraete").textContent=e.message;return}}
  const d=GER,voll=d.max&&d.anzahl>=d.max;$("d_verbrauch").innerHTML=`<div class="wert" style="font-size:18px">${d.tarif?esc(d.tarif)+": ":""}${d.max?d.anzahl+" von "+d.max+" Geräten":d.anzahl+" Geräte (unbegrenzt)"}</div>`+(d.max?`<div class="balken${voll?" voll":""}"><i style="width:${Math.min(100,Math.round(d.anzahl/d.max*100))}%"></i></div>`:"")+(voll?'<p class="hint" style="color:#b42318">Alle Plätze belegt – trennen Sie ein Gerät oder wechseln Sie in einen größeren Tarif.</p>':"");
  $("d_geraete").innerHTML=d.geraete.length?d.geraete.map(g=>`<div class="geraet"><span class="nr">Gerät ${esc(g.nr)}</span><div style="flex:1"><b>${esc(g.name)}</b>${g.art?`<br><span class="klein">${esc(g.art)}</span>`:""}</div></div>`).join(""):`<p class="hint">${esc(d.fehler||"Gerade ist kein Gerät angemeldet.")}</p>`;
