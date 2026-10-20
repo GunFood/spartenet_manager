@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Standard: nur HTTPS. Unverschlüsseltes HTTP ist erlaubt, damit der Manager im eigenen Netz
-  (z. B. http://192.168.1.10:8080) erreichbar ist – die App warnt bei http:// sichtbar.
-  Wer nur HTTPS nutzt, setzt cleartextTrafficPermitted auf "false".
+  Nur HTTPS: die Mitglieder-App spricht ausschließlich mit https://manager.wlan-im-garten.de.
+  Unverschlüsseltes HTTP ist verboten, vertraut wird nur den System-Zertifikaten (keine vom Nutzer installierten CAs).
 -->
 <network-security-config>
-    <base-config cleartextTrafficPermitted="true">
+    <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>

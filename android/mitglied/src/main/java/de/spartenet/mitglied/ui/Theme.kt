@@ -34,7 +34,16 @@ private val Dunkel = darkColorScheme(
     surface = Color(0xFF111318),
 )
 
+/** ansicht: "system", "hell" oder "dunkel" – Symbole wie im Manager: ◐ System, ☀ Hell, ☾ Dunkel */
 @Composable
-fun MitgliedTheme(inhalt: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = if (isSystemInDarkTheme()) Dunkel else Hell, content = inhalt)
+fun MitgliedTheme(ansicht: String = "system", inhalt: @Composable () -> Unit) {
+    val dunkel = when (ansicht) {
+        "hell" -> false
+        "dunkel" -> true
+        else -> isSystemInDarkTheme()
+    }
+    MaterialTheme(colorScheme = if (dunkel) Dunkel else Hell, content = inhalt)
 }
+
+/** Symbol und Text der Ansicht – wie der Umschalter im Manager */
+val ANSICHTEN = listOf(Triple("system", "◐", "System"), Triple("hell", "☀", "Hell"), Triple("dunkel", "☾", "Dunkel"))

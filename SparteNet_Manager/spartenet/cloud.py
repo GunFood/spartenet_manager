@@ -130,6 +130,13 @@ class Gateway:
             raise Fehler(f"Klassische Schnittstelle über die Cloud nicht verfügbar ({code}).")
         return d.get("data", [])
 
+    def legacy_cmd(self, pfad, body):
+        """Befehl an die klassische Schnittstelle (z. B. cmd/stamgr block-sta) – Fehler mit verständlichem Text"""
+        code, d = http("POST", f"{self.leg_base}/{pfad.lstrip('/')}", self.key, body)
+        if code >= 400:
+            raise Fehler((schreibfehler(code, "POST") or f"Das Gateway hat den Befehl abgelehnt ({code}).") + f" (POST {pfad})")
+        return d.get("data", []) if isinstance(d, dict) else []
+
     def legacy_post(self, pfad, body):
         code, d = http("POST", f"{self.leg_base}/{pfad.lstrip('/')}", self.key, body)
         if code >= 400 or not isinstance(d, dict):
