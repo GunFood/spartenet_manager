@@ -129,7 +129,7 @@ fun Uebersicht(speicher: Speicher, token: String, ansicht: String, onAnsicht: (S
     var wahl by remember { mutableStateOf<String?>(null) }
     var bereich by remember { mutableStateOf(Bereich.START) }
     var abmeldenFragen by remember { mutableStateOf(false) }
-    var dialog by remember { mutableStateOf<String?>(null) }        // "upgrade", "downgrade", "neu", "verlaengern", "ticket"
+    var dialog by remember { mutableStateOf<String?>(null) }        // "upgrade", "downgrade", "neu", "verlaengern", "zusatz", "ticket"
     var beschaeftigt by remember { mutableStateOf(false) }
 
     fun melden(text: String) {
@@ -319,6 +319,20 @@ fun Uebersicht(speicher: Speicher, token: String, ansicht: String, onAnsicht: (S
                                 laden()
                             }
                         }
+                        "zusatz" -> ZusatzDialog(d, p, onAbbrechen = { dialog = null }) { anzahl ->
+                            aktion {
+                                val r = api.post("/mein/buchen", JSONObject().put("id", p.s("id")).put("art", "zusatz").put("anzahl", anzahl))
+                                dialog = null
+                                val url = r.s("url")
+                                if (url.isNotEmpty()) {
+                                    oeffnen(ctx, url)
+                                    melden("Bezahlseite geöffnet – nach der Zahlung hier aktualisieren.")
+                                } else {
+                                    melden(r.s("text"))
+                                }
+                                laden()
+                            }
+                        }
                         else -> TarifDialog(d, p, wie, onAbbrechen = { dialog = null }) { art, name ->
                             aktion {
                                 val r = api.post("/mein/buchen", JSONObject().put("id", p.s("id")).put("art", art).put("tarif", name))
@@ -441,6 +455,8 @@ private fun TarifKarte(d: JSONObject, p: JSONObject, erlaubt: JSONObject, onWahl
                 } else {
                     Wert("Laufzeit", "unbegrenzt")
                 }
+                val tg = p.i("tarif_geraete")
+                Wert("Geräte", if (tg > 0) "${p.i("geraete_erlaubt")}" else "unbegrenzt", if (p.i("zusatz") > 0) "$tg + ${p.i("zusatz")} Zusatz" else "")
                 Wert("Offen", geld(p.d("offen")))
             }
             if (p.b("gesperrt")) Hinweis("Der WLAN-Zugang ist gerade gesperrt (Laufzeit abgelaufen) – mit einer Verlängerung wird er wieder freigegeben.", fehler = true)
@@ -455,11 +471,17 @@ private fun TarifKarte(d: JSONObject, p: JSONObject, erlaubt: JSONObject, onWahl
         }
         val tarife = d.liste("tarife")
         val ups = tarife.filter { it.s("name") != tarif && hoeher(it, p) }
-        val downs = tarife.filter { it.s("name") != tarif && !hoeher(it, p) }
+        // Downgrade nur eine Stufe nach unten und erst nach der Wartezeit (Regeln im Manager)
+        val dg = p.o("downgrade") ?: JSONObject()
+        val downs = tarife.filter { it.s("name") in dg.texte("ziele") }
+        if (tarif.isNotEmpty() && erlaubt.b("downgrade") && downs.isNotEmpty() && dg.s("ab_text").isNotEmpty()) {
+            Hinweis("⬇ Ein kleinerer Tarif (${downs.first().s("name")}) ist ab ${dg.s("ab_text")} möglich – ${dg.i("monate")} Monate nach dem letzten Tarifwechsel.")
+        }
         val knoepfe = buildList {
             if (tarif.isEmpty() && erlaubt.b("neubuchung") && tarife.isNotEmpty()) add("neu" to "Tarif buchen")
             if (tarif.isNotEmpty() && erlaubt.b("tarifwechsel") && ups.isNotEmpty()) add("upgrade" to "⬆ Upgrade")
-            if (tarif.isNotEmpty() && erlaubt.b("downgrade") && downs.isNotEmpty() && antraege.isEmpty()) add("downgrade" to "⬇ Kleinerer Tarif")
+            if (tarif.isNotEmpty() && erlaubt.b("downgrade") && downs.isNotEmpty() && antraege.isEmpty() && dg.s("ab_text").isEmpty()) add("downgrade" to "⬇ Kleinerer Tarif")
+            if (tarif.isNotEmpty() && erlaubt.b("zusatzgeraete") && p.i("tarif_geraete") > 0 && (p.i("zusatz_platz") > 0 || p.i("zusatz") > 0)) add("zusatz" to "＋ Zusatzgeräte")
             val lzText = p.s("tarif_laufzeit")
             if (tarif.isNotEmpty() && erlaubt.b("verlaengern") && lzText.isNotEmpty() && lzText != "unbegrenzt" && antraege.isEmpty()) add("verlaengern" to "Verlängern ($lzText)")
         }
@@ -680,20 +702,23 @@ private fun TarifDialog(d: JSONObject, p: JSONObject, wie: String, onAbbrechen: 
                 .put("geraete", p.i("tarif_geraete")).put("laufzeit", p.s("tarif_laufzeit"))
         )
         "upgrade" -> d.liste("tarife").filter { it.s("name") != tarif && hoeher(it, p) }
-        "downgrade" -> d.liste("tarife").filter { it.s("name") != tarif && !hoeher(it, p) }
+        "downgrade" -> d.liste("tarife").filter { it.s("name") in (p.o("downgrade") ?: JSONObject()).texte("ziele") }
         else -> d.liste("tarife")
     }
     var gewaehlt by remember { mutableStateOf(if (wie == "verlaengern") tarif else null) }
     val titel = when (wie) { "upgrade" -> "Upgrade"; "downgrade" -> "Kleinerer Tarif"; "verlaengern" -> "Laufzeit verlängern"; else -> "Tarif buchen" }
     val hinweis = when (wie) {
-        "upgrade" -> "Ein Upgrade ist jederzeit möglich" + if (bezahlen) " – nach der Bezahlung sofort gebucht." else " und wird sofort gebucht."
-        "downgrade" -> "Ein Wechsel in einen kleineren Tarif muss vom Verein freigegeben werden. Sie bekommen per E-Mail Bescheid."
+        "upgrade" -> "Ein Upgrade ist jederzeit möglich" + (if (bezahlen) " – nach der Bezahlung sofort gebucht." else " und wird sofort gebucht.") +
+            " Die Laufzeit beginnt mit dem Wechsel neu."
+        "downgrade" -> "Ein kleinerer Tarif geht nur eine Stufe nach unten; die Laufzeit beginnt neu. Es dürfen nicht mehr Geräte verbunden sein, " +
+            "als der neue Tarif erlaubt – sonst bitte vorher Geräte sperren oder ausschalten." +
+            if (d.o("erlaubt")?.b("downgrade_freigabe") == true) " Der Verein muss den Wechsel freigeben." else ""
         else -> if (bezahlen) "Sie werden zur Bezahlung weitergeleitet; gebucht wird, sobald die Zahlung bestätigt ist." else "Ihr Antrag geht an den Verein und wird nach der Freigabe gebucht."
     }
     val knopf = when {
-        wie == "downgrade" -> "Antrag stellen"
+        wie == "downgrade" && d.o("erlaubt")?.b("downgrade_freigabe") == true -> "Antrag stellen"
         bezahlen -> "Weiter zur Bezahlung"
-        wie == "upgrade" -> "Jetzt wechseln"
+        wie == "upgrade" || wie == "downgrade" -> "Jetzt wechseln"
         else -> "Antrag senden"
     }
     AlertDialog(
@@ -724,6 +749,39 @@ private fun TarifDialog(d: JSONObject, p: JSONObject, wie: String, onAbbrechen: 
             }
         },
         confirmButton = { TextButton(onClick = { gewaehlt?.let { onBestaetigen(if (wie == "upgrade" || wie == "downgrade") "wechsel" else wie, it) } }, enabled = gewaehlt != null) { Text(knopf) } },
+        dismissButton = { TextButton(onClick = onAbbrechen) { Text("Abbrechen") } },
+    )
+}
+
+/** Zusatzgeräte: neue Gesamtzahl wählen (Preis je Gerät und Jahr) */
+@Composable
+private fun ZusatzDialog(d: JSONObject, p: JSONObject, onAbbrechen: () -> Unit, onBestaetigen: (Int) -> Unit) {
+    val jetzt = p.i("zusatz")
+    val max = maxOf(p.i("zusatz_platz"), jetzt)
+    val preis = d.d("zusatz_preis")
+    val basis = p.i("tarif_geraete")
+    val bezahlen = d.s("modus") == "bezahldienst"
+    var gewaehlt by remember { mutableStateOf(jetzt) }
+    AlertDialog(
+        onDismissRequest = onAbbrechen,
+        title = { Text("Zusatzgeräte") },
+        text = {
+            Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
+                Text(
+                    "Mehr Geräte als im Tarif ${p.s("tarif")} ($basis)? Jedes Zusatzgerät kostet ${geld(preis)} im Jahr" +
+                        (if (bezahlen) " und wird gleich bezahlt." else " und wird mit der Jahresrechnung abgerechnet.") +
+                        " Weniger geht, wenn nicht mehr Geräte verbunden sind.",
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                (0..max).forEach { n ->
+                    Row(Modifier.fillMaxWidth().clickable { gewaehlt = n }.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = gewaehlt == n, onClick = { gewaehlt = n })
+                        Text("$n Zusatzgerät" + (if (n == 1) "" else "e") + " – insgesamt ${basis + n}" + if (n > 0) " · ${geld(n * preis)} im Jahr" else "")
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onBestaetigen(gewaehlt) }, enabled = gewaehlt != jetzt) { Text(if (bezahlen && gewaehlt > jetzt) "Weiter zur Bezahlung" else "Übernehmen") } },
         dismissButton = { TextButton(onClick = onAbbrechen) { Text("Abbrechen") } },
     )
 }

@@ -131,7 +131,9 @@ def akt_rechnungslauf(d, b, ich):
             if not m:
                 ohne.append(f"{kz} {p}")
                 continue
-            neu.append({"sparte": kz, "parzelle": int(p), "tarif": tarif, "preis": preise.get(tarif, 0), "mitglied": mid,
+            zg = zusatz_geraete(d, kz, p)
+            neu.append({"sparte": kz, "parzelle": int(p), "tarif": tarif, "preis": round(preise.get(tarif, 0) + zg * zusatz_preis(d), 2), "mitglied": mid,
+                        "tarif_preis": preise.get(tarif, 0), "zusatz": zg, "zusatz_preis": zusatz_preis(d),
                         "name": f"{m.get('vorname', '')} {m.get('nachname', '')}".strip(), "email": m.get("email", "")})
     summe = sum(x["preis"] for x in neu)
     log = [f"{'Vorschau: ' if not b.get('ausfuehren') else ''}{len(neu)} Rechnung(en) für {jahr} über zusammen {geld(summe)}"
@@ -148,7 +150,10 @@ def akt_rechnungslauf(d, b, ich):
         rid = secrets.token_hex(6)
         r["liste"][rid] = {"nr": _neue_nummer(d, jahr), "jahr": jahr, "datum": heute, "faellig": faellig, "mitglied": x["mitglied"], "name": x["name"],
                            "email": x["email"], "sparte": x["sparte"], "sparte_name": namen.get(x["sparte"], x["sparte"]), "parzelle": x["parzelle"],
-                           "tarif": x["tarif"], "positionen": [{"text": f"WLAN-Tarif „{x['tarif']}“, Parzelle {x['parzelle']}, Jahr {jahr}", "menge": 1, "einzel": brutto, "gesamt": brutto}],
+                           "tarif": x["tarif"], "positionen": [{"text": f"WLAN-Tarif „{x['tarif']}“, Parzelle {x['parzelle']}, Jahr {jahr}", "menge": 1,
+                                                                "einzel": round(x["tarif_preis"], 2), "gesamt": round(x["tarif_preis"], 2)}]
+                           + ([{"text": f"Zusätzliche Endgeräte, Parzelle {x['parzelle']}, Jahr {jahr}", "menge": x["zusatz"], "einzel": x["zusatz_preis"],
+                                "gesamt": round(x["zusatz"] * x["zusatz_preis"], 2)}] if x["zusatz"] else []),
                            "netto": netto, "ust": ust, "ust_satz": 0 if e["kleinunternehmer"] else e["ust_satz"], "brutto": brutto, "bezahlt": 0.0,
                            "status": "offen", "zahlungen": [], "erstellt": time.strftime("%Y-%m-%d %H:%M"), "von": ich}
     speichere(d)

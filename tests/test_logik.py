@@ -555,7 +555,7 @@ class Mitgliederbereich(unittest.TestCase):
         roh = json.dumps(g)
         for geheim in ("10.", "aa:bb", "dd:ee:ff", '"ip"', '"mac"'):                                  # keine IP- oder MAC-Adresse
             self.assertNotIn(geheim, roh)
-        self.assertEqual((g["anzahl"], g["max"], g["tarif"]), (2, 5, "Basic"))                           # „Basic: 2 von 5“
+        self.assertEqual((g["anzahl"], g["max"], g["tarif"]), (2, 3, "Basic"))                           # „Basic: 2 von 3“
         self.assertNotEqual(g["geraete"][0]["ref"], S._geraet_ref(kz, "13", "aa:bb:cc:00:11:22"))      # Kennung hängt an der Parzelle
         with self.assertRaises(S.Fehler):                                                               # Trennen nur, wenn eingeschaltet
             S.mb_geraet_trennen(d, kz, "12", {"ref": g["geraete"][0]["ref"], "bestaetigt": True})
@@ -597,6 +597,58 @@ class Mitgliederbereich(unittest.TestCase):
         roh = b'{"referenz":"SN-X"}'
         with self.assertRaises(S.Fehler):                     # Signatur stimmt, Auftrag gibt es nicht
             S.mb_webhook(d, roh, "sha256=" + hmac.new(b"g", roh, hashlib.sha256).hexdigest())
+
+
+class TarifRegeln(unittest.TestCase):
+    def test_downgrade_und_zusatzgeraete(self):
+        """Downgrade nur eine Stufe, frühestens nach 3 Monaten, nicht mit zu vielen Geräten; Zusatzgeräte erhöhen die Grenze"""
+        from unittest import mock
+        d = frisch()
+        kz = S.plan_aktiv(d)["sparten"][0]["kz"]
+        d.setdefault("buchungen", {}).setdefault(kz, {})["12"] = "Max"
+        d["tarif_seit"] = {f"{kz}-12": time.time() - 10 * 86400}                   # vor 10 Tagen auf Max gewechselt
+        alle = {t["name"]: t for t in S.tarife_pruefen(d["tarife"])}
+        info = S.downgrade_info(d, kz, "12")
+        self.assertEqual(info["ziele"], ["Plus"])                                   # nur eine Stufe nach unten
+        self.assertTrue(info["ab_text"])
+        with self.assertRaises(S.Fehler) as f:
+            S.downgrade_pruefen(d, kz, "12", alle["Basic"])
+        self.assertIn("eine Stufe", str(f.exception))
+        with self.assertRaises(S.Fehler) as f:
+            S.downgrade_pruefen(d, kz, "12", alle["Plus"])
+        self.assertIn("frühestens", str(f.exception))
+        d["tarif_seit"][f"{kz}-12"] = time.time() - 100 * 86400                    # 3 Monate vorbei
+        modul = S.downgrade_pruefen.__globals__
+        with mock.patch.dict(modul, {"_geraete_roh": lambda d, kz, p: ([{}] * 6, "")}):
+            with self.assertRaises(S.Fehler) as f:                                  # 6 Geräte verbunden, Plus erlaubt 5
+                S.downgrade_pruefen(d, kz, "12", alle["Plus"])
+            self.assertIn("1 Gerät(e) sperren", str(f.exception))
+            d["zusatzgeraete"] = {f"{kz}-12": 1}                                    # mit einem Zusatzgerät passt es
+            S.downgrade_pruefen(d, kz, "12", alle["Plus"])
+            self.assertEqual(S.geraete_im_tarif(d, alle["Plus"], kz, "12"), 6)
+        # Tarifwechsel merkt sich den Zeitpunkt, Kündigung entfernt die Zusatzgeräte
+        S._tarif_ereignis("buchung", {"sparte": kz, "parzelle": 12, "tarif": "Plus"}, d)
+        self.assertGreater(S.tarif_seit(d, kz, "12"), time.time() - 5)
+        S._tarif_ereignis("kuendigung", {"sparte": kz, "parzelle": 12}, d)
+        self.assertEqual(S.zusatz_geraete(d, kz, "12"), 0)
+        self.assertEqual(S.zusatz_platz(alle["Basic"]), 2)                            # /29: 5 Plätze, Basic 3 → 2 Zusatzgeräte
+
+    def test_rechnung_mit_zusatzgeraeten(self):
+        d = frisch()
+        kz = S.plan_aktiv(d)["sparten"][0]["kz"]
+        d.setdefault("buchungen", {}).setdefault(kz, {})["12"] = "Basic"
+        d["zusatzgeraete"] = {f"{kz}-12": 2}
+        d["mitgliederbereich"] = {"zusatz_preis": 1.5}
+        modul = S.akt_rechnungslauf.__globals__
+        with mock_patch(modul, "_mitglied_der_parzelle", lambda d, kz, p: ("m1", {"vorname": "A", "nachname": "B"})):
+            x = S.akt_rechnungslauf(d, {"jahr": 2027}, "test")
+        z = next(v for v in x["vorschau"] if v["parzelle"] == 12)
+        self.assertEqual((z["preis"], z["zusatz"]), (123.0, 2))                     # 120 € + 2 × 1,50 €
+
+
+def mock_patch(modul, name, wert):
+    from unittest import mock
+    return mock.patch.dict(modul, {name: wert})
 
 
 class AppUpdates(unittest.TestCase):

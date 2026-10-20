@@ -45,9 +45,9 @@ def speichere(d):
 
 # =============================================================== Tarife (Bandbreite per QoS-Regel, Netzgröße per Subnetz/DHCP)
 TARIFE_STANDARD = [
-    {"name": "Basic", "down": 30, "up": 10, "praefix": 29, "geraete": 5, "preis": 120},
-    {"name": "Plus", "down": 60, "up": 20, "praefix": 28, "geraete": 10, "preis": 180},
-    {"name": "Max", "down": 100, "up": 40, "praefix": 24, "geraete": 0, "preis": 240},
+    {"name": "Basic", "down": 30, "up": 10, "praefix": 29, "geraete": 3, "preis": 120},     # /29: Platz für 5 Geräte → bis 2 Zusatzgeräte
+    {"name": "Plus", "down": 60, "up": 20, "praefix": 28, "geraete": 5, "preis": 180},      # /28: Platz für 13 Geräte
+    {"name": "Max", "down": 100, "up": 40, "praefix": 27, "geraete": 10, "preis": 240},    # /27: Platz für 29 Geräte
 ]
 
 __all__ = [_n for _n in dict(globals()) if not _n.startswith("__")]  # alle Namen an die folgenden Module weitergeben
