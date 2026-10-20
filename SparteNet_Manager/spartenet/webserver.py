@@ -1,9 +1,81 @@
 """SparteNet Manager – Webserver: Anfragen, Rechteprüfung, Start"""
 from .oberflaeche import *  # noqa: F401,F403 – alle Namen der vorherigen Module
+from .invoice_ninja import (
+    InvoiceNinjaError,
+    InvoiceNinjaValidationError,
+    build_integration_from_env,
+)
 
 
 # =============================================================== Webserver
 PROXY_VERTRAUEN = os.environ.get("SPARTENET_PROXY", "0").strip().lower() in ("1", "ja", "true", "yes")
+INVOICE_NINJA = None
+_INVOICE_NINJA_WORKER_GESTARTET = False
+_INVOICE_NINJA_EMPFAENGER_REGISTRIERT = False
+
+def _invoice_ninja_mitglied(d, sparte, parzelle):
+    """Mitgliedsdaten einer gebuchten Parzelle fuer Invoice Ninja."""
+    _mitglied_id, mitglied = _mitglied_der_parzelle(d, sparte, int(parzelle))
+    if not mitglied:
+        raise InvoiceNinjaValidationError(f"Kein Mitglied fuer {sparte} Parzelle {parzelle} gefunden.")
+    email = str(mitglied.get("email") or "").strip().lower()
+    if not email:
+        raise InvoiceNinjaValidationError(f"Mitglied fuer {sparte} Parzelle {parzelle} hat keine E-Mail-Adresse.")
+    return {
+        "vorname": mitglied.get("vorname", ""), "nachname": mitglied.get("nachname", ""),
+        "name": f"{mitglied.get('vorname', '')} {mitglied.get('nachname', '')}".strip(),
+        "email": email, "telefon": mitglied.get("telefon", ""),
+        "invoice_ninja_client_id": mitglied.get("invoice_ninja_client_id", ""),
+    }
+
+def _invoice_ninja_tarif(d, tarif_name):
+    """Tarifdaten fuer eine Rechnungsposition laden."""
+    tarif = next((t for t in tarife_pruefen(d["tarife"]) if t["name"] == tarif_name), None)
+    if not tarif:
+        raise InvoiceNinjaValidationError(f"Tarif '{tarif_name}' wurde nicht gefunden.")
+    produkt = re.sub(r"[^A-Za-z0-9_-]+", "-", tarif["name"].upper()).strip("-")
+    return {"name": tarif["name"], "preis": tarif.get("preis", 0), "product_key": "SPARTENET-" + produkt,
+            "beschreibung": f"SparteNet-Tarif {tarif['name']} fuer ein Vertragsjahr"}
+
+def _invoice_ninja_ereignis(typ, daten, d):
+    """Neue Buchungen persistent fuer Invoice Ninja vormerken."""
+    if typ != "buchung" or INVOICE_NINJA is None or d is None:
+        return
+    sparte = str(daten.get("sparte") or "").strip().upper()
+    parzelle, tarif_name = daten.get("parzelle"), str(daten.get("tarif") or "").strip()
+    if not sparte or not str(parzelle or "").isdigit() or not tarif_name:
+        LOG.warning("Invoice Ninja: unvollstaendiges Buchungsereignis: %r", daten); return
+    try:
+        parzelle = int(parzelle)
+        mitglied, tarif = _invoice_ninja_mitglied(d, sparte, parzelle), _invoice_ninja_tarif(d, tarif_name)
+        vertrag = (d.get("vertraege") or {}).get(f"{sparte}-{parzelle}") or {}
+        beginn = str(vertrag.get("beginn") or time.strftime("%Y-%m-%d"))
+        auftrag = INVOICE_NINJA.queue_booking_invoice(
+            booking={"sparte": sparte, "parzelle": parzelle, "tarif": tarif_name, "period": beginn[:4], "date": beginn,
+                     "public_notes": f"WLAN-Tarif {tarif_name}, Sparte {sparte}, Parzelle {parzelle}"},
+            member=mitglied, tariff=tarif)
+        LOG.info("Invoice Ninja: Rechnung vorgemerkt fuer %s Parzelle %s, Tarif %s, Auftrag %s",
+                 sparte, parzelle, tarif_name, auftrag.id)
+    except InvoiceNinjaValidationError as e:
+        LOG.warning("Invoice Ninja: Buchung %s Parzelle %s konnte nicht vorgemerkt werden: %s", sparte, parzelle, e)
+    except Exception:
+        LOG.exception("Invoice Ninja: unerwarteter Fehler bei Buchung %s Parzelle %s", sparte, parzelle)
+
+def _invoice_ninja_hintergrund():
+    """Persistente Invoice-Ninja-Auftraege verarbeiten."""
+    while True:
+        try:
+            if INVOICE_NINJA is not None:
+                for ergebnis in INVOICE_NINJA.process_outbox(limit=20):
+                    status, auftrag_id = ergebnis.get("status"), ergebnis.get("id")
+                    if status == "done":
+                        LOG.info("Invoice-Ninja-Auftrag %s abgeschlossen", auftrag_id)
+                    elif status == "failed":
+                        LOG.error("Invoice-Ninja-Auftrag %s endgueltig fehlgeschlagen: %s", auftrag_id, ergebnis.get("last_error", ""))
+        except Exception:
+            LOG.exception("Invoice-Ninja-Outbox konnte nicht verarbeitet werden")
+        time.sleep(30)
+
 CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
        "connect-src 'self'; frame-src 'self' blob: data:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'self'")
 
@@ -270,6 +342,21 @@ class Handler(BaseHTTPRequestHandler):
             if n < 0 or n > API_MAX_BYTES:
                 return self._send(413, {"ok": False, "fehler": "Anfrage zu groß."})
             roh = self.rfile.read(n)
+        if u.path.rstrip("/") == "/api/v1/invoice-ninja/webhook" and methode == "POST":
+            if INVOICE_NINJA is None:
+                return self._send(503, {"ok": False, "fehler": "Invoice-Ninja-Integration ist nicht eingerichtet."})
+            try:
+                return self._send(200, INVOICE_NINJA.handle_webhook(raw_body=roh, headers=dict(self.headers)))
+            except InvoiceNinjaValidationError as e:
+                LOG.warning("Invoice-Ninja-Webhook abgelehnt: %s", e)
+                return self._send(400, {"ok": False, "fehler": str(e)})
+            except InvoiceNinjaError as e:
+                LOG.error("Invoice-Ninja-Webhook fehlgeschlagen: %s", e)
+                return self._send(502, {"ok": False, "fehler": str(e)})
+            except Exception:
+                ref = secrets.token_hex(3)
+                LOG.error("Unerwarteter Invoice-Ninja-Webhook-Fehler %s:\n%s", ref, traceback.format_exc())
+                return self._send(500, {"ok": False, "fehler": f"Unerwarteter Fehler beim Zahlungs-Webhook (Nr. {ref})."})
         if u.path.rstrip("/") == "/api/v1/app/anmelden" and methode == "POST":
             try:
                 b = json.loads(roh or b"{}")
@@ -753,6 +840,7 @@ ROH_PFADE = {"/api/zahlungen-import", "/api/mitglieder-import", "/api/excel", "/
 
 
 def main():
+    global INVOICE_NINJA, _INVOICE_NINJA_WORKER_GESTARTET, _INVOICE_NINJA_EMPFAENGER_REGISTRIERT
     if not AUTH_PASSWORD:
         raise SystemExit("Zugriffsschutz fehlt: SPARTENET_PASSWORD oder SPARTENET_PASSWORD_FILE setzen.")
     if len(AUTH_PASSWORD) < 12:
@@ -760,6 +848,19 @@ def main():
     datenbank_starten()
     d = lade()
     log_einrichten(d["log_aktiv"])
+    if os.environ.get("SPARTENET_INVOICE_NINJA_URL"):
+        try:
+            INVOICE_NINJA = build_integration_from_env()
+            if not _INVOICE_NINJA_EMPFAENGER_REGISTRIERT:
+                EREIGNIS_EMPFAENGER.append(_invoice_ninja_ereignis)
+                _INVOICE_NINJA_EMPFAENGER_REGISTRIERT = True
+            if not _INVOICE_NINJA_WORKER_GESTARTET:
+                threading.Thread(target=_invoice_ninja_hintergrund, daemon=True, name="invoice-ninja").start()
+                _INVOICE_NINJA_WORKER_GESTARTET = True
+            LOG.info("Invoice-Ninja-Integration aktiviert")
+        except Exception:
+            INVOICE_NINJA = None
+            LOG.exception("Invoice-Ninja-Integration konnte nicht initialisiert werden")
     a = update_aktiv_lesen()
     if a.get("ordner") and os.path.abspath(CODE_DIR) == os.path.abspath(os.path.join(UPDATE_DIR, a["ordner"])):
         print(f"Aktualisierte Version aus dem Datenordner: {a['ordner']}")
