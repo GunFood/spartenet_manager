@@ -646,6 +646,36 @@ class TarifRegeln(unittest.TestCase):
         self.assertEqual((z["preis"], z["zusatz"]), (123.0, 2))                     # 120 € + 2 × 1,50 €
 
 
+class Restguthaben(unittest.TestCase):
+    def test_restguthaben_beim_wechsel(self):
+        """Wechsel mitten in der Laufzeit: Restwert des alten Tarifs wird Guthaben und mit der Rechnung verrechnet"""
+        d = frisch()
+        kz = S.plan_aktiv(d)["sparten"][0]["kz"]
+        for t in d["tarife"]:
+            t.update(laufzeit=12, laufzeit_einheit="monate")
+        d.setdefault("buchungen", {}).setdefault(kz, {})["12"] = "Basic"
+        jetzt = time.time()
+        d["laufzeiten"] = {f"{kz}-12": {"sparte": kz, "parzelle": 12, "tarif": "Basic", "start": jetzt - 100 * 86400, "ende": jetzt + 100 * 86400, "status": "aktiv"}}
+        self.assertAlmostEqual(S.restwert(d, kz, 12), 60.0, delta=0.05)           # halbe Laufzeit von 120 €
+        S._tarif_ereignis("buchung", {"sparte": kz, "parzelle": 12, "tarif": "Max", "tarif_alt": "Basic"}, d)
+        self.assertAlmostEqual(S.guthaben(d, kz, 12), 60.0, delta=0.05)
+        S._tarif_ereignis("buchung", {"sparte": kz, "parzelle": 12, "tarif": "Max", "tarif_alt": ""}, d)   # Neubuchung: kein Guthaben
+        self.assertAlmostEqual(S.guthaben(d, kz, 12), 60.0, delta=0.05)
+        d["buchungen"][kz]["12"] = "Max"
+        modul = S.akt_rechnungslauf.__globals__
+        with mock_patch(modul, "_mitglied_der_parzelle", lambda d, kz, p: ("m1", {"vorname": "A", "nachname": "B"})):
+            with mock_patch(modul, "speichere", lambda d: None):
+                vor = S.akt_rechnungslauf(d, {"jahr": 2027}, "test")
+                z = next(v for v in vor["vorschau"] if v["parzelle"] == 12)
+                self.assertAlmostEqual(z["preis"], 180.0, delta=0.05)                # 240 € − 60 € Guthaben
+                S.akt_rechnungslauf(d, {"jahr": 2027, "ausfuehren": True}, "test")
+        self.assertEqual(S.guthaben(d, kz, 12), 0.0)                                 # verbraucht
+        x = next(r for r in S.rechnungen_daten(d)["liste"].values() if r["parzelle"] == 12)
+        self.assertLess(x["positionen"][-1]["gesamt"], 0)                           # Position „Abzüglich Guthaben“
+        S.guthaben_buchen(d, kz, 12, -5, "zu viel")                                  # nie unter 0
+        self.assertEqual(S.guthaben(d, kz, 12), 0.0)
+
+
 def mock_patch(modul, name, wert):
     from unittest import mock
     return mock.patch.dict(modul, {name: wert})

@@ -127,6 +127,11 @@ Den Zugriff nicht unverschlüsselt ins Internet veröffentlichen; für Fernzugri
     wie ins Netz des Tarifs passen). Sie erhöhen den DHCP-Bereich der Parzelle (ans Gateway über "Tarife → Übertragen", wie immer mit
     Vorschau) und stehen als eigene Position in der Jahresrechnung. In der Buchungsliste setzt du sie je Parzelle von Hand; bei einer
     Kündigung entfallen sie.
+  - Restguthaben: Beim Tarifwechsel mitten in der Laufzeit wird der nicht genutzte Teil des alten Tarifs gutgeschrieben
+    (Preis × Restzeit / Laufzeit). Ohne Bezahldienst entsteht gleich eine Rechnung über den neuen Tarif mit neuer Laufzeit, das Guthaben
+    ist abgezogen (abschaltbar: "Beim Tarifwechsel gleich eine Rechnung …"); mit Bezahldienst zahlt das Mitglied nur die Differenz.
+    Übrig gebliebenes Guthaben (z. B. nach einem Downgrade) wird mit der nächsten Rechnung verrechnet; Stand in der Buchungsliste,
+    auf /mein und in der App.
 
 ### NEU IN 5.7.1
   - Update über GitHub: auch eine Korrektur mit gleicher Versionsnummer wird als Update angeboten (anderer Stand auf GitHub) und

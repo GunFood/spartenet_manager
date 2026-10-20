@@ -22,7 +22,7 @@ Nutzt den Mitgliederbereich des Managers (ab 5.7, muss im Manager eingeschaltet 
 * **Unten vier Bereiche:** Übersicht (Tarif und Geräte), Rechnungen, Support, Profil.
 * **Mein Tarif:** Tarif, Laufzeit mit Resttagen, Geräte (Tarif + Zusatzgeräte), offener Betrag, Sperre. Upgrade jederzeit; kleinerer
   Tarif nur eine Stufe nach unten und erst nach der Wartezeit (die App zeigt, ab wann), mit Warnung, wenn zu viele Geräte verbunden sind;
-  jeder Wechsel startet eine neue Laufzeit. „＋ Zusatzgeräte“ bucht weitere Endgeräte (Preis je Gerät und Jahr). Neu buchen und
+  jeder Wechsel startet eine neue Laufzeit, die Restzeit des alten Tarifs wird als Guthaben angerechnet. „＋ Zusatzgeräte“ bucht weitere Endgeräte (Preis je Gerät und Jahr). Neu buchen und
   Verlängern je nach Einstellung im Manager; mit Bezahldienst öffnet sich die Bezahlseite.
 * **Geräte im WLAN:** Verbrauch nach Tarif („Basic: 3 von 5 Geräten“), die Geräte fortlaufend nummeriert (Gerät 1, 2, 3) –
   **ohne IP- und MAC-Adressen**. „Gerät trennen“ (Auswahl, welches; mit Bestätigung) trennt ein WLAN-Gerät vom

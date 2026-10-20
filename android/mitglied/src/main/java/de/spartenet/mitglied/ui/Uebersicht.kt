@@ -458,6 +458,7 @@ private fun TarifKarte(d: JSONObject, p: JSONObject, erlaubt: JSONObject, onWahl
                 val tg = p.i("tarif_geraete")
                 Wert("Geräte", if (tg > 0) "${p.i("geraete_erlaubt")}" else "unbegrenzt", if (p.i("zusatz") > 0) "$tg + ${p.i("zusatz")} Zusatz" else "")
                 Wert("Offen", geld(p.d("offen")))
+                if (p.d("guthaben") > 0) Wert("Guthaben", geld(p.d("guthaben")))
             }
             if (p.b("gesperrt")) Hinweis("Der WLAN-Zugang ist gerade gesperrt (Laufzeit abgelaufen) – mit einer Verlängerung wird er wieder freigegeben.", fehler = true)
         }
@@ -706,12 +707,13 @@ private fun TarifDialog(d: JSONObject, p: JSONObject, wie: String, onAbbrechen: 
         else -> d.liste("tarife")
     }
     var gewaehlt by remember { mutableStateOf(if (wie == "verlaengern") tarif else null) }
+    val rest = if (p.d("restwert") > 0) " Restguthaben von etwa ${geld(p.d("restwert"))} aus der laufenden Laufzeit wird angerechnet." else ""
     val titel = when (wie) { "upgrade" -> "Upgrade"; "downgrade" -> "Kleinerer Tarif"; "verlaengern" -> "Laufzeit verlängern"; else -> "Tarif buchen" }
     val hinweis = when (wie) {
         "upgrade" -> "Ein Upgrade ist jederzeit möglich" + (if (bezahlen) " – nach der Bezahlung sofort gebucht." else " und wird sofort gebucht.") +
-            " Die Laufzeit beginnt mit dem Wechsel neu."
+            " Die Laufzeit beginnt mit dem Wechsel neu." + rest
         "downgrade" -> "Ein kleinerer Tarif geht nur eine Stufe nach unten; die Laufzeit beginnt neu. Es dürfen nicht mehr Geräte verbunden sein, " +
-            "als der neue Tarif erlaubt – sonst bitte vorher Geräte sperren oder ausschalten." +
+            "als der neue Tarif erlaubt – sonst bitte vorher Geräte sperren oder ausschalten." + rest +
             if (d.o("erlaubt")?.b("downgrade_freigabe") == true) " Der Verein muss den Wechsel freigeben." else ""
         else -> if (bezahlen) "Sie werden zur Bezahlung weitergeleitet; gebucht wird, sobald die Zahlung bestätigt ist." else "Ihr Antrag geht an den Verein und wird nach der Freigabe gebucht."
     }
