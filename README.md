@@ -1,3 +1,5 @@
+[![Tests](https://github.com/GunFood/spartenet_manager/actions/workflows/tests.yml/badge.svg)](https://github.com/GunFood/spartenet_manager/actions/workflows/tests.yml)
+
 SparteNet Manager 5.8 (Cloud)
 ===============================
 
